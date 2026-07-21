@@ -28,7 +28,7 @@ public static class WorldLegacySystemSmokeTest
 
     static void ValidateCatalogEffects()
     {
-        if (HeritageSiteCatalog.All.Count != 108 || GreatPersonCatalog.All.Count != 120)
+        if (HeritageSiteCatalog.All.Count != 120 || GreatPersonCatalog.All.Count != 132)
             throw new Exception("世界史台帳件数が不正");
 
         var effects = new HashSet<GreatPersonEffectKind>();
@@ -41,7 +41,7 @@ public static class WorldLegacySystemSmokeTest
         }
         if (effects.Count != 6)
             throw new Exception("偉人効果6系統が網羅されていない: " + effects.Count);
-        Debug.Log("[Legacy] 遺産108件・偉人120人・分野別効果6系統OK");
+        Debug.Log("[Legacy] 遺産120件・偉人132人・分野別効果6系統OK");
     }
 
     static void ValidatePlacementAndDiscovery()

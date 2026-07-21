@@ -25,7 +25,7 @@ public static class WorldHistorySmokeTest
 
     static void ValidateSites()
     {
-        if (HeritageSiteCatalog.All.Count != 108)
+        if (HeritageSiteCatalog.All.Count != 120)
             throw new Exception("遺跡・史跡件数が不正: " + HeritageSiteCatalog.All.Count);
 
         var ids = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -43,21 +43,21 @@ public static class WorldHistorySmokeTest
                 throw new Exception("遺跡・史跡の文明参照が不正: " + item.Id);
         }
 
-        if (HeritageSiteCatalog.ForRegion("アフリカ").Count != 18 ||
-            HeritageSiteCatalog.ForRegion("西・南アジア").Count != 20 ||
-            HeritageSiteCatalog.ForRegion("東・東南アジア").Count != 20 ||
-            HeritageSiteCatalog.ForRegion("ヨーロッパ・地中海").Count != 20 ||
-            HeritageSiteCatalog.ForRegion("アメリカ大陸").Count != 20 ||
-            HeritageSiteCatalog.ForRegion("オセアニア").Count != 10 ||
+        if (HeritageSiteCatalog.ForRegion("アフリカ").Count != 20 ||
+            HeritageSiteCatalog.ForRegion("西・南アジア").Count != 22 ||
+            HeritageSiteCatalog.ForRegion("東・東南アジア").Count != 22 ||
+            HeritageSiteCatalog.ForRegion("ヨーロッパ・地中海").Count != 22 ||
+            HeritageSiteCatalog.ForRegion("アメリカ大陸").Count != 22 ||
+            HeritageSiteCatalog.ForRegion("オセアニア").Count != 12 ||
             HeritageSiteCatalog.ForRegion(null).Count != HeritageSiteCatalog.All.Count)
             throw new Exception("遺跡・史跡の地域フィルターが不正");
 
-        Debug.Log("[WorldHistory] 遺跡・史跡台帳OK: 108件");
+        Debug.Log("[WorldHistory] 遺跡・史跡台帳OK: 120件");
     }
 
     static void ValidatePeople()
     {
-        if (GreatPersonCatalog.All.Count != 120)
+        if (GreatPersonCatalog.All.Count != 132)
             throw new Exception("偉人件数が不正: " + GreatPersonCatalog.All.Count);
 
         var ids = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -80,9 +80,9 @@ public static class WorldHistorySmokeTest
             "ヨーロッパ・地中海", "アメリカ大陸", "オセアニア"
         };
         for (int i = 0; i < regions.Length; i++)
-            if (GreatPersonCatalog.ForRegion(regions[i]).Count != 20)
+            if (GreatPersonCatalog.ForRegion(regions[i]).Count != 22)
                 throw new Exception("偉人の地域件数が不正: " + regions[i]);
 
-        Debug.Log("[WorldHistory] 偉人台帳OK: 120人（6地域×20人）");
+        Debug.Log("[WorldHistory] 偉人台帳OK: 132人（6地域×22人）");
     }
 }

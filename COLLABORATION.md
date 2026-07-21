@@ -26,6 +26,20 @@ CodexとClaude Codeは、以後この `HexCiv` プロジェクトだけを更新
 
 ## 最新状況
 
+### 2026-07-22 Codex: 遺跡・偉人第4弾（各12件）・正式Windowsビルド更新
+
+- `Core/HeritageSiteCatalog.cs` / `Core/GreatPersonCatalog.cs`: 既存108遺跡・120偉人のIDと順序を固定した後方追加で、6地域へ各2件ずつ追加し、遺跡120件・偉人132人へ拡張。前回追加したカネム＝ボルヌ、メリナ、サーサーン朝、デリー・スルターン朝、新羅、マラッカ、キーウ・ルーシ、ポルトガル、ラコタ、ポウハタン、タヒチ、ラロトンガへ、史料上関係する遺跡1件・偉人1人をそれぞれ一対一で接続した。宗教的聖地を過去の廃墟に限定せず、人物の異名・帰属・伝承・著者論の不確実性も説明へ明記した。
+- `HeritageGreatPersonExpansionSmokeTest` / `WorldHistorySmokeTest` / `WorldLegacySystemSmokeTest` / `GlobalHistoryIndexSmokeTest`: 120遺跡、132偉人、6地域配分、12文明への一対一参照、ID一意性、必須情報、6効果系統、既存後方互換、セーブ往復、2048x1024エンブレム、総合13分類・1057件を検証し、すべて `SMOKE OK`。
+- Unity 6.3総合 `SmokeTest` を同一ソースから2回実行し、ともに `SMOKE OK`。第4弾の遺産配置・偉人候補が実ゲームへ入るため旧結果から変化したが、2回とも **turn150: units=62 cities=19 techs=144 wars=2 / peace=1** で完全一致し、決定性を確認した。ログは `Logs/hg4_*.log`（git除外）。
+- 正式 `Build/HexCiv.exe` をUnity 6.3で更新（`BUILD OK: 96963763 bytes`）。20秒ヘッドレス起動でUnity `6000.3.20f1`、例外なし。`Build/HexCiv_Data/Managed/Assembly-CSharp.dll` SHA-256は `FECAFA4A78E9A21AA1C26682DE1D0A60B7A4D5E522F401CDE1154BCBF5915F2B`。
+- `WORLD_HISTORY_CATALOG.md` / `GLOBAL_HISTORY_CATALOG.md` / `README.md` / `ARCHITECTURE.md`: 代表史料URL、台帳方針、件数を120遺跡・132偉人・総合1057件へ更新。既存のオリジナル遺跡・偉人アイコンとプロシージャルBGM・SEへ自動接続するため、実在の聖像・人物肖像・共同体固有意匠の複製は追加していない。
+- Claude Code第12弾の `AchievementPanel` / `ScoreGraphPanel` / `ChroniclePanel` / `GameAudio` は編集せず、統合コンパイル・総合スモーク・正式ビルドでは同時点の変更を含めて検証した。Claude側の作業中宣言と未コミット変更はそのまま維持する。
+
+### 🔧 2026-07-22 Claude Code: 作業中宣言 第12弾(完了時に結果で置き換え)
+
+実装中: ①実績システム(新規 UI/AchievementPanel.cs — 解除トースト+一覧パネル+生成アイコン+PlayerPrefs永続化+解除音) ②戦況グラフの多指標タブ化(スコア/軍事力/文化/技術 — ScoreGraphPanel) ③年表のテキスト書き出し(ChroniclePanel)。
+対象: 新規 UI/AchievementPanel.cs / UI/ScoreGraphPanel / UI/ChroniclePanel / Audio/GameAudio(追加のみ)。シミュレーション不変(基準値95/21/148/2ビット一致ゲート)。**この節がある間、Codexは上記ファイルの編集を控えてください**。完了後はgit commit+push。
+
 ### 2026-07-22 Codex: 文明・指導者第4弾（12文明・24指導者）・正式Windowsビルド更新
 
 - `Core/CivilizationCatalog.cs` / `Core/LeaderCatalog.cs`: 既存80文明・155指導者のIDと順序を固定した後方追加で、6地域へ各2文明・4指導者を追加。カネム＝ボルヌ／メリナ、サーサーン朝／デリー・スルターン朝、新羅／マラッカ、キーウ・ルーシ／ポルトガル、ラコタ／ポウハタン、タヒチ／ラロトンガを収録し、全92文明・179指導者へ拡張した。各文明へ6拠点・各2指導者を設定し、文明選択、指導者選択、AI重複なし割当、図鑑、セーブへ自動接続した。

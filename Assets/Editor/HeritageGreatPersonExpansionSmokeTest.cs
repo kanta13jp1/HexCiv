@@ -4,7 +4,7 @@ using HexCiv.Core;
 using UnityEditor;
 using UnityEngine;
 
-/// <summary>遺跡・偉人第2・3弾の後方互換、地域配分、文明参照、図鑑画像を検証する。</summary>
+/// <summary>遺跡・偉人第2～4弾の後方互換、地域配分、文明参照、図鑑画像を検証する。</summary>
 public static class HeritageGreatPersonExpansionSmokeTest
 {
     static readonly Dictionary<string, string> SecondBatchSites =
@@ -54,6 +54,33 @@ public static class HeritageGreatPersonExpansionSmokeTest
             { "juan_tepano", "rapa_nui" }, { "ratu_sukuna", "fiji" },
         };
 
+    static readonly Dictionary<string, string> FourthBatchSites =
+        new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            { "ngazargamu", "kanem_bornu" },
+            { "ambohimanga_royal_hill", "merina" },
+            { "sasanian_fars_landscape", "sasanian" },
+            { "qutb_minar_complex", "delhi_sultanate" },
+            { "seokguram_bulguksa", "silla" },
+            { "melaka_historic_city", "malacca" },
+            { "kyiv_sophia_lavra", "kyivan_rus" },
+            { "batalha_monastery", "portugal" },
+            { "paha_sapa", "lakota" }, { "werowocomoco", "powhatan" },
+            { "arahurahu_marae", "tahiti" }, { "arai_te_tonga", "rarotonga" },
+        };
+
+    static readonly Dictionary<string, string> FourthBatchPeople =
+        new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            { "ahmad_ibn_furtu", "kanem_bornu" },
+            { "rainilaiarivony", "merina" }, { "borzuya", "sasanian" },
+            { "amir_khusrau", "delhi_sultanate" }, { "wonhyo", "silla" },
+            { "tun_perak", "malacca" }, { "nestor_chronicler", "kyivan_rus" },
+            { "luis_de_camoes", "portugal" }, { "black_elk", "lakota" },
+            { "pocahontas", "powhatan" }, { "henri_hiro", "tahiti" },
+            { "taunga", "rarotonga" },
+        };
+
     static readonly string[] Regions =
     {
         "アフリカ", "西・南アジア", "東・東南アジア",
@@ -65,7 +92,8 @@ public static class HeritageGreatPersonExpansionSmokeTest
         try
         {
             ValidateCatalogs();
-            ValidateRegionalBatch();
+            ValidateRegionalBatch(ThirdBatchSites, ThirdBatchPeople, "第3弾");
+            ValidateRegionalBatch(FourthBatchSites, FourthBatchPeople, "第4弾");
             ValidateVisualAsset();
             Debug.Log("HERITAGE GREAT PERSON EXPANSION SMOKE OK");
             EditorApplication.Exit(0);
@@ -79,21 +107,25 @@ public static class HeritageGreatPersonExpansionSmokeTest
 
     static void ValidateCatalogs()
     {
-        if (HeritageSiteCatalog.All.Count != 108 || GreatPersonCatalog.All.Count != 120)
+        if (HeritageSiteCatalog.All.Count != 120 || GreatPersonCatalog.All.Count != 132)
             throw new Exception("拡張後の台帳件数が不正");
 
         if (HeritageSiteCatalog.All[95].Id != "pulemelei_mound" ||
-            HeritageSiteCatalog.All[107].Id != "levuka_historic_port")
+            HeritageSiteCatalog.All[107].Id != "levuka_historic_port" ||
+            HeritageSiteCatalog.All[119].Id != "arai_te_tonga")
             throw new Exception("遺跡台帳の後方追加順序が不正");
         if (GreatPersonCatalog.All[107].Id != "albert_wendt" ||
-            GreatPersonCatalog.All[119].Id != "ratu_sukuna")
+            GreatPersonCatalog.All[119].Id != "ratu_sukuna" ||
+            GreatPersonCatalog.All[131].Id != "taunga")
             throw new Exception("偉人台帳の後方追加順序が不正");
 
         ValidateUniqueAndRequiredFields();
         ValidateSites(SecondBatchSites);
         ValidateSites(ThirdBatchSites);
+        ValidateSites(FourthBatchSites);
         ValidatePeople(SecondBatchPeople);
         ValidatePeople(ThirdBatchPeople);
+        ValidatePeople(FourthBatchPeople);
     }
 
     static void ValidateSites(Dictionary<string, string> sites)
@@ -152,7 +184,8 @@ public static class HeritageGreatPersonExpansionSmokeTest
         }
     }
 
-    static void ValidateRegionalBatch()
+    static void ValidateRegionalBatch(Dictionary<string, string> sites,
+        Dictionary<string, string> people, string batchName)
     {
         var siteCounts = new Dictionary<string, int>();
         var peopleCounts = new Dictionary<string, int>();
@@ -164,7 +197,7 @@ public static class HeritageGreatPersonExpansionSmokeTest
 
         var siteCivilizations = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var personCivilizations = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var pair in ThirdBatchSites)
+        foreach (var pair in sites)
         {
             var site = HeritageSiteCatalog.Find(pair.Key);
             if (!siteCounts.ContainsKey(site.RegionJa))
@@ -172,7 +205,7 @@ public static class HeritageGreatPersonExpansionSmokeTest
             siteCounts[site.RegionJa]++;
             siteCivilizations.Add(site.RelatedCivilizationId);
         }
-        foreach (var pair in ThirdBatchPeople)
+        foreach (var pair in people)
         {
             var person = GreatPersonCatalog.Find(pair.Key);
             if (!peopleCounts.ContainsKey(person.RegionJa))
@@ -185,8 +218,9 @@ public static class HeritageGreatPersonExpansionSmokeTest
             if (siteCounts[Regions[i]] != 2 || peopleCounts[Regions[i]] != 2)
                 throw new Exception(Regions[i] + "の追加配分が2件ずつではない");
         if (siteCivilizations.Count != 12 || personCivilizations.Count != 12)
-            throw new Exception("第3弾の12文明対応が一対一ではない");
-        Debug.Log("[Expansion] 第3弾を6地域×遺跡2件・偉人2人、12文明へ接続 OK");
+            throw new Exception(batchName + "の12文明対応が一対一ではない");
+        Debug.Log("[Expansion] " + batchName +
+            "を6地域×遺跡2件・偉人2人、12文明へ接続 OK");
     }
 
     static void ValidateVisualAsset()
