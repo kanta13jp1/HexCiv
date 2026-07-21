@@ -26,10 +26,14 @@ CodexとClaude Codeは、以後この `HexCiv` プロジェクトだけを更新
 
 ## 最新状況
 
-### 🔧 2026-07-21 Codex: 作業中宣言 研究・文化第3弾（完了時に結果で置き換え）
+### 2026-07-21 Codex: 研究・文化第3弾（各12件）・正式Windowsビルド更新
 
-実装中: 文明第3弾の12文明に対応する研究史12件・文化史12件を、既存108件のIDと順序を維持した後方追加で実装する。技術ツリー、文化政策、AI、図鑑、セーブ互換、専用回帰、総合スモーク、Windowsビルドへ接続する。
-対象: `Core/ResearchMilestoneCatalog.cs` / `Core/CulturalTraditionCatalog.cs` / 両台帳の動的生成・表示文言 / 関連Editorテスト / `RESEARCH_CULTURE_CATALOG.md` / `GLOBAL_HISTORY_CATALOG.md` / `README.md` / `ARCHITECTURE.md` / 本ファイル。**Claude Code第10弾の Rendering / Audio / CameraController / GameBootstrap / TitleScreen は編集しない**。
+- `Core/ResearchMilestoneCatalog.cs`: 既存108件のIDと順序を固定した後方追加で、研究史を120件へ拡張。アシャンティの金衡量と失蝋鋳造、ブガンダの樹皮布製作、クシャーナ朝の金貨鋳造と重量標準、シク帝国の砲兵・常備軍改革、高麗の金属活字印刷、アチェとオスマンの砲術交流、ヴェネツィア造船所の工程分業、マーチャーシュ宮廷の天文学、サポテカの暦法と碑文記録、チェロキー音節文字と活字印刷、ラパ・ヌイのモアイ採石・建設知、フィジーのドルア造船・航海術を追加した。`TechnologyCatalog` は基礎12件＋研究史120件＝132技術。
+- `Core/CulturalTraditionCatalog.cs`: 既存108件を維持して文化史を120件へ拡張。アシャンティの椅子と王権象徴、ブガンダ王宮太鼓と伝達文化、クシャーナ期ガンダーラの多文化美術、ランガルとセーヴァ、高麗青磁の翡色と象嵌、『ヒカヤット・アチェ』の宮廷文学、ヴェネツィアの仮面とカーニバル、コルヴィナ文庫とハンガリー人文主義、サポテカのゲラゲッツァと互酬、チェロキーのストンプ・ダンスと祭儀共同体、ラパ・ヌイのカイカイ、フィジーのタブア贈与文化を追加した。文化政策は6地域×20件＝120件。
+- 新規24件は既存の地域別技術ツリー／文化政策、AI選択、図鑑、進行コスト、セーブ・ロードへ自動接続。ランガルがシク帝国以前から続くこと、モアイ運搬方法が確定していないこと、チェロキーの非公開祭儀知識を扱わないこと、生きた文化が変化し続けることを説明に明記した。既存の研究・文化エンブレム、選択／完了SE、地域別BGMが新規項目にも適用されるため、今回は画像・音源を重複追加していない。
+- `ResearchCultureExpansionSmokeTest` / `ResearchCultureSmokeTest` / `ResearchTechTreeSmokeTest` / `CultureSystemSmokeTest` / `GlobalHistoryIndexSmokeTest` はすべてOK。研究120、全技術132、文化120、6地域×20、旧末尾と第2・第3弾末尾、ID一意、前提・コスト、総合13分類955件を検証した。移動前のログは検証コピー `C:\Users\kanta\HexCiv_Verify_HG3_20260721\Logs\rc3_*.log` に保存。
+- Claude Code第10弾の完了後、その雲影・時間帯トーン・戦闘SE・占領シェイク・v1.0表記も取り込んだ統合状態で再検証。`rc3_combined_smoke.log` は150ターン、セーブ往復、複数文明、群島、難易度を完走して `SMOKE OK`、基準値は **turn150: units=81 cities=21 techs=149 wars=2** と一致。`rc3_combined_build.log` は `BUILD OK: 95866493 bytes`、検証Buildと正式Buildはいずれも15秒起動・Unity 6000.3.20f1・重大例外0。
+- 検証済み統合Buildを正式 `Build\HexCiv.exe` へ反映。移動後も `Build\HexCiv_Data\Managed\Assembly-CSharp.dll` SHA-256は `D32AFB97BE58BB279882D101942F3E40185780817F8ADEFEF09D18C35BBFFB35` と一致。`RESEARCH_CULTURE_CATALOG.md` / `GLOBAL_HISTORY_CATALOG.md` / `README.md` / `ARCHITECTURE.md` は研究120・文化120・総合台帳955件へ更新済み。
 
 ### 2026-07-21 Claude Code: 雲影+時間帯トーン+戦闘SE種別化+占領シェイク+v1.0表記、全検証合格
 
