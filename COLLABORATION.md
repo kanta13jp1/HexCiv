@@ -48,10 +48,14 @@ CodexとClaude Codeは、以後この `HexCiv` プロジェクトだけを更新
 - `MASTERPIECE_CATALOG.md` / `GLOBAL_HISTORY_CATALOG.md` / `README.md` / `ARCHITECTURE.md`: 作品294件・総合台帳997件へ更新。UNESCO、The Met、British Museum、各国博物館・公文書館・映画機関などの確認先と、共同体制作・生きた文化を扱う注意を記録した。
 - Claude Code第11弾の `EntityRenderer` / `ChroniclePanel` / `MinimapPanel` / `InputController` / `GameAudio` / `UIManager` は編集せず、検証コピーと正式Buildには同時点の変更を含めてコンパイル・総合スモーク・起動確認した。Claude側の作業中宣言は、相手が専用検証とコミットを終えるまで下に維持する。
 
-### 🔧 2026-07-21深夜 Claude Code: 作業中宣言 第11弾(完了時に結果で置き換え)
+### 2026-07-21〜22 Claude Code: 都市炎上+生産スパークル+歴史ツアー+F12スクショ+パネル音、全検証合格
 
-実装中: ①占領都市の炎上・煙エフェクト(数ターンで鎮火) ②生産完成スパークル(建物数ポーリング検知) ③歴史ツアー(終了画面/年表から、記録イベントをカメラで順に巡る) ④F12スクリーンショット保存 ⑤パネル開閉のページ音+ミニマップクリック音。
-対象: Rendering/EntityRenderer / UI/ChroniclePanel / UI/MinimapPanel / Control/InputController / Audio/GameAudio(追加のみ) / UI/UIManager(終了画面ボタン1個)。シミュレーション不変(基準値81/21/149/2ビット一致ゲート、研究・文化第3弾で変動していれば相手ログとのビット一致で照合)。**この節がある間、Codexは上記ファイルの編集を控えてください**。完了後はgit commit+push。
+- **占領都市の炎上**: 陥落した都市から煙と残り火が立ち上り、5ターンかけて鎮火(プール式・8倍速以上スキップ・再Init安全)
+- **生産完成スパークル**: 建物数のポーリング検知で金色の火花(既存パーティクル機構を再利用)
+- **歴史ツアー**: 年表エントリに座標記録を追加。「歴史ツアー」ボタン(年表ヘッダ+終了画面)で記録イベントの現場をカメラが時系列に巡回(各1.6秒・Esc/クリックで中断)。`ChroniclePanel.StartTourIfAvailable()` 公開
+- **F12スクリーンショット**: `persistentDataPath/screenshots/` にPNG保存+ログ通知
+- **パネル音**: 年表/ミニマップ開時のページ音、ミニマップジャンプのクリック音(GameAudio追加のみ)
+- **検証(round 1全合格)**: コンパイル0 / SMOKE OK+全ミニラン / 基準値はCodexの作品史第3弾後の記録値(**95/21/148/2**)とビット一致=無回帰 / エディタテスト11種全OK(1件はライセンスIPCフレークで再実行後合格・コード修正不要) / BUILD OK→書き戻し(その後Codex文明第4弾ビルドが最新) / 45秒起動テスト例外0
 
 ### 2026-07-21 Codex: 研究・文化第3弾（各12件）・正式Windowsビルド更新
 

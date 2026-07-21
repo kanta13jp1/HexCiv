@@ -1181,7 +1181,16 @@ namespace HexCiv.UI
             var finalGraph = UIStyle.CreateButton(gameOverOverlay.transform, "FinalScoreGraphButton",
                 "最終戦況", 18, OnFinalScoreGraphClicked);
             UIStyle.SetRect(finalGraph.gameObject, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
-                new Vector2(0.5f, 0.5f), new Vector2(0f, -205f), new Vector2(240f, 48f));
+                new Vector2(0.5f, 0.5f), new Vector2(-125f, -205f), new Vector2(240f, 48f));
+
+            // 歴史ツアー(2026-07-21 Claude Code 追加): 最終戦況の右隣。ChroniclePanel の
+            // 歴史ツアーをツアーモードで直接開始する(記録イベントの現場をカメラで順に巡る。
+            // ツアーのラベルCanvasはこのオーバーレイより手前のため終了画面上でも見える)。
+            // 横並びにするため最終戦況を左(-125)へ寄せた(ハンドラ・文言・サイズは従来どおり)。
+            var historyTour = UIStyle.CreateButton(gameOverOverlay.transform, "HistoryTourButton",
+                "歴史ツアー", 18, OnHistoryTourClicked);
+            UIStyle.SetRect(historyTour.gameObject, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
+                new Vector2(0.5f, 0.5f), new Vector2(125f, -205f), new Vector2(240f, 48f));
 
             gameOverOverlay.SetActive(false);
         }
@@ -2064,6 +2073,16 @@ namespace HexCiv.UI
         {
             if (scoreGraphPanel == null) return;
             scoreGraphPanel.Toggle();
+        }
+
+        /// <summary>
+        /// ゲーム終了画面の「歴史ツアー」ボタン(2026-07-21 Claude Code 追加)。
+        /// ChroniclePanel(独立Canvasの自己起動UI)の歴史ツアーを直接開始する。
+        /// 静的入口が内部でインスタンスを検索するため、不在・未構築でも安全(何もしない)。
+        /// </summary>
+        void OnHistoryTourClicked()
+        {
+            ChroniclePanel.StartTourIfAvailable();
         }
 
         void OnSaveClicked()

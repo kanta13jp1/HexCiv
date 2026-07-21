@@ -1,6 +1,7 @@
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
+using HexCiv.Audio;
 using HexCiv.Core;
 using HexCiv.Control;
 
@@ -103,7 +104,11 @@ namespace HexCiv.UI
         {
             // Mキーで表示切替(シード入力欄などのInputFieldへ入力中は無視)
             if (panel != null && Input.GetKeyDown(KeyCode.M) && !IsTextInputFocused())
-                panel.SetActive(!panel.activeSelf);
+            {
+                bool opening = !panel.activeSelf;
+                panel.SetActive(opening);
+                if (opening) GameAudio.Instance?.PlayPanelOpen();   // 開く時のみページ音(2026-07-21 追加)
+            }
 
             if (panel == null || !panel.activeSelf) return;
 
@@ -421,6 +426,7 @@ namespace HexCiv.UI
             float v = Mathf.Clamp01((local.y - r.yMin) / r.height);
             int row = Mathf.Clamp((int)(v * texH) / 2, 0, state.Map.Height - 1);
             int col = Mathf.Clamp(((int)(u * texW) - (row & 1)) / 2, 0, state.Map.Width - 1);
+            GameAudio.Instance?.PlayMinimapJump();   // マップジャンプの小さなクリック音(2026-07-21 追加)
             FocusCamera(HexCoord.FromOffset(col, row).ToWorld());
         }
 

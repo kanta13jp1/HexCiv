@@ -49,6 +49,14 @@ namespace HexCiv.Audio
         AudioClip greatPersonClip;
         AudioClip masterpieceClip;
 
+        // --- 2026-07-21 Claude Code 追加: パネル開閉音+ミニマップジャンプ音 ---
+        // パネル開: 柔らかい紙めくり風の短いウーシュ(ローパスノイズの山形スイープ)。
+        // 年表・ミニマップの「開く」操作と歴史ツアー開始が呼ぶ。
+        // ミニマップジャンプ: 上行二音の小さなブリップ(UIクリック音の下降と対照的)。
+        // どちらも音量・ミュートは既存の Play() が一括処理する。
+        AudioClip panelOpenClip;
+        AudioClip minimapJumpClip;
+
         // --- 2026-07-21 Claude Code 追加: 開幕ホルン ---
         // 新しいゲームの開始時(TurnManager.BeginGame の開幕ログ「文明の夜明け ―」)に一度だけ
         // 鳴らす、静かな二音のホルンコール(約1.2秒、C4→G4の上行五度)。祝祭的で長い勝利
@@ -389,6 +397,11 @@ namespace HexCiv.Audio
             siegeAttackClip = CreateSiegeAttackClip();
             rangedAttackClip = CreateRangedAttackClip();
             meleeAttackClip = CreateMeleeAttackClip();
+
+            // --- 2026-07-21 Claude Code 追加: パネル開閉音+ミニマップジャンプ音 ---
+            // 生成はこの初期化経路で一度だけ行い、RegisterClip 経由で破棄も既存と同じ扱い。
+            panelOpenClip = CreatePanelOpenClip();
+            minimapJumpClip = CreateMinimapJumpClip();
         }
 
         public void PlayUiClick() => Play(uiClickClip);
@@ -416,6 +429,12 @@ namespace HexCiv.Audio
 
         // 2026-07-21 Claude Code 追加: 開幕ホルン(音量・ミュートは Play() が一括処理)
         public void PlayOpeningHorn() => Play(openingHornClip);
+
+        // 2026-07-21 Claude Code 追加: パネル開閉音+ミニマップジャンプ音
+        // (年表・ミニマップの「開く」と歴史ツアー開始/ミニマップのマップジャンプが呼ぶ。
+        //  音量・ミュートは Play() が一括処理)
+        public void PlayPanelOpen() => Play(panelOpenClip);
+        public void PlayMinimapJump() => Play(minimapJumpClip);
 
         // 2026-07-21 Claude Code 追加: イベントスティング(音量・ミュートは Play() が一括処理)
         public void PlayWarDeclared() => Play(warStingClip);
@@ -1363,6 +1382,56 @@ namespace HexCiv.Audio
             float env = Mathf.Clamp01(localTime / 0.05f) * Mathf.Exp(-p * 2.4f) *
                 Mathf.Clamp01((noteLength - localTime) / 0.10f);
             return sample * env;
+        }
+
+        /// <summary>
+        /// パネル開閉音(2026-07-21 Claude Code 追加)。約0.22秒の柔らかい紙めくり風ウーシュ。
+        /// 2段ローパスの係数を山形に開閉したノイズ(紙が空気を切る通過感)に、
+        /// 紙のしなりを思わせる弱い上行トーンを薄く添える。音量は控えめで、
+        /// UIクリック音(下降トリル)や移動音(下降トーン+ノイズ)と質感で区別できる。
+        /// </summary>
+        AudioClip CreatePanelOpenClip()
+        {
+            const float duration = 0.22f;
+            int length = Mathf.CeilToInt(duration * SampleRate);
+            var data = new float[length];
+            var random = new System.Random(20260728);
+            float lp1 = 0f, lp2 = 0f;
+
+            for (int i = 0; i < length; i++)
+            {
+                float t = i / (float)SampleRate;
+                float p = t / duration;
+                float noise = (float)(random.NextDouble() * 2.0 - 1.0);
+
+                // ローパス係数を山形に開閉(中央で最も明るく=「サッ」という紙の通過感)
+                float a = Mathf.Lerp(0.10f, 0.55f, Mathf.Sin(p * Mathf.PI));
+                lp1 += (noise - lp1) * a;
+                lp2 += (lp1 - lp2) * a * 0.5f;
+                float whoosh = (lp1 - lp2) * Mathf.Sin(p * Mathf.PI);
+
+                // 紙のしなりの薄い実音(上行する弱い三角波)
+                float flick = Triangle(Mathf.Lerp(340f, 520f, p), t) * Mathf.Exp(-p * 6f) * 0.10f;
+
+                data[i] = Mathf.Clamp((whoosh * 0.9f + flick) * 0.5f, -0.8f, 0.8f);
+            }
+
+            return RegisterClip("Panel Page Flip", data);
+        }
+
+        /// <summary>
+        /// ミニマップジャンプ音(2026-07-21 Claude Code 追加)。約0.09秒の小さな上行二音ブリップ
+        /// (E5→B5)。既存のUIクリック音(940→700Hzの下降)とは進行が対照的で、
+        /// 「地図上の別地点へ飛んだ」ことが耳でも分かる最小限の合図にする。
+        /// </summary>
+        AudioClip CreateMinimapJumpClip()
+        {
+            return CreateClip("Minimap Jump", 0.09f, t =>
+            {
+                float p = t / 0.09f;
+                float f = p < 0.5f ? 659.25f : 987.77f;
+                return (Triangle(f, t) * 0.7f + 0.2f * Sine(f * 2f, t)) * Decay(p, 7f) * 0.26f;
+            });
         }
 
         AudioClip CreateArpeggio(string name, float duration, float[] notes, float spacing, float gain)

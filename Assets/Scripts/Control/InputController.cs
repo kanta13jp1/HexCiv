@@ -88,6 +88,12 @@ namespace HexCiv.Control
             if (ui != null && !ui.IsTextInputFocused && Input.GetKeyDown(KeyCode.F11))
                 ui.RequestFullscreenToggle();
 
+            // F12:スクリーンショット保存(2026-07-21 Claude Code 追加)。
+            // F11 と同様、通常プレイ・観戦モード・ゲーム終了後のいずれでも有効にするため、
+            // ゲームオーバーの早期 return より前で処理する(テキスト入力とも衝突しない)。
+            if (Input.GetKeyDown(KeyCode.F12))
+                CaptureScreenshot();
+
             if (state.IsGameOver)
             {
                 // ゲーム終了後はカメラと「もう一度プレイ」ボタン(uGUI側)のみ有効
@@ -280,6 +286,29 @@ namespace HexCiv.Control
             if (hadPanel || hadSelection || externalPanelOpenRecently) return;
 
             if (ui != null && ui.IsFullscreenActive) ui.RequestFullscreenToggle();
+        }
+
+        /// <summary>
+        /// スクリーンショットを保存する(2026-07-21 Claude Code 追加。F12)。
+        /// 保存先: Application.persistentDataPath/screenshots/hexciv_yyyyMMdd_HHmmss.png
+        /// (フォルダは無ければ作成)。ScreenCapture は非同期にフレーム末尾で書き出すため、
+        /// ログ表示はここで即時に出す。失敗してもゲーム進行には影響させない(警告ログのみ)。
+        /// </summary>
+        void CaptureScreenshot()
+        {
+            try
+            {
+                string dir = System.IO.Path.Combine(Application.persistentDataPath, "screenshots");
+                System.IO.Directory.CreateDirectory(dir);
+                string file = System.IO.Path.Combine(dir,
+                    "hexciv_" + System.DateTime.Now.ToString("yyyyMMdd_HHmmss") + ".png");
+                ScreenCapture.CaptureScreenshot(file);
+                if (ui != null) ui.AddLog("スクリーンショットを保存しました");
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogWarning("スクリーンショットの保存に失敗しました: " + e.Message);
+            }
         }
 
         void HandleHover()

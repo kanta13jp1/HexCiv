@@ -33,6 +33,15 @@ namespace HexCiv.Render
     ///   1〜4個+中央の高層ブロックのクラスタを表示。配置・色は都市Idから決定的(毎フレームの
     ///   UnityEngine.Random なし)。城壁("walls")建設済みなら暗石色の低い六角壁リングを追加。
     ///   人口段階か城壁状態が変わった時のみ再構築(都市Idごとにキャッシュ)
+    /// ・占領都市の炎上(2026-07-21 追加。OnCityCaptured 購読): 占領された都市に暗灰色の煙4個
+    ///   (各周期約1.2秒・位相ずらし・同じクアッドをループ再利用)+バナー下の淡いオレンジの
+    ///   残り火グローを付与。占領時の state.TurnNumber を記録し、Update() が現在ターンを
+    ///   ポーリングして5ターンかけて徐々に鎮火(+5ターンで完全消滅・エフェクト破棄)。
+    ///   8倍速以上では開始せず、進行中も非表示化。都市ビューコンテナ(Root)の子に付けるため
+    ///   Refresh 差分・ビュー破棄・再Init で自動的に片付く
+    /// ・生産完成スパークル(2026-07-21 追加): 成長パルスと同じキャッシュ+ポーリング方式で
+    ///   Buildings.Count の増加を検知し、金色スパークル5個が都市ブロックから上昇(約0.5秒。
+    ///   都市誕生バーストのパーティクルプールを再利用)。生成/ロード直後と8倍速以上ではスキップ
     /// Init(state) 内でイベントを購読し、再Init/OnDestroy で必ず解除する。
     /// </summary>
     public class EntityRenderer : MonoBehaviour
@@ -60,6 +69,8 @@ namespace HexCiv.Render
         const int SortUnitFlash = 14;
         const int SortDamageText = 15;
         const int SortFoundParticle = 15;   // 都市誕生パーティクル(ダメージ数字と同層の一時演出)
+        const int SortCityEmber = 4;        // 炎上の残り火グロー(バナー5の直下)
+        const int SortCitySmoke = 7;        // 炎上の煙(霧8より下 = 視界外のゴースト都市では霧に霞む)
 
         // ---- 演出パラメータ(すべて表示のみ・非スケール時間) ----
         const float TweenSharpness = 18f;      // 指数平滑の強さ。1タイル移動が約0.15〜0.2秒で収束
@@ -85,6 +96,20 @@ namespace HexCiv.Render
         const int FoundParticlePoolSize = 18;    // 誕生パーティクルプール(3都市同時分。最古から再利用)
         const float FoundParticleY = 0.5f;       // 誕生パーティクルの基準高さ(バナーの少し下)
 
+        // ---- 占領都市の炎上(2026-07-21 Claude Code 追加。表示のみ・非スケール時間) ----
+        const float BurnPuffCycle = 1.2f;        // 煙1個の上昇→消滅の周期(位相をずらしてループ)
+        const int BurnPuffCount = 4;             // 都市1つあたりの煙クアッド数
+        const float BurnPuffBaseY = 0.24f;       // 煙の開始高さ(都市ブロックの上端付近)
+        const float BurnPuffRise = 0.55f;        // 1周期の上昇量
+        const float BurnSmokeMaxAlpha = 0.55f;   // 煙の最大アルファ(鎮火の進行でさらに減衰)
+        const int BurnFadeTurns = 5;             // 占領から完全鎮火までのターン数
+        const float BurnEmberMaxAlpha = 0.35f;   // 残り火グローの最大アルファ
+
+        // ---- 生産完成スパークル(2026-07-21 Claude Code 追加。表示のみ) ----
+        const float SparkleLife = 0.5f;          // スパークルの寿命
+        const int SparkleCount = 5;              // 建物1件完成ごとの金色スパークル数
+        const float SparkleBaseScale = 0.7f;     // 誕生パーティクルより小さめの基準スケール
+
         // ---- 待機アニメーション(2026-07-21 Claude Code 追加。表示のみ・非スケール時間) ----
         const float IdleBobAmplitude = 0.02f;    // 上下ゆれの振幅(ワールドY±0.02)
         const float IdleBobPeriod = 2.5f;        // 上下ゆれの周期(秒)
@@ -102,6 +127,16 @@ namespace HexCiv.Render
         static readonly Color HpHigh = new Color(0.20f, 0.85f, 0.20f, 1f);
         static readonly Color DamageColor = new Color(1f, 0.22f, 0.18f, 1f);
         static readonly Color FoundParticleColor = new Color(1f, 0.82f, 0.30f, 1f);   // 都市誕生の金色
+        static readonly Color BurnSmokeColor = new Color(0.22f, 0.22f, 0.25f, 1f);    // 炎上の暗灰色の煙
+        static readonly Color BurnEmberColor = new Color(1f, 0.45f, 0.10f, 1f);       // 残り火のオレンジ
+        static readonly Color SparkleColor = new Color(1f, 0.90f, 0.40f, 1f);         // 完成スパークルの金色
+        static readonly Vector3[] BurnPuffOffsets =    // 煙の水平配置(決定的。Idに依らず固定で十分)
+        {
+            new Vector3(-0.16f, 0f, -0.10f),
+            new Vector3( 0.15f, 0f,  0.05f),
+            new Vector3(-0.03f, 0f,  0.17f),
+            new Vector3( 0.09f, 0f, -0.15f),
+        };
 
         static MaterialPropertyBlock mpb;
         static readonly int ColorPropId = Shader.PropertyToID("_Color");
@@ -152,6 +187,14 @@ namespace HexCiv.Render
             public GameObject Cluster;    // ブロック群+城壁リングのルート
             public int ClusterTier = -1;  // 構築済みの人口段階(-1 = 未構築)
             public bool ClusterWalls;     // 構築済みの城壁有無
+            // ---- 炎上(占領)エフェクト(2026-07-21 追加) ----
+            public GameObject BurnRoot;        // 煙+残り火のルート(都市Rootの子。鎮火時に破棄)
+            public MeshRenderer[] BurnPuffs;   // 煙クアッド(ループ再利用)
+            public float[] BurnPuffPhase;      // 各煙の位相(0..1。周期をずらす)
+            public MeshRenderer BurnEmber;     // バナー下の残り火グロー
+            public int BurnCaptureTurn = -1;   // 占領されたターン(-1 = 炎上していない)
+            // ---- 生産完成スパークル(2026-07-21 追加) ----
+            public int LastBuildings = -1;     // 建物数キャッシュ(-1 = 未観測。生成/ロード直後は発火しない)
         }
 
         /// <summary>撃破フェード中の旧ビュー(状態からは既に消えている)。</summary>
@@ -176,7 +219,10 @@ namespace HexCiv.Render
             public Vector3 BasePos;
         }
 
-        /// <summary>都市誕生バーストの金色パーティクル(プール。DamageText と同じ再利用方式)。</summary>
+        /// <summary>
+        /// 都市誕生バースト/生産完成スパークルの金色パーティクル(プール。DamageText と同じ再利用方式)。
+        /// Life/Tint/BaseScale はスポーン時に必ず設定される(2026-07-21 スパークル対応で追加)。
+        /// </summary>
         class FoundParticle
         {
             public GameObject Go;
@@ -185,7 +231,10 @@ namespace HexCiv.Render
             public float Age;
             public bool Active;
             public Vector3 Origin;
-            public Vector3 Velocity;   // 寿命内の総変位(easeOut で外側へ飛散)
+            public Vector3 Velocity;   // 寿命内の総変位(easeOut で飛散/上昇)
+            public float Life;         // 寿命(誕生バースト=FoundParticleLife / スパークル=SparkleLife)
+            public Color Tint;         // 色(フェードは毎フレーム Tint から計算)
+            public float BaseScale;    // 基準スケール(スパークルは小さめ)
         }
 
         GameState state;
@@ -220,6 +269,8 @@ namespace HexCiv.Render
         Mesh bannerMesh;    // 都市バナー
         Mesh foundParticleMesh;   // 都市誕生パーティクルの小さな矩形
         Mesh fortifyGlowMesh;     // 防御態勢グロー用の白リング(色はMaterialPropertyBlockで着色)
+        Mesh burnPuffMesh;        // 炎上の煙クアッド(色・フェードはMaterialPropertyBlockで着色)
+        Mesh burnEmberMesh;       // 炎上の残り火グロー(バナー下の横長クアッド)
 
         /// <summary>初期化。再呼び出し(リスタート)にも対応。</summary>
         public void Init(GameState state)
@@ -271,6 +322,10 @@ namespace HexCiv.Render
                 // 待機アニメ用グローリング(2026-07-21 追加): 頂点色は白で作り、
                 // 実際の色・アルファは MaterialPropertyBlock で毎フレーム変える(フラッシュと同方式)
                 fortifyGlowMesh = RenderUtil.BuildRing(0.46f, 0.60f, 24, Color.white);
+                // 炎上エフェクト用(2026-07-21 追加): 同じく頂点色は白で作り、
+                // 煙の暗灰色・残り火のオレンジは MaterialPropertyBlock で毎フレーム変える
+                burnPuffMesh = RenderUtil.BuildQuadXZ(0.20f, 0.20f, Color.white, false);
+                burnEmberMesh = RenderUtil.BuildQuadXZ(2.4f, 0.62f, Color.white, false);
             }
 
             SubscribeEvents(state);
@@ -527,6 +582,11 @@ namespace HexCiv.Render
                         v.Banner.transform.localScale = new Vector3(s, 1f, s);
                     }
                 }
+
+                // 占領都市の炎上(2026-07-21 追加): 煙の上昇ループ+残り火の明滅。
+                // 現在ターンをポーリングし、占領から5ターンかけて徐々に鎮火する(表示のみ)。
+                if (v.BurnCaptureTurn >= 0)
+                    TickBurning(v, snapAll);
             }
 
             // ---- ダメージ数字: 上昇 + フェード ----
@@ -553,7 +613,8 @@ namespace HexCiv.Render
                 }
             }
 
-            // ---- 都市誕生パーティクル: 外側へ飛散(easeOut) + 縮小 + フェード ----
+            // ---- 都市誕生/生産完成パーティクル: 飛散・上昇(easeOut) + 縮小 + フェード ----
+            // (寿命・色・基準スケールはスポーン時に設定された fp.Life / fp.Tint / fp.BaseScale を使う)
             if (foundPool != null)
             {
                 for (int i = 0; i < foundPool.Length; i++)
@@ -561,7 +622,7 @@ namespace HexCiv.Render
                     var fp = foundPool[i];
                     if (!fp.Active) continue;
                     fp.Age += dt;
-                    float t = fp.Age / FoundParticleLife;
+                    float t = fp.Age / Mathf.Max(0.0001f, fp.Life);
                     if (t >= 1f || fp.Go == null)
                     {
                         fp.Active = false;
@@ -570,9 +631,9 @@ namespace HexCiv.Render
                     }
                     float ease = 1f - (1f - t) * (1f - t);   // 勢いよく飛び出して減速
                     fp.Tr.localPosition = fp.Origin + fp.Velocity * ease;
-                    float sc = 1f - 0.45f * t;
+                    float sc = fp.BaseScale * (1f - 0.45f * t);
                     fp.Tr.localScale = new Vector3(sc, 1f, sc);
-                    var c = FoundParticleColor;
+                    var c = fp.Tint;
                     c.a = 1f - t * t;
                     mpb.SetColor(ColorPropId, c);
                     fp.Mr.SetPropertyBlock(mpb);
@@ -673,11 +734,20 @@ namespace HexCiv.Render
         void HandleCityCaptured(City city, Player oldOwner, Player newOwner)
         {
             CityView v;
-            if (city != null && cityViews.TryGetValue(city.Id, out v)
-                && v.Root != null && v.Root.activeSelf)
+            if (city == null || !cityViews.TryGetValue(city.Id, out v) || v.Root == null)
+                return;
+            if (v.Root.activeSelf)
             {
                 StartFlash(v.Flash, out v.FlashTime, out v.FlashDuration,
                     out v.FlashWithRed, CaptureFlashDuration, false);
+            }
+            // 炎上開始(2026-07-21 追加。表示のみ): 占領ターンを記録し、Update() の TickBurning が
+            // 以後5ターンかけて鎮火させる。8倍速以上では開始しない(他FXと同じ判定)。
+            // 視界外(Root非表示)でも記録は行い、探索した時点でまだ燃えていれば煙が見える。
+            if (state != null && Time.timeScale < SnapTimeScale)
+            {
+                v.BurnCaptureTurn = state.TurnNumber;
+                EnsureBurnFx(v);
             }
         }
 
@@ -791,6 +861,9 @@ namespace HexCiv.Render
                 if (fp.Go == null) continue;
                 fp.Active = true;
                 fp.Age = 0f;
+                fp.Life = FoundParticleLife;   // 誕生バーストは従来どおりの寿命・色・スケール
+                fp.Tint = FoundParticleColor;
+                fp.BaseScale = 1f;
                 // 等間隔+わずかな角度ジッターで放射状に(表示のみなので UnityEngine.Random で可)
                 float ang = (360f / FoundParticleCount) * i + Random.Range(-14f, 14f);
                 float rad = ang * Mathf.Deg2Rad;
@@ -817,6 +890,138 @@ namespace HexCiv.Render
             fp.Mr = mr;
             fp.Go.SetActive(false);
             return fp;
+        }
+
+        /// <summary>
+        /// 生産完成スパークル(2026-07-21 追加。表示のみ): 建物完成時に金色スパークル5個を
+        /// 都市ブロック付近からほぼ真上へ飛ばす(約0.5秒)。都市誕生バーストと同じ
+        /// パーティクルプールを再利用する(ウォームアップ後はアロケーションなし)。
+        /// </summary>
+        void SpawnBuildingSparkle(Vector3 worldPos)
+        {
+            if (foundPool == null)
+            {
+                foundPool = new FoundParticle[FoundParticlePoolSize];
+                for (int i = 0; i < FoundParticlePoolSize; i++) foundPool[i] = CreateFoundParticle();
+            }
+            if (mpb == null) mpb = new MaterialPropertyBlock();
+
+            for (int i = 0; i < SparkleCount; i++)
+            {
+                var fp = foundPool[foundPoolCursor];                  // ラウンドロビン = 最古を再利用
+                foundPoolCursor = (foundPoolCursor + 1) % FoundParticlePoolSize;
+                if (fp.Go == null) continue;
+                fp.Active = true;
+                fp.Age = 0f;
+                fp.Life = SparkleLife;
+                fp.Tint = SparkleColor;
+                fp.BaseScale = SparkleBaseScale;
+                // 都市ブロックのあたりから上昇(わずかな水平ジッター。表示のみなので UnityEngine.Random で可)
+                fp.Origin = worldPos + new Vector3(
+                    Random.Range(-0.22f, 0.22f), 0.25f, Random.Range(-0.22f, 0.22f));
+                fp.Velocity = new Vector3(
+                    Random.Range(-0.10f, 0.10f), Random.Range(0.55f, 0.85f), Random.Range(-0.10f, 0.10f));
+                fp.Tr.localPosition = fp.Origin;
+                fp.Tr.localScale = new Vector3(SparkleBaseScale, 1f, SparkleBaseScale);
+                mpb.SetColor(ColorPropId, SparkleColor);
+                fp.Mr.SetPropertyBlock(mpb);
+                fp.Go.SetActive(true);
+            }
+        }
+
+        // ------------------------------------------------------------------
+        // 占領都市の炎上(2026-07-21 Claude Code 追加。表示のみ)
+        // ------------------------------------------------------------------
+
+        /// <summary>
+        /// 炎上エフェクト(煙4個+バナー下の残り火グロー)を都市ビューコンテナに(なければ)作る。
+        /// 都市Root の子のため、Refresh 差分でのビュー使い回し・ビュー破棄・再Init で自動的に片付く。
+        /// 最初の TickBurning までの1フレームで素の白クアッドが見えないよう透明で初期化する。
+        /// </summary>
+        void EnsureBurnFx(CityView v)
+        {
+            if (v.BurnRoot != null) return;   // 再占領は BurnCaptureTurn の更新だけで良い
+            if (mpb == null) mpb = new MaterialPropertyBlock();
+
+            v.BurnRoot = new GameObject("Burning");
+            v.BurnRoot.transform.SetParent(v.Root.transform, false);
+
+            var clear = new Color(0f, 0f, 0f, 0f);
+            v.BurnPuffs = new MeshRenderer[BurnPuffCount];
+            v.BurnPuffPhase = new float[BurnPuffCount];
+            for (int i = 0; i < BurnPuffCount; i++)
+            {
+                var start = BurnPuffOffsets[i % BurnPuffOffsets.Length];
+                start.y = BurnPuffBaseY;
+                var mr = RenderUtil.NewMeshChild(v.BurnRoot.transform, "Smoke" + i, burnPuffMesh,
+                    baseMat, start, SortCitySmoke);
+                mpb.SetColor(ColorPropId, clear);
+                mr.SetPropertyBlock(mpb);
+                v.BurnPuffs[i] = mr;
+                v.BurnPuffPhase[i] = (float)i / BurnPuffCount;   // 均等に位相をずらす
+            }
+
+            v.BurnEmber = RenderUtil.NewMeshChild(v.BurnRoot.transform, "Ember", burnEmberMesh,
+                baseMat, new Vector3(0f, 0.73f, 0.62f), SortCityEmber);
+            mpb.SetColor(ColorPropId, clear);
+            v.BurnEmber.SetPropertyBlock(mpb);
+        }
+
+        /// <summary>
+        /// 炎上の毎フレーム更新(Update() の都市ループから呼ばれる。表示のみ)。
+        /// 現在ターンをポーリングし、占領から BurnFadeTurns ターンで完全鎮火(エフェクト破棄)。
+        /// それまでは経過ターンに比例して煙・残り火を減衰させる。
+        /// 8倍速以上(snapAll = 他FXと同じ判定)の間は非表示にし、速度を戻せば再表示する。
+        /// </summary>
+        void TickBurning(CityView v, bool snapAll)
+        {
+            if (v.BurnRoot == null) { v.BurnCaptureTurn = -1; return; }
+
+            int turnsSince = state.TurnNumber - v.BurnCaptureTurn;
+            if (turnsSince >= BurnFadeTurns)
+            {
+                Destroy(v.BurnRoot);
+                v.BurnRoot = null;
+                v.BurnPuffs = null;
+                v.BurnPuffPhase = null;
+                v.BurnEmber = null;
+                v.BurnCaptureTurn = -1;
+                return;
+            }
+
+            bool show = !snapAll;
+            if (v.BurnRoot.activeSelf != show) v.BurnRoot.SetActive(show);
+            if (!show) return;
+
+            // 経過ターンに応じた全体強度(1 → 0。ロード等で負になっても clamp で安全)
+            float intensity = 1f - Mathf.Clamp01(turnsSince / (float)BurnFadeTurns);
+            float now = Time.unscaledTime;
+
+            for (int i = 0; i < v.BurnPuffs.Length; i++)
+            {
+                var mr = v.BurnPuffs[i];
+                if (mr == null) continue;
+                float t = Mathf.Repeat(now / BurnPuffCycle + v.BurnPuffPhase[i], 1f);   // 0..1 ループ
+                var p = BurnPuffOffsets[i % BurnPuffOffsets.Length];
+                p.y = BurnPuffBaseY + BurnPuffRise * t;
+                mr.transform.localPosition = p;
+                float sc = 0.7f + 0.6f * t;   // 上昇しながらゆっくり広がる
+                mr.transform.localScale = new Vector3(sc, 1f, sc);
+                var c = BurnSmokeColor;
+                c.a = intensity * BurnSmokeMaxAlpha * Mathf.Sin(t * Mathf.PI);   // 出現→消滅を滑らかに
+                mpb.SetColor(ColorPropId, c);
+                mr.SetPropertyBlock(mpb);
+            }
+
+            if (v.BurnEmber != null)
+            {
+                // 残り火: 淡いオレンジのゆらぎ(位相は座標ハッシュで都市ごとにずらす)
+                var ec = BurnEmberColor;
+                ec.a = intensity * BurnEmberMaxAlpha
+                    * (0.75f + 0.25f * Mathf.Sin(now * 7.3f + RenderUtil.Hash01(v.Coord) * (Mathf.PI * 2f)));
+                mpb.SetColor(ColorPropId, ec);
+                v.BurnEmber.SetPropertyBlock(mpb);
+            }
         }
 
         // ------------------------------------------------------------------
@@ -1027,6 +1232,17 @@ namespace HexCiv.Render
             if (v.LastPop >= 0 && c.Population > v.LastPop)
                 v.GrowthPulseTime = GrowthPulseDuration;
             v.LastPop = c.Population;
+
+            // 生産完成スパークル(2026-07-21 追加。表示のみ): 成長パルスと同じキャッシュ+
+            // ポーリング方式で Buildings.Count の増加を検知して金色スパークルを飛ばす
+            // (生成/ロード/再Init直後は LastBuildings=-1 で発火しない。8倍速以上はスキップ)
+            int builtCount = c.Buildings != null ? c.Buildings.Count : 0;
+            if (v.LastBuildings >= 0 && builtCount > v.LastBuildings
+                && !suppressSpawnPop && Time.timeScale < SnapTimeScale)
+            {
+                SpawnBuildingSparkle(p);   // p はタイル視覚高さ込みの都市ワールド位置
+            }
+            v.LastBuildings = builtCount;
 
             bool damaged = c.Hp < c.MaxHp;
             if (v.HpRoot.activeSelf != damaged) v.HpRoot.SetActive(damaged);
