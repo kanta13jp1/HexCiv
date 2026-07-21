@@ -57,6 +57,12 @@ namespace HexCiv.Audio
         AudioClip panelOpenClip;
         AudioClip minimapJumpClip;
 
+        // --- 2026-07-22 Claude Code 追加: 実績解除チャイム ---
+        // 実績解除トースト(UI/AchievementPanel.cs)が表示される瞬間に鳴らす明るいチャイム。
+        // 高音域の装飾二音+きらめく和音で、既存のアルペジオ系チャイム(遺産/偉人/作品/研究)
+        // とは音域・構成で聞き分けられる。音量・ミュートは既存の Play() が一括処理する。
+        AudioClip achievementClip;
+
         // --- 2026-07-21 Claude Code 追加: 開幕ホルン ---
         // 新しいゲームの開始時(TurnManager.BeginGame の開幕ログ「文明の夜明け ―」)に一度だけ
         // 鳴らす、静かな二音のホルンコール(約1.2秒、C4→G4の上行五度)。祝祭的で長い勝利
@@ -402,6 +408,10 @@ namespace HexCiv.Audio
             // 生成はこの初期化経路で一度だけ行い、RegisterClip 経由で破棄も既存と同じ扱い。
             panelOpenClip = CreatePanelOpenClip();
             minimapJumpClip = CreateMinimapJumpClip();
+
+            // --- 2026-07-22 Claude Code 追加: 実績解除チャイム ---
+            // 生成はこの初期化経路で一度だけ行い、RegisterClip 経由で破棄も既存と同じ扱い。
+            achievementClip = CreateAchievementClip();
         }
 
         public void PlayUiClick() => Play(uiClickClip);
@@ -435,6 +445,10 @@ namespace HexCiv.Audio
         //  音量・ミュートは Play() が一括処理)
         public void PlayPanelOpen() => Play(panelOpenClip);
         public void PlayMinimapJump() => Play(minimapJumpClip);
+
+        // 2026-07-22 Claude Code 追加: 実績解除チャイム(UI/AchievementPanel.cs のトーストが呼ぶ。
+        // 音量・ミュートは Play() が一括処理)
+        public void PlayAchievement() => Play(achievementClip);
 
         // 2026-07-21 Claude Code 追加: イベントスティング(音量・ミュートは Play() が一括処理)
         public void PlayWarDeclared() => Play(warStingClip);
@@ -1431,6 +1445,46 @@ namespace HexCiv.Audio
                 float p = t / 0.09f;
                 float f = p < 0.5f ? 659.25f : 987.77f;
                 return (Triangle(f, t) * 0.7f + 0.2f * Sine(f * 2f, t)) * Decay(p, 7f) * 0.26f;
+            });
+        }
+
+        /// <summary>
+        /// 実績解除チャイム(2026-07-22 Claude Code 追加)。約0.85秒。
+        /// 高音域の素早い装飾二音(E6→A6)に続けて、0.14秒から明るいCメジャー系の
+        /// きらめく和音(C6+E6+G6+薄いC7)が振幅トレモロ付きで立ち上がり、減衰する。
+        /// 既存のアルペジオ系チャイム(遺産D5系/偉人G4系/作品E5系/研究A4系)より
+        /// 高い音域と「装飾音→和音」の2段構成で聞き分けられる。周波数変調ではなく
+        /// 振幅トレモロを使い、位相の不連続によるチャープひずみを避ける。
+        /// </summary>
+        AudioClip CreateAchievementClip()
+        {
+            const float duration = 0.85f;
+            return CreateClip("Achievement Unlock", duration, t =>
+            {
+                float sample = 0f;
+
+                // 装飾二音: E6(1318.51Hz)→A6(1760Hz)の速い上行(各に薄い2倍音)
+                if (t < 0.12f)
+                    sample += (Sine(1318.51f, t) + 0.30f * Sine(2637.02f, t)) *
+                        Mathf.Exp(-t * 22f) * 0.35f;
+                float g2 = t - 0.07f;
+                if (g2 >= 0f && g2 < 0.14f)
+                    sample += (Sine(1760f, g2) + 0.30f * Sine(3520f, g2)) *
+                        Mathf.Exp(-g2 * 20f) * 0.38f;
+
+                // きらめく和音: 0.14秒から C6+E6+G6+薄いC7、9Hzの振幅トレモロ付きで減衰
+                float ct = t - 0.14f;
+                if (ct >= 0f)
+                {
+                    float tremolo = 0.85f + 0.15f * Mathf.Sin(2f * Mathf.PI * 9f * ct);
+                    float env = Mathf.Clamp01(ct / 0.02f) * Mathf.Exp(-ct * 3.4f) *
+                        Mathf.Clamp01((duration - t) / 0.06f);
+                    float chord = Sine(1046.50f, ct) + 0.80f * Sine(1318.51f, ct)
+                        + 0.65f * Sine(1567.98f, ct) + 0.28f * Sine(2093.00f, ct);
+                    sample += chord * env * tremolo * 0.30f;
+                }
+
+                return Mathf.Clamp(sample * 0.9f, -0.85f, 0.85f);
             });
         }
 

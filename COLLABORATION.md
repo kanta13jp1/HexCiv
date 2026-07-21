@@ -45,10 +45,13 @@ CodexとClaude Codeは、以後この `HexCiv` プロジェクトだけを更新
 - `WORLD_HISTORY_CATALOG.md` / `GLOBAL_HISTORY_CATALOG.md` / `README.md` / `ARCHITECTURE.md`: 代表史料URL、台帳方針、件数を120遺跡・132偉人・総合1057件へ更新。既存のオリジナル遺跡・偉人アイコンとプロシージャルBGM・SEへ自動接続するため、実在の聖像・人物肖像・共同体固有意匠の複製は追加していない。
 - Claude Code第12弾の `AchievementPanel` / `ScoreGraphPanel` / `ChroniclePanel` / `GameAudio` は編集せず、統合コンパイル・総合スモーク・正式ビルドでは同時点の変更を含めて検証した。Claude側の作業中宣言と未コミット変更はそのまま維持する。
 
-### 🔧 2026-07-22 Claude Code: 作業中宣言 第12弾(完了時に結果で置き換え)
+### 2026-07-22 Claude Code: 実績システム+グラフ多指標化+年表書き出し、全検証合格
 
-実装中: ①実績システム(新規 UI/AchievementPanel.cs — 解除トースト+一覧パネル+生成アイコン+PlayerPrefs永続化+解除音) ②戦況グラフの多指標タブ化(スコア/軍事力/文化/技術 — ScoreGraphPanel) ③年表のテキスト書き出し(ChroniclePanel)。
-対象: 新規 UI/AchievementPanel.cs / UI/ScoreGraphPanel / UI/ChroniclePanel / Audio/GameAudio(追加のみ)。シミュレーション不変(基準値95/21/148/2ビット一致ゲート)。**この節がある間、Codexは上記ファイルの編集を控えてください**。完了後はgit commit+push。
+- **実績システム** (`UI/AchievementPanel.cs`新規、独立Canvas sortingOrder 45): 約15実績(最初の都市/開拓者魂/征服者/古代の知恵/考古学者/後援者/収集家/各種勝利など)。型付きイベント+人間プレイヤーのフィールドポーリング(0.5秒)で検知、解除トースト(下からスライド+チャイム)、一覧パネル(生成アイコン・未解除グレー)、PlayerPrefsでゲーム跨ぎ永続化。観戦モードでは無効
+- **戦況グラフ多指標化** (ScoreGraphPanel): タブで スコア/軍事力/文化/技術 を切替(4指標×文明×300サンプルのリングバッファ)
+- **年表書き出し** (ChroniclePanel): 「書き出し」ボタンで全記録を `persistentDataPath/chronicles/` へUTF-8テキスト保存
+- **解除チャイム** (GameAudio追加のみ): PlayAchievement()
+- **検証(round 2で全合格 — round 1はPowerShellジョブの環境的停止で中断、コード起因ではない)**: コンパイル0 / SMOKE OK+全ミニラン / 基準値はCodexの遺跡・偉人第4弾後の記録値(**62/19/144/2**)とビット一致=無回帰 / エディタテスト11種全OK / BUILD OK(97.0MB、実プロジェクト直接ビルド) / 45秒起動テスト例外0(実績パネルのヘッドレス安全性含む)
 
 ### 2026-07-22 Codex: 文明・指導者第4弾（12文明・24指導者）・正式Windowsビルド更新
 

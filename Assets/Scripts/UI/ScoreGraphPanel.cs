@@ -6,9 +6,12 @@ using HexCiv.Core;
 namespace HexCiv.UI
 {
     /// <summary>
-    /// 戦況グラフ(2026-07-20 Claude Code 追加)。毎ターン各文明のスコア
-    /// (Σ人口×3 + 都市数×8 + 技術数×5 — TurnManager のスコア勝利と同じ式)を
-    /// 表示側のリングバッファ(最大300サンプル)へ記録し、Texture2D の折れ線グラフとして描く。
+    /// 戦況グラフ(2026-07-20 Claude Code 追加)。毎ターン各文明の4指標
+    /// (スコア=Σ人口×3+都市数×8+技術数×5 — TurnManager のスコア勝利と同じ式 /
+    /// 軍事力=Player.MilitaryPower() / 文化=TotalCulture / 技術=KnownTechs.Count)を
+    /// 表示側のリングバッファ(最大300サンプル×4指標×文明数)へ記録し、
+    /// 上部のタブ(スコア/軍事力/文化/技術 — 2026-07-22 Claude Code 追加)で選んだ指標を
+    /// Texture2D の折れ線グラフとして描く。タブ切替は記録済みバッファからの再描画のみ。
     /// UIManager が新しいゲームごとに生成する(Canvas と共に破棄されるため、履歴も
     /// 新規ゲームで自動的にクリアされる)。開閉は「戦況」ボタン(通常プレイの二段目/観戦バー)、
     /// Esc は UIManager.CloseAllPanels 経由で閉じる。シミュレーションへは読み取り専用。
@@ -19,16 +22,34 @@ namespace HexCiv.UI
         const int TexWidth = 320;
         const int TexHeight = 160;
 
+        // ---- 指標タブ(2026-07-22 Claude Code 追加) ----
+        /// <summary>指標の数(0=スコア/1=軍事力/2=文化/3=技術)。</summary>
+        const int MetricCount = 4;
+        static readonly string[] MetricNames = { "スコア", "軍事力", "文化", "技術" };
+        /// <summary>タブごとの説明行(グラフ上部に表示。すべて表示専用の読み取り)。</summary>
+        static readonly string[] MetricFormulas =
+        {
+            "スコア = Σ人口×3 + 都市数×8 + 技術数×5",
+            "軍事力 = Σ戦闘ユニットの(戦闘力+遠隔戦闘力)×HP/100",
+            "文化 = 累計文化ポイント",
+            "技術 = 研究済みの技術数",
+        };
+
         GameState state;
         GameObject panel;
         RawImage graphImage;
         Texture2D graphTexture;
         Text rangeText;
+        Text formulaText;
         readonly List<Text> legendTexts = new List<Text>();
+        readonly Button[] tabButtons = new Button[MetricCount];
+        /// <summary>表示中の指標(タブで切り替える。記録自体は常に全指標)。</summary>
+        int selectedMetric;
 
-        /// <summary>プレイヤーごとのスコア履歴(state.Players と同じ並び。滅亡後も列を揃えるため全員毎ターン記録)。</summary>
-        readonly List<List<int>> samples = new List<List<int>>();
-        /// <summary>記録したターン番号(samples の列と対応)。</summary>
+        /// <summary>指標ごと×プレイヤーごとの履歴(state.Players と同じ並び。滅亡後も列を揃える
+        /// ため全員毎ターン記録。300サンプル×4指標×最大8文明のintで上限約38KB)。</summary>
+        readonly List<List<int>>[] metricSamples = new List<List<int>>[MetricCount];
+        /// <summary>記録したターン番号(metricSamples の列と対応)。</summary>
         readonly List<int> sampleTurns = new List<int>();
         int lastSampledTurn = int.MinValue;
         bool textureDirty;
@@ -39,12 +60,16 @@ namespace HexCiv.UI
         public void Init(GameState s)
         {
             state = s;
-            samples.Clear();
             sampleTurns.Clear();
             lastSampledTurn = int.MinValue;
-            if (state != null)
-                for (int i = 0; i < state.Players.Count; i++)
-                    samples.Add(new List<int>());
+            for (int m = 0; m < MetricCount; m++)
+            {
+                if (metricSamples[m] == null) metricSamples[m] = new List<List<int>>();
+                metricSamples[m].Clear();
+                if (state != null)
+                    for (int i = 0; i < state.Players.Count; i++)
+                        metricSamples[m].Add(new List<int>());
+            }
 
             UIStyle.StretchFull(gameObject);   // 子パネルのアンカー基準を Canvas 全面にする
             BuildPanel();
@@ -95,18 +120,30 @@ namespace HexCiv.UI
             if (panel != null) Destroy(panel);
             panel = UIStyle.CreatePanel(transform, "Panel", new Color(0.06f, 0.08f, 0.12f, 0.96f));
             UIStyle.SetRect(panel, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
-                new Vector2(0.5f, 0.5f), new Vector2(0f, 10f), new Vector2(470f, 344f));
+                new Vector2(0.5f, 0.5f), new Vector2(0f, 10f), new Vector2(470f, 382f));
 
             var title = UIStyle.CreateText(panel.transform, "Title", "戦況グラフ", 18,
                 TextAnchor.MiddleCenter, UIStyle.Accent);
             UIStyle.SetRect(title.gameObject, new Vector2(0f, 1f), new Vector2(1f, 1f),
                 new Vector2(0.5f, 1f), new Vector2(0f, -8f), new Vector2(-72f, 24f));
 
-            var formula = UIStyle.CreateText(panel.transform, "Formula",
-                "スコア = Σ人口×3 + 都市数×8 + 技術数×5", 12,
+            // 指標タブ(2026-07-22 追加): スコア/軍事力/文化/技術。切替は再描画のみ。
+            for (int m = 0; m < MetricCount; m++)
+            {
+                int metric = m;   // クロージャ用コピー
+                var tab = UIStyle.CreateButton(panel.transform, "MetricTab" + m, MetricNames[m], 13,
+                    () => SelectMetric(metric));
+                UIStyle.SetRect(tab.gameObject, new Vector2(0f, 1f), new Vector2(0f, 1f),
+                    new Vector2(0f, 1f), new Vector2(23f + m * 108f, -34f), new Vector2(100f, 26f));
+                tabButtons[m] = tab;
+            }
+            UpdateTabVisuals();
+
+            formulaText = UIStyle.CreateText(panel.transform, "Formula",
+                MetricFormulas[selectedMetric], 12,
                 TextAnchor.MiddleCenter, UIStyle.TextDim);
-            UIStyle.SetRect(formula.gameObject, new Vector2(0f, 1f), new Vector2(1f, 1f),
-                new Vector2(0.5f, 1f), new Vector2(0f, -32f), new Vector2(-40f, 18f));
+            UIStyle.SetRect(formulaText.gameObject, new Vector2(0f, 1f), new Vector2(1f, 1f),
+                new Vector2(0.5f, 1f), new Vector2(0f, -62f), new Vector2(-40f, 18f));
 
             var close = UIStyle.CreateButton(panel.transform, "CloseButton", "×", 16, Hide);
             UIStyle.SetRect(close.gameObject, new Vector2(1f, 1f), new Vector2(1f, 1f),
@@ -122,12 +159,12 @@ namespace HexCiv.UI
             graphImage.texture = graphTexture;
             graphImage.raycastTarget = false;
             UIStyle.SetRect(imgGo, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f),
-                new Vector2(0.5f, 1f), new Vector2(0f, -54f), new Vector2(430f, 190f));
+                new Vector2(0.5f, 1f), new Vector2(0f, -84f), new Vector2(430f, 190f));
 
             rangeText = UIStyle.CreateText(panel.transform, "Range", "", 12,
                 TextAnchor.MiddleLeft, UIStyle.TextDim);
             UIStyle.SetRect(rangeText.gameObject, new Vector2(0f, 1f), new Vector2(0f, 1f),
-                new Vector2(0f, 1f), new Vector2(20f, -246f), new Vector2(220f, 18f));
+                new Vector2(0f, 1f), new Vector2(20f, -276f), new Vector2(220f, 18f));
 
             legendTexts.Clear();
             if (state != null)
@@ -140,7 +177,7 @@ namespace HexCiv.UI
                     var t = UIStyle.CreateText(panel.transform, "Legend" + i, "", 13,
                         TextAnchor.MiddleLeft, UIStyle.TextMain);
                     UIStyle.SetRect(t.gameObject, new Vector2(0f, 1f), new Vector2(0f, 1f),
-                        new Vector2(0f, 1f), new Vector2(20f + col * 218f, -266f - row * 19f),
+                        new Vector2(0f, 1f), new Vector2(20f + col * 218f, -296f - row * 19f),
                         new Vector2(214f, 18f));
                     legendTexts.Add(t);
                 }
@@ -154,15 +191,37 @@ namespace HexCiv.UI
             if (state == null) return;
             lastSampledTurn = state.TurnNumber;
             sampleTurns.Add(state.TurnNumber);
-            for (int i = 0; i < samples.Count && i < state.Players.Count; i++)
-                samples[i].Add(ScoreOf(state.Players[i]));
+            for (int m = 0; m < MetricCount; m++)
+            {
+                var series = metricSamples[m];
+                if (series == null) continue;
+                for (int i = 0; i < series.Count && i < state.Players.Count; i++)
+                    series[i].Add(MetricValueOf(state.Players[i], m));
+            }
             while (sampleTurns.Count > MaxSamples)
             {
                 sampleTurns.RemoveAt(0);
-                for (int i = 0; i < samples.Count; i++)
-                    if (samples[i].Count > 0) samples[i].RemoveAt(0);
+                for (int m = 0; m < MetricCount; m++)
+                {
+                    var series = metricSamples[m];
+                    if (series == null) continue;
+                    for (int i = 0; i < series.Count; i++)
+                        if (series[i].Count > 0) series[i].RemoveAt(0);
+                }
             }
             textureDirty = true;
+        }
+
+        /// <summary>指標の現在値(2026-07-22 追加。すべて読み取りのみでシミュレーションには影響しない)。</summary>
+        static int MetricValueOf(Player p, int metric)
+        {
+            switch (metric)
+            {
+                case 1: return p.MilitaryPower();
+                case 2: return p.TotalCulture;
+                case 3: return p.KnownTechs != null ? p.KnownTechs.Count : 0;
+                default: return ScoreOf(p);
+            }
         }
 
         /// <summary>TurnManager のスコア勝利と同じ式(表示専用に複製。シミュレーションには影響しない)。</summary>
@@ -173,6 +232,33 @@ namespace HexCiv.UI
                 score += p.Cities[i].Population * 3;
             score += p.Cities.Count * 8 + p.KnownTechs.Count * 5;
             return score;
+        }
+
+        /// <summary>タブで指標を切り替える(記録済みバッファからの再描画のみ。2026-07-22 追加)。</summary>
+        void SelectMetric(int metric)
+        {
+            if (metric < 0 || metric >= MetricCount) return;
+            selectedMetric = metric;
+            if (formulaText != null) formulaText.text = MetricFormulas[metric];
+            UpdateTabVisuals();
+            Redraw();
+            RefreshLegend();
+        }
+
+        /// <summary>選択中タブの強調表示(背景をハイライト色・ラベルをアクセント色へ)。</summary>
+        void UpdateTabVisuals()
+        {
+            for (int m = 0; m < tabButtons.Length; m++)
+            {
+                var b = tabButtons[m];
+                if (b == null) continue;
+                var cb = b.colors;
+                cb.normalColor = m == selectedMetric ? UIStyle.ButtonHover : UIStyle.ButtonNormal;
+                cb.selectedColor = cb.normalColor;
+                b.colors = cb;
+                var label = UIStyle.ButtonLabel(b);
+                if (label != null) label.color = m == selectedMetric ? UIStyle.Accent : UIStyle.TextMain;
+            }
         }
 
         void Redraw()
@@ -193,7 +279,8 @@ namespace HexCiv.UI
             }
 
             int n = sampleTurns.Count;
-            if (n > 0)
+            var samples = metricSamples[selectedMetric];   // 表示中の指標の履歴(2026-07-22 追加)
+            if (n > 0 && samples != null)
             {
                 int maxScore = 1;
                 for (int p = 0; p < samples.Count; p++)
@@ -242,10 +329,11 @@ namespace HexCiv.UI
                 }
                 else
                 {
-                    int score = i < samples.Count && samples[i].Count > 0
+                    var samples = metricSamples[selectedMetric];   // 表示中の指標の最新値(2026-07-22 追加)
+                    int value = samples != null && i < samples.Count && samples[i].Count > 0
                         ? samples[i][samples[i].Count - 1]
                         : 0;
-                    t.text = $"■ {p.NameJa}  {score}";
+                    t.text = $"■ {p.NameJa}  {value}";
                     t.color = LineColor(p.Color);
                 }
             }

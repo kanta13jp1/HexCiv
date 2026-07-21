@@ -46,6 +46,12 @@ namespace HexCiv.UI
     /// Esc または任意クリックで中断、最後は「ツアー終了」を短く表示する。
     /// カメラ移動は CameraController.FocusOn の再利用(MinimapPanel と同じ取得方法)で、
     /// シミュレーション状態には一切影響しない。
+    ///
+    /// 書き出し(2026-07-22 Claude Code 追加): ヘッダーの「書き出し」ボタンで記録全件を
+    /// Application.persistentDataPath/chronicles/hexciv_chronicle_yyyyMMdd_HHmmss.txt へ
+    /// UTF-8テキストとして保存する(ヘッダーに日時と参加文明、本文は1行1件「ターンN: 本文」)。
+    /// 完了時はパネル上の「書き出しました」ラベルをフェード表示し、UIManager が居れば
+    /// ゲーム内ログにも通知する(F12スクリーンショット保存と同じ流儀)。読み取り専用。
     /// </summary>
     public sealed class ChroniclePanel : MonoBehaviour
     {
@@ -63,6 +69,12 @@ namespace HexCiv.UI
         const float TourFadeInSeconds = 0.25f;
         /// <summary>ラベルのフェードアウト時間(秒)。</summary>
         const float TourFadeOutSeconds = 0.3f;
+
+        // ---- 書き出し(2026-07-22 Claude Code 追加) ----
+        /// <summary>書き出し確認ラベルを不透明のまま保つ時間(秒、非スケール時間)。</summary>
+        const float ExportNoticeHoldSeconds = 1.2f;
+        /// <summary>書き出し確認ラベルのフェードアウト時間(秒)。</summary>
+        const float ExportNoticeFadeSeconds = 0.7f;
 
         // ---- 事件種別ごとのアクセント色 ----
         static readonly Color WarColor     = UIStyle.Danger;                          // 宣戦=赤
@@ -88,6 +100,14 @@ namespace HexCiv.UI
         Text pageText;
         Button prevButton;
         Button nextButton;
+
+        // ---- 書き出し(2026-07-22 Claude Code 追加) ----
+        /// <summary>「書き出しました」確認ラベル(ヘッダー右側。表示後にフェードアウト)。</summary>
+        Text exportNoticeText;
+        /// <summary>確認ラベルの表示開始時刻(Time.unscaledTime。負=非表示)。</summary>
+        float exportNoticeShownAt = -1f;
+        /// <summary>ゲーム内ログ通知先(CameraController と同じシーン検索+キャッシュ方式)。</summary>
+        UIManager uiManager;
 
         // ---- 歴史ツアー(2026-07-21 Claude Code 追加) ----
         /// <summary>ツアーラベル専用の最前面Canvas(sortingOrder=150)。</summary>
@@ -198,6 +218,9 @@ namespace HexCiv.UI
             // 表示中かつdirtyの時だけ可視行を再描画(イベント駆動・毎フレーム仕事なし)
             if (panel.activeSelf && rowsDirty)
                 RefreshRows();
+
+            // 書き出し確認ラベルの保持→フェードアウト(表示中のみ動作。2026-07-22 追加)
+            UpdateExportNotice();
         }
 
         void OnDestroy()
@@ -392,6 +415,18 @@ namespace HexCiv.UI
             UIStyle.SetRect(tour.gameObject, new Vector2(0f, 1f), new Vector2(0f, 1f),
                 new Vector2(0f, 1f), new Vector2(6f, -6f), new Vector2(100f, 28f));
 
+            // 書き出し(2026-07-22 追加): 「歴史ツアー」の右隣。記録全件をUTF-8テキストへ保存する。
+            var export = UIStyle.CreateButton(panel.transform, "ExportButton", "書き出し", 14, ExportChronicle);
+            UIStyle.SetRect(export.gameObject, new Vector2(0f, 1f), new Vector2(0f, 1f),
+                new Vector2(0f, 1f), new Vector2(110f, -6f), new Vector2(86f, 28f));
+
+            // 書き出し確認ラベル(ヘッダー右側・×ボタンの左。書き出し直後だけフェード表示)
+            exportNoticeText = UIStyle.CreateText(panel.transform, "ExportNotice", "", 13,
+                TextAnchor.MiddleRight, PeaceColor);
+            UIStyle.SetRect(exportNoticeText.gameObject, new Vector2(1f, 1f), new Vector2(1f, 1f),
+                new Vector2(1f, 1f), new Vector2(-40f, -6f), new Vector2(170f, 28f));
+            exportNoticeText.gameObject.SetActive(false);
+
             // 10行の再利用ビュー(左からアクセントバー・ターン列・本文)
             for (int i = 0; i < RowsPerPage; i++)
             {
@@ -495,6 +530,112 @@ namespace HexCiv.UI
             if (pageText != null) pageText.text = $"{page + 1} / {pageCount} ページ";
             if (prevButton != null) prevButton.interactable = page > 0;
             if (nextButton != null) nextButton.interactable = page < pageCount - 1;
+        }
+
+        // ==================================================================
+        // 書き出し(2026-07-22 Claude Code 追加)
+        // ==================================================================
+
+        /// <summary>
+        /// 年表の全記録をUTF-8テキストへ書き出す(記録の読み取りのみ。シミュレーションには
+        /// 一切影響しない)。保存先: persistentDataPath/chronicles/
+        /// hexciv_chronicle_yyyyMMdd_HHmmss.txt(フォルダは無ければ作成)。
+        /// ヘッダーに書き出し日時と参加文明、本文は1行1件「ターンN: 本文」。
+        /// 完了時は「書き出しました」ラベルをフェード表示し、UIManager が見つかれば
+        /// ゲーム内ログにも通知する(F12スクリーンショット保存と同じ流儀)。
+        /// 失敗してもゲーム進行には影響させない(警告ログ+失敗表示のみ)。
+        /// </summary>
+        void ExportChronicle()
+        {
+            try
+            {
+                string dir = System.IO.Path.Combine(Application.persistentDataPath, "chronicles");
+                System.IO.Directory.CreateDirectory(dir);
+                string file = System.IO.Path.Combine(dir,
+                    "hexciv_chronicle_" + System.DateTime.Now.ToString("yyyyMMdd_HHmmss") + ".txt");
+
+                var sb = new System.Text.StringBuilder();
+                sb.AppendLine("HexCiv 戦史年表");
+                sb.AppendLine("書き出し日時: " + System.DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"));
+                if (boundState != null && boundState.Players != null && boundState.Players.Count > 0)
+                {
+                    sb.Append("参加文明: ");
+                    for (int i = 0; i < boundState.Players.Count; i++)
+                    {
+                        if (i > 0) sb.Append("、");
+                        var p = boundState.Players[i];
+                        sb.Append(p != null ? p.NameJa : "?");
+                    }
+                    sb.AppendLine();
+                }
+                sb.AppendLine("----------------------------------------");
+                for (int i = 0; i < entries.Count; i++)
+                    sb.AppendLine("ターン" + entries[i].Turn + ": " + ExportBody(entries[i]));
+
+                System.IO.File.WriteAllText(file, sb.ToString(), System.Text.Encoding.UTF8);
+                Debug.Log("年表を書き出しました: " + file);
+                ShowExportNotice("書き出しました");
+                NotifyLog("年表を書き出しました");
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogWarning("年表の書き出しに失敗しました: " + e.Message);
+                ShowExportNotice("書き出しに失敗しました");
+            }
+        }
+
+        /// <summary>
+        /// 記録本文から行頭列と二重になる「ターンN: 」表記だけを取り除いた書き出し用本文を返す
+        /// (本文は「⚔ ターン12: …」形式のため。絵文字などの前置部分は保持し、
+        /// 見つからない場合は本文をそのまま返す)。
+        /// </summary>
+        static string ExportBody(Entry e)
+        {
+            if (string.IsNullOrEmpty(e.Text)) return "";
+            string marker = "ターン" + e.Turn + ": ";
+            int idx = e.Text.IndexOf(marker, System.StringComparison.Ordinal);
+            if (idx < 0) return e.Text;
+            return e.Text.Substring(0, idx) + e.Text.Substring(idx + marker.Length);
+        }
+
+        /// <summary>確認ラベルを不透明で表示する(以後は Update の UpdateExportNotice がフェードさせる)。</summary>
+        void ShowExportNotice(string messageJa)
+        {
+            if (exportNoticeText == null) return;
+            exportNoticeText.text = messageJa;
+            var c = exportNoticeText.color;
+            c.a = 1f;
+            exportNoticeText.color = c;
+            exportNoticeText.gameObject.SetActive(true);
+            exportNoticeShownAt = Time.unscaledTime;
+        }
+
+        /// <summary>確認ラベルの保持→フェードアウト→非表示(非スケール時間基準・非表示時は即return)。</summary>
+        void UpdateExportNotice()
+        {
+            if (exportNoticeText == null || exportNoticeShownAt < 0f) return;
+            float t = Time.unscaledTime - exportNoticeShownAt;
+            if (t >= ExportNoticeHoldSeconds + ExportNoticeFadeSeconds)
+            {
+                exportNoticeShownAt = -1f;
+                exportNoticeText.gameObject.SetActive(false);
+                return;
+            }
+            var c = exportNoticeText.color;
+            c.a = t <= ExportNoticeHoldSeconds
+                ? 1f
+                : Mathf.Clamp01(1f - (t - ExportNoticeHoldSeconds) / ExportNoticeFadeSeconds);
+            exportNoticeText.color = c;
+        }
+
+        /// <summary>
+        /// UIManager のゲーム内ログへ通知する(CameraController と同じシーン検索+キャッシュ方式。
+        /// リスタートで破棄された参照は Unity の null 判定で再検索される。見つからなければ何もしない)。
+        /// </summary>
+        void NotifyLog(string messageJa)
+        {
+            if (uiManager == null) uiManager = FindFirstObjectByType<UIManager>();
+            if (uiManager != null) uiManager.AddLog(messageJa);
         }
 
         // ==================================================================
