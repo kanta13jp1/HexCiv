@@ -13,7 +13,7 @@
 - 個人名が不明な社会では「名は未詳」と明記し、架空名を付けない
 - 現段階では能力差を付けず、全指導者を同じゲームルールで扱う
 
-第1～第3弾の累計は **80文明・155件**（個人名を表示する148件、個人名未詳・考古学上の呼称7件）です。
+第1～第4弾の累計は **92文明・179件**（個人名を表示する172件、個人名未詳・考古学上の呼称7件）です。
 上部バーの「指導者変更」から選択でき、選択内容は次回起動とセーブデータに保持されます。
 
 ## 実装済み（第1弾・107件）
@@ -111,9 +111,26 @@
 | オセアニア | ラパ・ヌイ | ホトゥ・マトゥア（口承）、ンガアラ |
 | オセアニア | フィジー諸邦 | タノア・ヴィサワンガ、セル・エペニサ・ザコンバウ |
 
+## 実装済み（第4弾・24件）
+
+| 共通地域 | 文明 | 指導者 |
+|---|---|---|
+| アフリカ | カネム＝ボルヌ帝国 | ドゥナマ・ダッバレミ、イドリス・アローマ |
+| アフリカ | メリナ王国 | アンドリアナンプイニメリナ、ラナヴァルナ1世 |
+| 西・南アジア | サーサーン朝 | アルダシール1世、ホスロー1世 |
+| 西・南アジア | デリー・スルターン朝 | ラズィーヤ、アラーウッディーン・ハルジー |
+| 東・東南アジア | 新羅 | 善徳女王、武烈王 |
+| 東・東南アジア | マラッカ・スルターン国 | パラメスワラ、マンスール・シャー |
+| ヨーロッパ・地中海 | キーウ・ルーシ | オリハ（オリガ）、ヤロスラウ賢公 |
+| ヨーロッパ・地中海 | ポルトガル王国 | ジョアン1世、マヌエル1世 |
+| アメリカ大陸 | ラコタ諸社会 | マフピーヤ・ルタ（レッド・クラウド）、タタンカ・イヨタケ（シッティング・ブル） |
+| アメリカ大陸 | ポウハタン連合（ツェナコンマカ） | ワフンセナコー、オペチャンカノー |
+| オセアニア | タヒチ王国 | ポマレ2世、ポマレ4世 |
+| オセアニア | ラロトンガ王国 | マケア・ポリ・アリキ、マケア・タカウ・アリキ |
+
 ## 順次追加する範囲
 
-1. 既存80文明の王統を拡充（エジプト諸王朝、メソポタミア諸王、歴代中国皇帝、
+1. 既存92文明の王統を拡充（エジプト諸王朝、メソポタミア諸王、歴代中国皇帝、
    日本の天皇・将軍、朝鮮諸王、イスラーム諸王朝、ヨーロッパ諸王家など）
 2. `CIVILIZATIONS.md` の追加文明と同時に、その文明の代表指導者を追加
 3. 共同統治者、摂政、選挙君主、都市国家の執政者、反植民地運動・独立運動の指導者を追加
@@ -162,6 +179,22 @@
 [ケンブリッジ大学考古学人類学博物館（タノア・ヴィサワンガ）](https://maa.cam.ac.uk/fiji-chiefs-and-governors)、
 [フィジー政府（ザコンバウと1871年王国）](https://www.fiji.gov.fj/Media-Center/Speeches/FIJIAN-PRESIDENT-H-E-RT-EPELI-NAILATIKAU-AT-STATE-)
 などです。伝承人物は伝承と明記し、史料の解釈が分かれる要素を確定事実として書いていません。
+
+第4弾はさらに、[ナイジェリア教育省教材（カネム＝ボルヌ）](https://inspire.education.gov.ng/lessons/10134/preview)、
+[UNESCO（アンブヒマンガの王領地）](https://whc.unesco.org/en/list/950/)、
+[Encyclopaedia Iranica（アルダシール1世）](https://www.iranicaonline.org/articles/ardasir-i/)、
+[Encyclopaedia Iranica（ホスロー1世）](https://www.iranicaonline.org/articles/kosrow-1-parent/)、
+[インド国立記念物局（アラーウッディーン・ハルジー）](https://www.nma.gov.in/showfile.php?lang=1&level=2&lid=1465&ls_id=1199&nma_type=0)、
+[The Met『Silla: Korea's Golden Kingdom』](https://resources.metmuseum.org/resources/metpublications/pdf/Silla_Koreas_Golden_Kingdom.pdf)、
+[マラッカ州政府史](https://melaka.gov.my/en/government/state-info/melaka-history.html)、
+[ウクライナ教育科学省教材（キーウ・ルーシ）](https://dspace.usfa.edu.ua/bitstream/123456789/972/1/Romanko.History%20of%20Ukraine.%20Part%201.pdf)、
+[ポルトガル公爵館（ジョアン1世）](https://pacodosduques.gov.pt/monumentos/paco-dos-duques/historia-paco/joao-i-de-portugal/)、
+[米国国立公園局（シッティング・ブル）](https://home.nps.gov/libi/learn/historyculture/sitting-bull.htm)、
+[米国国立公園局（ワフンセナコー）](https://www.nps.gov/people/powhatan.htm)、
+[タヒチ諸島博物館（ポマレ王統期）](https://www.museetahiti.pf/the-museum-of-tahiti-and-her-islands/?lang=en)、
+[クック諸島史](https://cookislands.travel/islands/history-people)、
+[ニュージーランド国立図書館史料（マケア・タカウ）](https://paperspast.natlib.govt.nz/parliamentary/appendix-to-the-journals-of-the-house-of-representatives/1911/I/142)
+を照合の入口にしました。植民地記録だけに依存せず、先住民名と共同体の政治構造を表示へ残しています。
 
 ゲーム内の正本は `Assets/Scripts/Core/LeaderCatalog.cs` です。この文書とコードの件数・名称は
 同じ変更で更新します。

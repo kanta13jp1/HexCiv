@@ -26,6 +26,16 @@ CodexとClaude Codeは、以後この `HexCiv` プロジェクトだけを更新
 
 ## 最新状況
 
+### 2026-07-22 Codex: 文明・指導者第4弾（12文明・24指導者）・正式Windowsビルド更新
+
+- `Core/CivilizationCatalog.cs` / `Core/LeaderCatalog.cs`: 既存80文明・155指導者のIDと順序を固定した後方追加で、6地域へ各2文明・4指導者を追加。カネム＝ボルヌ／メリナ、サーサーン朝／デリー・スルターン朝、新羅／マラッカ、キーウ・ルーシ／ポルトガル、ラコタ／ポウハタン、タヒチ／ラロトンガを収録し、全92文明・179指導者へ拡張した。各文明へ6拠点・各2指導者を設定し、文明選択、指導者選択、AI重複なし割当、図鑑、セーブへ自動接続した。
+- ラコタの拠点欄は都市ではなく6共同体名として記録し、ポウハタンには地域名ツェナコンマカ、ラロトンガの指導者には伝統首長職アリキを併記した。先住社会を近代国家・都市・絶対王政へ一律に置き換えず、植民地記録だけに依存しない表記方針を `CIVILIZATIONS.md` / `LEADERS.md` に記録した。
+- `CivilizationLeaderExpansionSmokeTest`: 92文明・179指導者、旧56・68・80文明および旧131・155指導者の後方順序、ID一意、6地域×2文明、36追加文明×2指導者、必須情報、所属、既定選択、ラロトンガ／マケア・タカウ指定ゲーム、決定的セーブ往復、既存アイコンを検証し `CIVILIZATION LEADER EXPANSION SMOKE OK`。
+- `GlobalHistoryIndexSmokeTest`: 13分類・台帳1033件、全分類の6地域完全分割、図鑑画像を検証し `GLOBAL HISTORY INDEX SMOKE OK`。台帳文書、README、ARCHITECTUREも92文明・179指導者・1033件へ更新した。
+- Unity 6.3総合 `SmokeTest` を同一ソースから2回実行し、ともに `SMOKE OK`、turn150 `units=95 cities=21 techs=148 wars=2` で完全一致。ログは `C:\Users\kanta\GitHub\HexCiv_Verify_CIV4_20260722\Logs\`。検証コピーの初回ビルドはIL Post ProcessorのIPC待ちで停止したが、正式プロジェクトのLibraryでは再接続後に完走した。
+- 正式 `Build\HexCiv.exe` をUnity 6.3で更新（`BUILD OK: 96940237 bytes`）。15秒ヘッドレス起動でUnity `6000.3.20f1`、例外なし。`Build\HexCiv_Data\Managed\Assembly-CSharp.dll` SHA-256は `5C2F37999E72D8E5C8F03144F48D91397B27151B6B2DB121C50054AC851BAEBD`。
+- Claude Code第11弾の `EntityRenderer` / `ChroniclePanel` / `MinimapPanel` / `InputController` / `GameAudio` / `UIManager` / `ProjectSettings` は編集・ステージせず、正式Buildには同時点の変更を含めてコンパイル・総合スモーク・起動確認した。Claude側の作業中宣言は、相手が専用検証とコミットを終えるまで下に維持する。
+
 ### 2026-07-22 Codex: 作品史第3弾42件・作品7分類アイコン・正式Windowsビルド更新
 
 - `Core/MasterpieceCatalog.cs`: 既存252件のIDと順序を固定し、書籍・絵画・彫刻・建築・音楽・演劇・映画へ6地域から各1件、計42件を末尾追加。全294件（各分野42件、各地域49件）へ拡張した。第3弾文明のブガンダ、アシャンティ、クシャーナ朝、高麗、アチェ、ヴェネツィア、ハンガリー、サポテカ、チェロキー、ラパ・ヌイ、フィジー諸邦に関係する作品を収録し、後世国家への遡及が不適切なガヨのサマン、タルチュム等は文明IDを空欄にした。作者・年代・帰属が不確定な対象も断定を避けて記録した。
