@@ -403,6 +403,67 @@ namespace HexCiv.Core
             W("passion_joan_arc_film", "裁かるゝジャンヌ", MasterpieceKind.Film, "ヨーロッパ・地中海", "1928年", "カール・テオドア・ドライヤー", "ジャンヌ・ダルクの裁判と殉教を、顔の接写と簡素な空間で強く構成した無声映画。", "france"),
             W("roma_2018_film", "ROMA／ローマ", MasterpieceKind.Film, "アメリカ大陸", "2018年", "アルフォンソ・キュアロン", "1970年代メキシコ市の家族と家事労働者の日常を、社会の動乱と個人的記憶に重ねる。", ""),
             W("whale_rider_film", "クジラの島の少女", MasterpieceKind.Film, "オセアニア", "2002年", "ニキ・カーロと製作陣", "マオリの少女パイが伝統を学び、世代間の葛藤を越えて共同体を導く力を示す。", "maori"),
+
+            // ==================================================================
+            // 作品史追加バッチ第3弾（7分類×6地域＝42件）
+            // 既存252件のID・順序を固定し、セーブ互換のため末尾へ追加する。
+            // ==================================================================
+
+            // 書籍・文書（各地域1件）
+            W("basekabaka_be_buganda", "ブガンダ歴代王記", MasterpieceKind.Book, "アフリカ", "1901年初版・後に増補", "アポロ・カグワ", "ブガンダの王統、制度、口承をルガンダ語で記録した歴史書。版を重ねながら内容が増補された。", "buganda", "apollo_kaggwa"),
+            W("buddhacarita", "ブッダチャリタ（仏所行讃）", MasterpieceKind.Book, "西・南アジア", "1～2世紀ごろ", "馬鳴（アシュヴァゴーシャ）", "釈迦の生涯をサンスクリット叙事詩として構成し、写本と諸言語への翻訳で伝わった。", "kushan", "ashvaghosha"),
+            W("hikayat_aceh", "ヒカヤット・アチェ", MasterpieceKind.Book, "東・東南アジア", "17世紀", "アチェ宮廷の編者たち", "イスカンダル・ムダの生涯と王権をマレー語で語る宮廷年代記。複数の写本が伝える。", "aceh"),
+            W("hypnerotomachia_poliphili", "ヒュプネロトマキア・ポリフィリ", MasterpieceKind.Book, "ヨーロッパ・地中海", "1499年", "作者未詳／アルドゥス・マヌティウス刊", "夢の旅を精緻な木版挿絵と実験的な言語で構成した、ヴェネツィア印刷文化の初期刊本。", "venice"),
+            W("hombres_que_disperso_danza", "ロス・オンブレス・ケ・ディスペルソ・ラ・ダンサ", MasterpieceKind.Book, "アメリカ大陸", "1929年", "アンドレス・エネストロサ", "サポテカの口承、人物、土地の記憶をスペイン語文学へ再構成した物語集。", "zapotec", "andres_henestrosa"),
+            W("kohau_rongorongo_tablet", "コハウ・ロンゴロンゴ木板", MasterpieceKind.Book, "オセアニア", "18～19世紀初頭", "ラパ・ヌイの記録者たち", "木板に絵文字状の記号を刻んだ文書。記号体系は現在も確定的には解読されていない。", "rapa_nui"),
+
+            // 絵画（各地域1件）
+            W("asante_adinkra_cloth_1817", "1817年収集のアシャンティ・アディンクラ布", MasterpieceKind.Painting, "アフリカ", "19世紀初頭", "アシャンティの染織職人たち", "濃色の布面へ反復文様を捺染した衣装用染織。1817年の戦いに関わる来歴とともに伝わる。", "asante"),
+            W("kizil_cave_murals", "キジル石窟壁画", MasterpieceKind.Painting, "西・南アジア", "3～8世紀", "亀茲地域の画工たち", "石窟寺院の壁面に仏教説話、礼拝像、寄進者などを描き、シルクロードの交流を伝える。", ""),
+            W("goryeo_water_moon_avalokiteshvara", "高麗の水月観音図", MasterpieceKind.Painting, "東・東南アジア", "14世紀", "高麗の仏画工房", "岩上の観音と善財童子を、精緻な線、金泥、透明感ある彩色で表した高麗仏画。", "goryeo"),
+            W("procession_st_marks_square", "サン・マルコ広場の行列", MasterpieceKind.Painting, "ヨーロッパ・地中海", "1496年", "ジェンティーレ・ベッリーニ", "聖遺物を伴う大行列と広場の建築、人々の装いを大画面に組み上げたヴェネツィア絵画。", "venice"),
+            W("chief_joseph_series_17", "チーフ・ジョセフ・シリーズ第17番", MasterpieceKind.Painting, "アメリカ大陸", "1976年", "ケイ・ウォーキングスティック", "蝋を用いた抽象的な色面と反復形で、歴史上の人物と記憶への応答を構成した絵画。", "cherokee"),
+            W("ana_kai_tangata_rock_art", "アナ・カイ・タンガタの岩絵", MasterpieceKind.Painting, "オセアニア", "年代未確定", "ラパ・ヌイの画工たち", "海食洞の天井や壁に鳥や舟などの顔料画を残し、島の儀礼と海洋文化を伝える岩絵群。", "rapa_nui"),
+
+            // 彫刻（各地域1件）
+            W("sika_dwa_kofi", "黄金の椅子（シカ・ドゥワ・コフィ）", MasterpieceKind.Sculpture, "アフリカ", "17世紀末ごろの伝承", "アシャンティの祭司・工人たち", "アシャンティ共同体の魂と統合を象徴する聖なる椅子。伝承ではオコンフォ・アノキェと結び付けられる。", "asante", "okomfo_anokye"),
+            W("gandhara_parinirvana_relief", "ガンダーラの仏涅槃浮彫", MasterpieceKind.Sculpture, "西・南アジア", "2～3世紀", "ガンダーラの石工たち", "横たわる釈迦と周囲の会衆を片岩へ彫り、涅槃の場面を凝縮した仏教浮彫。", "kushan"),
+            W("goryeo_gilt_bronze_buddha", "高麗の金銅立像", MasterpieceKind.Sculpture, "東・東南アジア", "10～11世紀", "高麗の鋳造工たち", "均整の取れた立ち姿、衣文、手のしぐさを小型の金銅像へまとめた仏教彫刻。", "goryeo"),
+            W("mars_neptune_doges_palace", "巨人の階段のマルスとネプトゥヌス", MasterpieceKind.Sculpture, "ヨーロッパ・地中海", "16世紀", "ヤコポ・サンソヴィーノ", "ヴェネツィアの陸海の支配を象徴する二神像を、ドゥカーレ宮殿の儀礼動線へ配置した。", "venice"),
+            W("monte_alban_danzantes", "モンテ・アルバンの『踊る人々』石彫", MasterpieceKind.Sculpture, "アメリカ大陸", "紀元前500年以降", "サポテカの石工たち", "人体と初期文字の要素を刻んだ石板群。人物の解釈には複数の学説があり、断定を避けて研究される。", "zapotec"),
+            W("hoa_hakananai_a", "ホア・ハカナナイア", MasterpieceKind.Sculpture, "オセアニア", "1000～1200年ごろ", "ラパ・ヌイの石工たち", "玄武岩製のモアイで、背面には後世の鳥人儀礼に関わる岩刻が加えられている。", "rapa_nui"),
+
+            // 建築（各地域1件）
+            W("muzibu_azaala_mpanga", "ムジブ・アザーラ・ムパンガ", MasterpieceKind.Architecture, "アフリカ", "1882年宮殿・1884年以降王墓", "ブガンダの建築家・職人たち", "巨大な茅葺き屋根と木、葦などを用い、カスビ王墓の中心建築として王統と儀礼を担う。", "buganda"),
+            W("takht_i_bahi_monastery", "タフティ・バヒ仏教僧院", MasterpieceKind.Architecture, "西・南アジア", "1～7世紀", "ガンダーラの僧団と建築職人たち", "丘上に祠堂、ストゥーパ院、僧房を段階的に築いた僧院遺跡。クシャーナ期を含む複数時期を伝える。", "kushan"),
+            W("baiturrahman_grand_mosque", "バイトゥラフマン大モスク", MasterpieceKind.Architecture, "東・東南アジア", "17世紀創建・19世紀以降再建", "アチェの宮廷と後世の建築家・職人たち", "アチェ王国期の創建伝承を持ち、1873年の焼失後に再建・拡張されたバンダ・アチェの礼拝建築。", "aceh"),
+            W("doges_palace_venice", "ヴェネツィアのドゥカーレ宮殿", MasterpieceKind.Architecture, "ヨーロッパ・地中海", "14～16世紀を中心に形成", "ヴェネツィアの建築家・石工たち", "総督の居館、議会、裁判、行政機能を中庭と大広間にまとめ、都市国家の統治を可視化した。", "venice"),
+            W("mitla_palace_group", "ミトラの宮殿群", MasterpieceKind.Architecture, "アメリカ大陸", "9～16世紀", "サポテカとミシュテカの建築職人たち", "中庭、列柱広間、石材モザイクの幾何学文様を組み合わせた複数の記念的建築群。", "zapotec"),
+            W("ahu_tongariki", "アフ・トンガリキ", MasterpieceKind.Architecture, "オセアニア", "10～16世紀ごろ", "ラパ・ヌイの共同体", "15体のモアイを載せる島最大級の祭祀基壇で、海岸景観と祖先表象を結び付ける。", "rapa_nui"),
+
+            // 音楽（各地域1件）
+            W("buganda_royal_drum_repertoire", "ブガンダ王宮太鼓のレパートリー", MasterpieceKind.Music, "アフリカ", "長く継承される王宮音楽", "ブガンダの太鼓奏者・守護者たち", "王宮と王墓の儀礼で太鼓を用い、王統、共同体、場所の記憶を世代間で伝える演奏伝統。", "buganda"),
+            W("gurbani_kirtan", "グルバニ・キールタン", MasterpieceKind.Music, "西・南アジア", "15世紀以降", "シク教の詩人・ラーギー・共同体", "聖典の賛歌をラーガに基づいて歌い、礼拝と共同体の学びの中で継承する音楽実践。", ""),
+            W("saman_gayo", "ガヨのサマン", MasterpieceKind.Music, "東・東南アジア", "長く継承される生きた伝統", "ガヨの共同体", "横一列に座る演者が歌、手拍子、胸や腿を打つ動きを緊密に重ねる共同表現。", ""),
+            W("vivaldi_four_seasons", "協奏曲集『四季』", MasterpieceKind.Music, "ヨーロッパ・地中海", "1725年刊", "アントニオ・ヴィヴァルディ", "四つのヴァイオリン協奏曲で季節の自然と人の営みを描写し、詩と器楽表現を結んだ。", "venice"),
+            W("cherokee_syllabary_hymns", "チェロキー音節文字の聖歌と歌唱", MasterpieceKind.Music, "アメリカ大陸", "19世紀以降", "チェロキーの翻訳者・歌い手・共同体", "音節文字で記された聖歌を共同歌唱へ結び、言語、信仰、楽譜に依存しない旋律記憶を伝える。", "cherokee"),
+            W("fijian_meke", "フィジーのメケ", MasterpieceKind.Music, "オセアニア", "長く継承される生きた伝統", "フィジーの作詞者・歌い手・踊り手・共同体", "詠唱、歌、打楽、身振りを一体化し、歴史、系譜、出来事を共同体ごとの形で表現する。", "fiji"),
+
+            // 演劇（各地域1件）
+            W("the_burdens_ruganda", "重荷", MasterpieceKind.Theater, "アフリカ", "1972年", "ジョン・ルガンダ", "失脚した政治家と家族の生活を通じ、独立後社会の権力、期待、崩壊を家庭劇にした。", ""),
+            W("sariputraprakarana", "シャーリプトラ・プラカラナ", MasterpieceKind.Theater, "西・南アジア", "1～2世紀ごろ", "馬鳴（アシュヴァゴーシャ）に帰される", "断片写本で伝わる初期サンスクリット仏教劇。帰属と全体像には研究上の不確実性が残る。", "kushan", "ashvaghosha"),
+            W("talchum_mask_dance_drama", "仮面舞踊劇タルチュム", MasterpieceKind.Theater, "東・東南アジア", "地域ごとに長く継承", "朝鮮半島各地の演者・共同体", "仮面、踊り、歌、台詞、風刺を組み合わせ、社会的緊張を観客との交流の中で演じる。", ""),
+            W("servant_of_two_masters", "二人の主人を一度に持つと", MasterpieceKind.Theater, "ヨーロッパ・地中海", "1745年", "カルロ・ゴルドーニ", "一人の召使いが二人の主人に仕えることで生じる混乱を、仮面喜劇の型と人物描写で展開した。", "venice"),
+            W("unto_these_hills", "アントゥ・ジーズ・ヒルズ", MasterpieceKind.Theater, "アメリカ大陸", "1950年初演・継続上演", "チェロキー歴史協会と歴代の創作者・出演者", "東部チェロキーの歴史を、欧州勢力との接触から強制移住と共同体の存続まで野外劇で語る。", "cherokee"),
+            W("last_virgin_in_paradise", "楽園最後の処女", MasterpieceKind.Theater, "オセアニア", "1991年初演", "ヴィルソニ・ヘレニコ、テレシア・テアイワ", "架空の太平洋島を舞台に、外部が作る楽園像、ジェンダー、家族と主体性を風刺する喜劇。", "fiji"),
+
+            // 映画（各地域1件）
+            W("heritage_africa_film", "ヘリテージ・アフリカ", MasterpieceKind.Film, "アフリカ", "1989年", "クワウ・アンサーと製作陣", "植民地期の官吏を中心に、同化、名前、家族、文化的帰属をめぐる葛藤を描く。", ""),
+            W("nanak_nam_jahaz_hai_film", "ナーナク・ナーム・ジャハーズ・ハイ", MasterpieceKind.Film, "西・南アジア", "1969年", "ラム・マヘシュワリと製作陣", "グル・ナーナクへの信仰と家族の再生を軸にしたパンジャーブ語映画。", ""),
+            W("tjoet_nja_dhien_film", "チュッ・ニャ・ディン", MasterpieceKind.Film, "東・東南アジア", "1988年", "エロス・ジャロットと製作陣", "アチェ戦争の抵抗指導者チュッ・ニャ・ディンを、戦争、老い、信念の物語として描く。", "aceh"),
+            W("mephisto_film", "メフィスト", MasterpieceKind.Film, "ヨーロッパ・地中海", "1981年", "サボー・イシュトヴァーンと製作陣", "俳優の成功と権力への迎合を、ナチ体制下の舞台とファウスト的な選択に重ねる。", "hungary"),
+            W("cherokee_word_for_water_film", "チェロキー・ワード・フォー・ウォーター", MasterpieceKind.Film, "アメリカ大陸", "2013年", "チャーリー・ソープ、ティム・ケリーと製作陣", "ベル共同体の水道建設を通じ、協働の原理ガドゥギとウィルマ・マンキラーの歩みを描く。", "cherokee"),
+            W("land_has_eyes_film", "大地には眼がある", MasterpieceKind.Film, "オセアニア", "2004年", "ヴィルソニ・ヘレニコと製作陣", "ロトゥマ島を舞台に、少女が家族の汚名と植民地的な権力関係に向き合う物語。", "fiji"),
         };
 
         public static IReadOnlyList<MasterpieceDef> All => Definitions;

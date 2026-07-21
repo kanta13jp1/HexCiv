@@ -36,6 +36,11 @@ namespace HexCiv.UI
             GreatPerson,
             Research,
             Culture,
+            Book,
+            Painting,
+            Sculpture,
+            Architecture,
+            Music,
             Theater,
             Film
         }
@@ -72,6 +77,7 @@ namespace HexCiv.UI
         Texture2D civilizationLeaderEmblems;
         Texture2D heritageGreatPeopleEmblems;
         Texture2D researchCultureEmblems;
+        Texture2D masterpieceEmblems;
         Texture2D theaterFilmEmblems;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
@@ -144,6 +150,7 @@ namespace HexCiv.UI
                 "History/heritage_great_people_emblems");
             researchCultureEmblems = Resources.Load<Texture2D>(
                 "History/research_culture_emblems");
+            masterpieceEmblems = Resources.Load<Texture2D>("History/masterpiece_emblems");
             theaterFilmEmblems = Resources.Load<Texture2D>("History/theater_film_emblems");
             var bannerTexture = Resources.Load<Texture2D>("History/world_history_banner");
             if (bannerTexture != null)
@@ -537,10 +544,23 @@ namespace HexCiv.UI
                 string text = MasterpieceStatus(item.Id) + item.NameJa + "　［" +
                     item.KindNameJa + "］　" + item.PeriodJa + " / " + item.CreatorJa +
                     "\n" + MasterpieceSystem.EffectTextJa(item.Kind) + "　" + item.SummaryJa;
-                RowIconKind iconKind = item.Kind == MasterpieceKind.Theater
-                    ? RowIconKind.Theater : item.Kind == MasterpieceKind.Film
-                    ? RowIconKind.Film : RowIconKind.None;
+                RowIconKind iconKind = IconForMasterpiece(item.Kind);
                 CreateEntryRow(i - start, "Work_" + item.Id, text, iconKind);
+            }
+        }
+
+        static RowIconKind IconForMasterpiece(MasterpieceKind kind)
+        {
+            switch (kind)
+            {
+                case MasterpieceKind.Book: return RowIconKind.Book;
+                case MasterpieceKind.Painting: return RowIconKind.Painting;
+                case MasterpieceKind.Sculpture: return RowIconKind.Sculpture;
+                case MasterpieceKind.Architecture: return RowIconKind.Architecture;
+                case MasterpieceKind.Music: return RowIconKind.Music;
+                case MasterpieceKind.Theater: return RowIconKind.Theater;
+                case MasterpieceKind.Film: return RowIconKind.Film;
+                default: return RowIconKind.None;
             }
         }
 
@@ -582,12 +602,23 @@ namespace HexCiv.UI
                     ? new Rect(0f, 0f, 0.5f, 1f)
                     : new Rect(0.5f, 0f, 0.5f, 1f);
             }
-            else if (iconKind == RowIconKind.Theater || iconKind == RowIconKind.Film)
+            else if ((int)iconKind >= (int)RowIconKind.Book &&
+                (int)iconKind <= (int)RowIconKind.Film)
             {
-                iconTexture = theaterFilmEmblems;
-                iconUv = iconKind == RowIconKind.Theater
-                    ? new Rect(0f, 0f, 0.5f, 1f)
-                    : new Rect(0.5f, 0f, 0.5f, 1f);
+                iconTexture = masterpieceEmblems;
+                int cell = (int)iconKind - (int)RowIconKind.Book;
+                iconUv = new Rect((cell % 4) * 0.25f, cell < 4 ? 0.5f : 0f,
+                    0.25f, 0.5f);
+
+                // 旧2分割アトラスを残し、生成画像が欠けた環境でも演劇・映画は表示する。
+                if (iconTexture == null &&
+                    (iconKind == RowIconKind.Theater || iconKind == RowIconKind.Film))
+                {
+                    iconTexture = theaterFilmEmblems;
+                    iconUv = iconKind == RowIconKind.Theater
+                        ? new Rect(0f, 0f, 0.5f, 1f)
+                        : new Rect(0.5f, 0f, 0.5f, 1f);
+                }
             }
 
             if (iconTexture != null)

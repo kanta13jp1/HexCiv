@@ -6,7 +6,7 @@ using HexCiv.Core.AI;
 using UnityEditor;
 using UnityEngine;
 
-/// <summary>作品史追加42件の後方互換、地域・分野均衡、ゲーム収蔵、セーブ往復を検証する。</summary>
+/// <summary>作品史追加84件の後方互換、地域・分野均衡、ゲーム収蔵、セーブ往復を検証する。</summary>
 public static class MasterpieceExpansionSmokeTest
 {
     static readonly string[] Regions =
@@ -34,6 +34,30 @@ public static class MasterpieceExpansionSmokeTest
         "passion_joan_arc_film", "roma_2018_film", "whale_rider_film",
     };
 
+    static readonly string[] ThirdBatchIds =
+    {
+        "basekabaka_be_buganda", "buddhacarita", "hikayat_aceh",
+        "hypnerotomachia_poliphili", "hombres_que_disperso_danza",
+        "kohau_rongorongo_tablet",
+        "asante_adinkra_cloth_1817", "kizil_cave_murals",
+        "goryeo_water_moon_avalokiteshvara", "procession_st_marks_square",
+        "chief_joseph_series_17", "ana_kai_tangata_rock_art",
+        "sika_dwa_kofi", "gandhara_parinirvana_relief",
+        "goryeo_gilt_bronze_buddha", "mars_neptune_doges_palace",
+        "monte_alban_danzantes", "hoa_hakananai_a",
+        "muzibu_azaala_mpanga", "takht_i_bahi_monastery",
+        "baiturrahman_grand_mosque", "doges_palace_venice",
+        "mitla_palace_group", "ahu_tongariki",
+        "buganda_royal_drum_repertoire", "gurbani_kirtan", "saman_gayo",
+        "vivaldi_four_seasons", "cherokee_syllabary_hymns", "fijian_meke",
+        "the_burdens_ruganda", "sariputraprakarana",
+        "talchum_mask_dance_drama", "servant_of_two_masters",
+        "unto_these_hills", "last_virgin_in_paradise",
+        "heritage_africa_film", "nanak_nam_jahaz_hai_film",
+        "tjoet_nja_dhien_film", "mephisto_film",
+        "cherokee_word_for_water_film", "land_has_eyes_film",
+    };
+
     public static void Run()
     {
         try
@@ -53,13 +77,16 @@ public static class MasterpieceExpansionSmokeTest
 
     static void ValidateAppendOnlyCatalog()
     {
-        if (MasterpieceCatalog.All.Count != 252)
+        if (MasterpieceCatalog.All.Count != 294)
             throw new Exception("作品史総数が不正: " + MasterpieceCatalog.All.Count);
         if (MasterpieceCatalog.All[209].Id != "vai_film")
             throw new Exception("既存210件の末尾または順序が変化した");
         if (MasterpieceCatalog.All[210].Id != NewIds[0] ||
             MasterpieceCatalog.All[251].Id != NewIds[NewIds.Length - 1])
             throw new Exception("追加42件が既存台帳の末尾に連続していない");
+        if (MasterpieceCatalog.All[252].Id != ThirdBatchIds[0] ||
+            MasterpieceCatalog.All[293].Id != ThirdBatchIds[ThirdBatchIds.Length - 1])
+            throw new Exception("第3弾42件が既存252件の末尾に連続していない");
 
         var ids = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         for (int i = 0; i < MasterpieceCatalog.All.Count; i++)
@@ -80,16 +107,19 @@ public static class MasterpieceExpansionSmokeTest
         for (int i = 0; i < NewIds.Length; i++)
             if (MasterpieceCatalog.Find(NewIds[i]) == null)
                 throw new Exception("追加作品が見つからない: " + NewIds[i]);
+        for (int i = 0; i < ThirdBatchIds.Length; i++)
+            if (MasterpieceCatalog.Find(ThirdBatchIds[i]) == null)
+                throw new Exception("第3弾作品が見つからない: " + ThirdBatchIds[i]);
     }
 
     static void ValidateBalancedBatch()
     {
-        if (NewIds.Length != 42) throw new Exception("追加ID数が42ではない");
-        var batch = new HashSet<string>(NewIds, StringComparer.OrdinalIgnoreCase);
+        if (ThirdBatchIds.Length != 42) throw new Exception("第3弾ID数が42ではない");
+        var batch = new HashSet<string>(ThirdBatchIds, StringComparer.OrdinalIgnoreCase);
         foreach (MasterpieceKind kind in Enum.GetValues(typeof(MasterpieceKind)))
         {
-            if (MasterpieceCatalog.ForKind(kind).Count != 36)
-                throw new Exception(kind + "の総数が36ではない");
+            if (MasterpieceCatalog.ForKind(kind).Count != 42)
+                throw new Exception(kind + "の総数が42ではない");
             for (int r = 0; r < Regions.Length; r++)
             {
                 int count = 0;
@@ -101,8 +131,8 @@ public static class MasterpieceExpansionSmokeTest
             }
         }
         for (int r = 0; r < Regions.Length; r++)
-            if (MasterpieceCatalog.ForRegion(Regions[r]).Count != 42)
-                throw new Exception(Regions[r] + "の総数が42ではない");
+            if (MasterpieceCatalog.ForRegion(Regions[r]).Count != 49)
+                throw new Exception(Regions[r] + "の総数が49ではない");
     }
 
     static void ValidateCollectionAndSave()
@@ -121,13 +151,14 @@ public static class MasterpieceExpansionSmokeTest
         player.MasterpiecePoints = 10000;
         if (player.Cities.Count == 0)
             player.Cities.Add(new City { Id = 9742, PlayerId = player.Id, NameJa = "追加作品検証都市", Population = 1 });
-        if (!MasterpieceSystem.TryCollect(state, player, "kebra_nagast"))
-            throw new Exception("追加作品を収蔵できない");
+        if (!MasterpieceSystem.TryCollect(state, player, "basekabaka_be_buganda"))
+            throw new Exception("第3弾作品を収蔵できない");
 
         state.LastSavedAtIso = "2026-07-21T20:00:00";
         string json = SaveLoad.Serialize(state);
         var restored = SaveLoad.Deserialize(json);
-        if (!restored.GetPlayer(player.Id).CollectedMasterpieces.Contains("kebra_nagast"))
-            throw new Exception("追加作品の収蔵IDがセーブ往復で失われた");
+        if (!restored.GetPlayer(player.Id).CollectedMasterpieces.Contains(
+            "basekabaka_be_buganda"))
+            throw new Exception("第3弾作品の収蔵IDがセーブ往復で失われた");
     }
 }

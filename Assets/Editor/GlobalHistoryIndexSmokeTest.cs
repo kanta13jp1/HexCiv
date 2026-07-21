@@ -38,9 +38,9 @@ public static class GlobalHistoryIndexSmokeTest
         var expected = new Dictionary<string, int>
         {
             { "civilizations", 80 }, { "leaders", 155 }, { "heritage", 108 },
-            { "great_people", 120 }, { "books", 36 }, { "paintings", 36 },
-            { "sculptures", 36 }, { "architecture", 36 }, { "music", 36 },
-            { "theater", 36 }, { "film", 36 }, { "research", 120 }, { "culture", 120 },
+            { "great_people", 120 }, { "books", 42 }, { "paintings", 42 },
+            { "sculptures", 42 }, { "architecture", 42 }, { "music", 42 },
+            { "theater", 42 }, { "film", 42 }, { "research", 120 }, { "culture", 120 },
         };
         int total = 0;
         for (int i = 0; i < entries.Count; i++)
@@ -52,8 +52,8 @@ public static class GlobalHistoryIndexSmokeTest
                 throw new Exception("総合索引説明が不足: " + entry.Id);
             total += entry.Count;
         }
-        if (total != 955) throw new Exception("台帳レコード総数が不正: " + total);
-        Debug.Log("[GlobalHistory] 13分類・台帳955件 OK");
+        if (total != 997) throw new Exception("台帳レコード総数が不正: " + total);
+        Debug.Log("[GlobalHistory] 13分類・台帳997件 OK");
     }
 
     static void ValidateRegionalPartition()
@@ -129,12 +129,22 @@ public static class GlobalHistoryIndexSmokeTest
                 (float)researchCultureEmblems.height - 2f) > 0.02f)
             throw new Exception("研究・文化アイコンの解像度・比率が不正: " +
                 researchCultureEmblems.width + "x" + researchCultureEmblems.height);
+        var masterpieceEmblems = Resources.Load<Texture2D>("History/masterpiece_emblems");
+        if (masterpieceEmblems == null)
+            throw new Exception("作品7分類アイコンをResourcesから読めない");
+        if (masterpieceEmblems.width < 1000 || masterpieceEmblems.height < 500 ||
+            Math.Abs(masterpieceEmblems.width /
+                (float)masterpieceEmblems.height - 2f) > 0.02f)
+            throw new Exception("作品7分類アイコンの解像度・比率が不正: " +
+                masterpieceEmblems.width + "x" + masterpieceEmblems.height);
         Debug.Log("[GlobalHistory] オリジナル図鑑バナー " + texture.width + "x" +
             texture.height + " / 演劇・映画アイコン " + emblems.width + "x" +
             emblems.height + " / 文明・指導者アイコン " +
             civilizationLeaderEmblems.width + "x" + civilizationLeaderEmblems.height +
             " / 遺跡・偉人アイコン " + heritageGreatPeopleEmblems.width + "x" +
             heritageGreatPeopleEmblems.height + " / 研究・文化アイコン " +
-            researchCultureEmblems.width + "x" + researchCultureEmblems.height + " OK");
+            researchCultureEmblems.width + "x" + researchCultureEmblems.height +
+            " / 作品7分類アイコン " + masterpieceEmblems.width + "x" +
+            masterpieceEmblems.height + " OK");
     }
 }

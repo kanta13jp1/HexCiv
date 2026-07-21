@@ -6,7 +6,7 @@ using HexCiv.Core.AI;
 using UnityEditor;
 using UnityEngine;
 
-/// <summary>作品史252件、7分野効果、世界一意収蔵、偉人連携、セーブ往復を検証する。</summary>
+/// <summary>作品史294件、7分野効果、世界一意収蔵、偉人連携、セーブ往復を検証する。</summary>
 public static class MasterpieceSystemSmokeTest
 {
     static readonly string[] Regions =
@@ -34,7 +34,7 @@ public static class MasterpieceSystemSmokeTest
 
     static void ValidateCatalog()
     {
-        if (MasterpieceCatalog.All.Count != 252)
+        if (MasterpieceCatalog.All.Count != 294)
             throw new Exception("作品史件数が不正: " + MasterpieceCatalog.All.Count);
 
         var ids = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -59,14 +59,14 @@ public static class MasterpieceSystemSmokeTest
         }
 
         foreach (MasterpieceKind kind in Enum.GetValues(typeof(MasterpieceKind)))
-            if (!kinds.ContainsKey(kind) || kinds[kind] != 36)
+            if (!kinds.ContainsKey(kind) || kinds[kind] != 42)
                 throw new Exception(kind + "の作品数が不正: " +
                     (kinds.ContainsKey(kind) ? kinds[kind] : 0));
         for (int i = 0; i < Regions.Length; i++)
-            if (MasterpieceCatalog.ForRegion(Regions[i]).Count != 42)
+            if (MasterpieceCatalog.ForRegion(Regions[i]).Count != 49)
                 throw new Exception(Regions[i] + "の作品数が不正");
 
-        Debug.Log("[Masterpiece] 252件・7分野×36・6地域×42・参照ID OK");
+        Debug.Log("[Masterpiece] 294件・7分野×42・6地域×49・参照ID OK");
     }
 
     static void ValidateEffectsAndUniqueness()

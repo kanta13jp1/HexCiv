@@ -26,6 +26,23 @@ CodexとClaude Codeは、以後この `HexCiv` プロジェクトだけを更新
 
 ## 最新状況
 
+### 2026-07-22 Codex: 作品史第3弾42件・作品7分類アイコン・正式Windowsビルド更新
+
+- `Core/MasterpieceCatalog.cs`: 既存252件のIDと順序を固定し、書籍・絵画・彫刻・建築・音楽・演劇・映画へ6地域から各1件、計42件を末尾追加。全294件（各分野42件、各地域49件）へ拡張した。第3弾文明のブガンダ、アシャンティ、クシャーナ朝、高麗、アチェ、ヴェネツィア、ハンガリー、サポテカ、チェロキー、ラパ・ヌイ、フィジー諸邦に関係する作品を収録し、後世国家への遡及が不適切なガヨのサマン、タルチュム等は文明IDを空欄にした。作者・年代・帰属が不確定な対象も断定を避けて記録した。
+- `Resources/History/masterpiece_emblems.png` / `UI/WorldHistoryPanel.cs`: 書籍、絵画、彫刻、建築、音楽、演劇、映画を示すオリジナル4×2アイコンアトラスを画像生成し、全作品行へUV分割表示。実在作品、人物肖像、ポスター、舞台写真、国旗、既存ゲームの意匠を複製していない。Unity取込後2048×1024。旧演劇・映画アトラスは欠落時フォールバックとして維持した。
+- `MasterpieceExpansionSmokeTest`: 294件、旧210件・252件の末尾順序、新42件、ID一意、必須情報、文明／偉人参照、7分類×6地域均衡、作品収蔵、セーブ往復を検証し `MASTERPIECE EXPANSION SMOKE OK`。
+- `MasterpieceSystemSmokeTest`: 7分類効果、継続効果、世界一意収蔵、AI自動収蔵、偉人連携、セーブv9決定往復、v8互換を検証し `MASTERPIECE SYSTEM SMOKE OK`。
+- `GlobalHistoryIndexSmokeTest`: 13分類・台帳997件、6地域完全分割、全図鑑画像と新7分類アイコンを検証し `GLOBAL HISTORY INDEX SMOKE OK`。
+- Unity 6.3で `SmokeTest` を同一ソースから2回実行し、ともに `SMOKE OK`、turn150 `units=95 cities=21 techs=148 wars=2` で完全一致。作品候補追加によりAI収蔵・作品効果が変化するため旧基準値からは変わったが、新結果の決定性を確認した。ログは `C:\Users\kanta\GitHub\HexCiv_Verify_MP3_20260721_2355\Logs\`。
+- Unity 6.3 Windowsビルド成功（`BUILD OK: 96932893 bytes`）。検証済み成果物を正式 `Build\HexCiv.exe` へ反映し、Unity `6000.3.20f1` で15秒起動・例外なし。`Build\HexCiv_Data\Managed\Assembly-CSharp.dll` SHA-256は `CD953765A7546A5FAAC2E7C4EBAA245E3BB491FD4A9F665D0E2069396E9C0218`。
+- `MASTERPIECE_CATALOG.md` / `GLOBAL_HISTORY_CATALOG.md` / `README.md` / `ARCHITECTURE.md`: 作品294件・総合台帳997件へ更新。UNESCO、The Met、British Museum、各国博物館・公文書館・映画機関などの確認先と、共同体制作・生きた文化を扱う注意を記録した。
+- Claude Code第11弾の `EntityRenderer` / `ChroniclePanel` / `MinimapPanel` / `InputController` / `GameAudio` / `UIManager` は編集せず、検証コピーと正式Buildには同時点の変更を含めてコンパイル・総合スモーク・起動確認した。Claude側の作業中宣言は、相手が専用検証とコミットを終えるまで下に維持する。
+
+### 🔧 2026-07-21深夜 Claude Code: 作業中宣言 第11弾(完了時に結果で置き換え)
+
+実装中: ①占領都市の炎上・煙エフェクト(数ターンで鎮火) ②生産完成スパークル(建物数ポーリング検知) ③歴史ツアー(終了画面/年表から、記録イベントをカメラで順に巡る) ④F12スクリーンショット保存 ⑤パネル開閉のページ音+ミニマップクリック音。
+対象: Rendering/EntityRenderer / UI/ChroniclePanel / UI/MinimapPanel / Control/InputController / Audio/GameAudio(追加のみ) / UI/UIManager(終了画面ボタン1個)。シミュレーション不変(基準値81/21/149/2ビット一致ゲート、研究・文化第3弾で変動していれば相手ログとのビット一致で照合)。**この節がある間、Codexは上記ファイルの編集を控えてください**。完了後はgit commit+push。
+
 ### 2026-07-21 Codex: 研究・文化第3弾（各12件）・正式Windowsビルド更新
 
 - `Core/ResearchMilestoneCatalog.cs`: 既存108件のIDと順序を固定した後方追加で、研究史を120件へ拡張。アシャンティの金衡量と失蝋鋳造、ブガンダの樹皮布製作、クシャーナ朝の金貨鋳造と重量標準、シク帝国の砲兵・常備軍改革、高麗の金属活字印刷、アチェとオスマンの砲術交流、ヴェネツィア造船所の工程分業、マーチャーシュ宮廷の天文学、サポテカの暦法と碑文記録、チェロキー音節文字と活字印刷、ラパ・ヌイのモアイ採石・建設知、フィジーのドルア造船・航海術を追加した。`TechnologyCatalog` は基礎12件＋研究史120件＝132技術。
