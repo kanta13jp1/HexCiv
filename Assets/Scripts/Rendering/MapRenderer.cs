@@ -1,0 +1,690 @@
+using System.Collections.Generic;
+using HexCiv.Core;
+using UnityEngine;
+
+namespace HexCiv.Render
+{
+    /// <summary>
+    /// マップ描画。地形は起動時に1枚の結合メッシュ(頂点カラー)として構築し、
+    /// 霧(戦場の霧)・領土国境・ハイライトは動的オーバーレイとして更新する。
+    /// マウス下のタイル判定(XZ平面との数学的交差 + HexCoord.FromWorld)も担当する。
+    /// </summary>
+    public class MapRenderer : MonoBehaviour
+    {
+        // ---- レイヤー高さ(契約 §6) ----
+        const float TerrainY = 0f;
+        const float DecoY = 0.02f;
+        const float BorderY = 0.04f;
+        const float HighlightY = 0.05f;
+        const float FogY = 0.06f;
+
+        // ---- 描画順(sortingOrder。Sprites/Default は ZWrite Off のため明示的に制御する) ----
+        const int SortTerrain = 0;
+        const int SortDeco = 1;
+        const int SortBorder = 3;
+        const int SortHighlight = 4;
+        const int SortSelection = 5;   // 選択リング(他ハイライトの上・霧8の下)
+        const int SortFog = 8;
+
+        // ---- 霧の色 ----
+        static readonly Color32 FogUnexplored = new Color32(5, 8, 15, 255);   // (0.02,0.03,0.06,1)
+        static readonly Color32 FogExplored = new Color32(0, 0, 0, 115);      // (0,0,0,0.45)
+        static readonly Color32 FogVisible = new Color32(0, 0, 0, 0);
+
+        GameState state;
+        Material mat;
+
+        Mesh terrainMesh;
+        Mesh decoMesh;
+        Mesh fogMesh;
+        Mesh borderMesh;
+        Mesh highlightMesh;
+
+        Tile[] tileOrder;        // 霧メッシュのタイル順(タイルごとの頂点範囲は fogVertBase/Count)
+        Color32[] fogColors;
+        int[] fogVertBase;       // 霧メッシュ内のタイル別先頭頂点添字
+        int[] fogVertCount;      // 同・頂点数(平地=7、丘陵はスカート分を含む)
+
+        // ---- 丘陵の立体化+領土の面塗り(2026-07-21 追加。表示のみ・シミュレーション非干渉) ----
+        // 丘陵タイルは地形メッシュの7頂点を RenderUtil.TileVisualHeight 分だけ持ち上げ、
+        // 低い隣接タイルとの段差にスカート壁(側面クアッド)を張って隙間を塞ぐ。
+        // 領土の面塗りは、所有者のいるタイルの地形頂点色へ所有者色を約7%だけ混ぜる。
+        // RefreshDynamic で国境と同じ可視ルール(未探索は塗らない)で更新する。
+        // どちらもマウス判定(XZ平面の数学的交差)には影響しない。
+        Color32[] tileBaseCols;              // タイルごとの基準色(明度ゆらぎ適用後・面塗り前)
+        const float TerritoryTint = 0.07f;   // 領土面塗りの混合率(約7%)
+        const float SkirtDarken = 0.72f;     // スカート壁は地形色より少し暗く
+
+        // ---- 水面ゆらぎ(2026-07-21 追加。表示のみ・シミュレーション非干渉) ----
+        // 地形メッシュの Ocean/Coast 頂点色だけを、座標ハッシュで位相をずらした
+        // ゆっくりした正弦波(明度±約1.2%)で更新する。バッファは全てキャッシュし、
+        // 毎フレームではなく最大10回/秒だけ書き込む。霧・国境・ハイライトの各メッシュ
+        // およびマウス判定(数学的交差)には一切触れない。
+        struct WaterEntry
+        {
+            public int VertBase;     // terrainColors 内の先頭添字(1タイル = 7頂点)
+            public Color32 BaseCol;  // 揺らぎの基準色(ビルド時の最終色)
+            public float Phase;      // タイル座標ハッシュ由来の位相
+        }
+        WaterEntry[] waterEntries;
+        Color32[] terrainColors;     // 地形メッシュ頂点色のキャッシュ(水面ゆらぎ・領土面塗りが更新)
+        float waterClock;
+        float nextWaterTick;
+        const float WaterPeriod = 5f;           // 約5秒周期(ゆっくり)
+        const float WaterAmp = 0.012f;          // 明度±1.2%
+        const float WaterTickInterval = 0.1f;   // 更新は最大10回/秒
+
+        // ---- 選択タイルのパルス(2026-07-21 追加。表示のみ・シミュレーション非干渉) ----
+        // SetHighlights の白い縁リングを独立メッシュへ分離し、非スケール時間の正弦波で
+        // アルファを 0.6→1.0 に明滅させる。色は MaterialPropertyBlock の _Color 乗算で
+        // 変えるため、毎フレームのメッシュ書き込み・マテリアル生成・割り当ては発生しない。
+        Mesh selectionMesh;
+        MeshRenderer selectionRenderer;
+        bool selectionVisible;
+        MaterialPropertyBlock selectionMpb;
+        static readonly int ColorPropId = Shader.PropertyToID("_Color");
+        const float SelectionPulsePeriod = 1.2f;  // 明滅の周期(秒)
+        const float SelectionAlphaMin = 0.6f;
+        const float SelectionAlphaMax = 1.0f;
+
+        readonly MeshBuilder builder = new MeshBuilder();
+
+        /// <summary>静的な地形メッシュ群を構築する。再呼び出し(リスタート)にも対応。</summary>
+        public void Init(GameState state)
+        {
+            this.state = state;
+
+            // 再初期化対応:以前の子オブジェクトを破棄
+            for (int i = transform.childCount - 1; i >= 0; i--)
+                Destroy(transform.GetChild(i).gameObject);
+
+            if (mat == null) mat = RenderUtil.NewSpriteMaterial();
+
+            BuildTerrain();
+            BuildDecorations();
+            BuildFog();
+
+            borderMesh = builderEmpty(borderMesh);
+            borderMesh.MarkDynamic();
+            RenderUtil.NewMeshChild(transform, "Borders", borderMesh, mat, Vector3.zero, SortBorder);
+
+            highlightMesh = builderEmpty(highlightMesh);
+            highlightMesh.MarkDynamic();
+            RenderUtil.NewMeshChild(transform, "Highlights", highlightMesh, mat, Vector3.zero, SortHighlight);
+
+            // 選択リング(アルファ明滅)専用メッシュ。子は上で全破棄済みのため毎回作り直す
+            selectionMesh = builderEmpty(selectionMesh);
+            selectionMesh.MarkDynamic();
+            selectionRenderer = RenderUtil.NewMeshChild(transform, "SelectionPulse", selectionMesh, mat, Vector3.zero, SortSelection);
+            selectionVisible = false;
+
+            RefreshDynamic();
+        }
+
+        Mesh builderEmpty(Mesh reuse)
+        {
+            builder.Clear();
+            return builder.Build(reuse);
+        }
+
+        /// <summary>霧・国境・領土の面塗りを state.HumanPlayer 視点で更新する(null なら全て可視)。</summary>
+        public void RefreshDynamic()
+        {
+            if (state == null || fogMesh == null) return;
+            UpdateFog();
+            RebuildBorders();
+            UpdateTerritoryTint();
+        }
+
+        /// <summary>移動可能・攻撃可能・経路・選択タイルのハイライトを表示する。引数はどれも null 可。</summary>
+        public void SetHighlights(HashSet<HexCoord> reachable, HashSet<HexCoord> attackable, List<HexCoord> path, HexCoord? selected)
+        {
+            if (state == null || highlightMesh == null) return;
+
+            // 初見でも意味が伝わるよう、チュートリアルの凡例と色を統一する。
+            Color reachCol = new Color(1f, 0.82f, 0.12f, 0.36f);
+            Color atkCol = new Color(1f, 0.12f, 0.08f, 0.52f);
+            Color pathCol = new Color(0.25f, 0.95f, 0.72f, 0.92f);
+
+            builder.Clear();
+
+            if (reachable != null)
+            {
+                foreach (var h in reachable)
+                {
+                    if (!state.Map.InBounds(h)) continue;
+                    var c = h.ToWorld(); c.y = HighlightY + VisualHeightAt(h);
+                    builder.AddHex(c, 0.90f, reachCol);
+                }
+            }
+
+            if (attackable != null)
+            {
+                foreach (var h in attackable)
+                {
+                    if (!state.Map.InBounds(h)) continue;
+                    var c = h.ToWorld(); c.y = HighlightY + VisualHeightAt(h);
+                    builder.AddHex(c, 0.90f, atkCol);
+                }
+            }
+
+            if (path != null)
+            {
+                for (int i = 0; i < path.Count; i++)
+                {
+                    if (!state.Map.InBounds(path[i])) continue;
+                    var c = path[i].ToWorld(); c.y = HighlightY + VisualHeightAt(path[i]);
+                    builder.AddDiamond(c, 0.16f, pathCol);
+                }
+            }
+
+            highlightMesh = builder.Build(highlightMesh);
+
+            // 選択タイルの白リングは独立メッシュに構築する(Update() でアルファ明滅させるため)。
+            // 頂点アルファは 1.0 で持ち、実際の明滅は _Color 乗算(0.6〜1.0)で行う。
+            builder.Clear();
+            selectionVisible = false;
+            if (selected.HasValue && state.Map.InBounds(selected.Value))
+            {
+                Color selCol = new Color(1f, 1f, 1f, 1f);
+                var c = selected.Value.ToWorld(); c.y = HighlightY + VisualHeightAt(selected.Value);
+                for (int d = 0; d < 6; d++)
+                {
+                    Vector3 ca = RenderUtil.Corners[RenderUtil.EdgeCornerA[d]];
+                    Vector3 cb = RenderUtil.Corners[RenderUtil.EdgeCornerB[d]];
+                    builder.AddQuad(c + ca * 0.97f, c + cb * 0.97f, c + cb * 0.85f, c + ca * 0.85f, selCol);
+                }
+                selectionVisible = true;
+            }
+            if (selectionMesh != null) selectionMesh = builder.Build(selectionMesh);
+        }
+
+        /// <summary>座標のタイルの視覚的な持ち上げ高さ(表示専用。マップ外は 0)。</summary>
+        float VisualHeightAt(HexCoord h)
+        {
+            return RenderUtil.TileVisualHeight(state.Map.Get(h));
+        }
+
+        /// <summary>ハイライトをすべて消す。</summary>
+        public void ClearHighlights()
+        {
+            if (highlightMesh != null) highlightMesh.Clear();
+            if (selectionMesh != null) selectionMesh.Clear();
+            selectionVisible = false;
+        }
+
+        /// <summary>
+        /// マウス位置のタイルを数学的に求める(y=0 の XZ 平面とレイの交差 → HexCoord.FromWorld)。
+        /// マップ外なら false。
+        /// </summary>
+        public bool TryGetTileUnderMouse(Camera cam, out HexCoord coord)
+        {
+            coord = default(HexCoord);
+            if (cam == null || state == null || state.Map == null) return false;
+
+            Ray ray = cam.ScreenPointToRay(Input.mousePosition);
+            if (Mathf.Abs(ray.direction.y) < 1e-6f) return false;
+            float t = -ray.origin.y / ray.direction.y;
+            if (t < 0f) return false;
+
+            Vector3 hit = ray.origin + ray.direction * t;
+            var c = HexCoord.FromWorld(hit);
+            if (!state.Map.InBounds(c)) return false;
+
+            coord = c;
+            return true;
+        }
+
+        // ------------------------------------------------------------------
+        // 構築
+        // ------------------------------------------------------------------
+
+        void BuildTerrain()
+        {
+            builder.Clear();
+            var baseCols = new List<Color32>();      // タイルごとの最終色(水面ゆらぎ・領土面塗りキャッシュの元)
+            var tileCols = new List<Color>();        // 同・float色(スカート壁の暗色計算用)
+            var waterList = new List<WaterEntry>();
+            int tileIndex = 0;
+            foreach (var t in state.Map.AllTiles)
+            {
+                // 丘陵タイルは7頂点をまるごと持ち上げる(表示のみ。マウス判定はXZ平面のまま)
+                var c = t.Coord.ToWorld(); c.y = TerrainY + RenderUtil.TileVisualHeight(t);
+                var col = t.Def.Color;
+                // タイルごとのわずかな明度ゆらぎ(決定的ハッシュ)
+                float b = 0.93f + 0.10f * RenderUtil.Hash01(t.Coord);
+                col = new Color(
+                    Mathf.Clamp01(col.r * b),
+                    Mathf.Clamp01(col.g * b),
+                    Mathf.Clamp01(col.b * b),
+                    1f);
+                builder.AddHex(c, 1f, col);
+
+                Color32 c32 = col;
+                baseCols.Add(c32);
+                tileCols.Add(col);
+                if (t.Terrain == TerrainType.Ocean || t.Terrain == TerrainType.Coast)
+                {
+                    waterList.Add(new WaterEntry
+                    {
+                        VertBase = tileIndex * 7,
+                        BaseCol = c32,
+                        Phase = RenderUtil.Hash01(t.Coord) * (Mathf.PI * 2f),
+                    });
+                }
+                tileIndex++;
+            }
+
+            // スカート壁: 持ち上げたタイルの縁のうち、低い隣(またはマップ外)へ落ちる辺に
+            // 側面クアッドを張り、段差の隙間から下が透けないようにする。
+            // ※必ず全ヘクスの後に追加する(WaterEntry.VertBase の「タイルi = 頂点7i」対応を保つ)。
+            int skirtIndex = 0;
+            foreach (var t in state.Map.AllTiles)
+            {
+                float h = RenderUtil.TileVisualHeight(t);
+                if (h > 0f)
+                {
+                    var col = tileCols[skirtIndex];
+                    var skirtCol = new Color(col.r * SkirtDarken, col.g * SkirtDarken, col.b * SkirtDarken, 1f);
+                    var c = t.Coord.ToWorld();
+                    for (int d = 0; d < 6; d++)
+                    {
+                        var n = state.Map.Get(t.Coord.Neighbor(d));
+                        float nh = (n == null) ? 0f : RenderUtil.TileVisualHeight(n);
+                        if (nh >= h) continue;   // 同じ高さの丘陵どうしは壁なしで連続させる
+
+                        Vector3 ca = RenderUtil.Corners[RenderUtil.EdgeCornerA[d]];
+                        Vector3 cb = RenderUtil.Corners[RenderUtil.EdgeCornerB[d]];
+                        Vector3 topA = c + ca; topA.y = TerrainY + h;
+                        Vector3 topB = c + cb; topB.y = TerrainY + h;
+                        Vector3 botA = c + ca; botA.y = TerrainY + nh;
+                        Vector3 botB = c + cb; botB.y = TerrainY + nh;
+                        builder.AddQuad(topA, topB, botB, botA, skirtCol);
+                    }
+                }
+                skirtIndex++;
+            }
+
+            terrainMesh = builder.Build(terrainMesh);
+            terrainMesh.MarkDynamic();               // 水面ゆらぎ・領土面塗りで頂点色を更新するため
+
+            // 頂点色キャッシュを一度だけ確保(先頭はタイルi = 頂点7i、末尾にスカート壁の頂点が続く)
+            terrainColors = builder.ColorsToArray();
+            tileBaseCols = baseCols.ToArray();
+            waterEntries = waterList.ToArray();
+            waterClock = 0f;
+            nextWaterTick = 0f;
+
+            RenderUtil.NewMeshChild(transform, "Terrain", terrainMesh, mat, Vector3.zero, SortTerrain);
+        }
+
+        /// <summary>毎フレームの表示演出(選択リングの明滅・水面のゆらぎ)。表示のみ。</summary>
+        void Update()
+        {
+            TickSelectionPulse();
+            TickWater();
+        }
+
+        /// <summary>
+        /// 選択リングのアルファ明滅(0.6→1.0、約1.2秒周期の正弦波、非スケール時間)。
+        /// MaterialPropertyBlock はキャッシュし、毎フレームの割り当てはゼロ。
+        /// </summary>
+        void TickSelectionPulse()
+        {
+            if (!selectionVisible || selectionRenderer == null) return;
+            float phase = Time.unscaledTime * (Mathf.PI * 2f / SelectionPulsePeriod);
+            float a = Mathf.Lerp(SelectionAlphaMin, SelectionAlphaMax, 0.5f + 0.5f * Mathf.Sin(phase));
+            if (selectionMpb == null) selectionMpb = new MaterialPropertyBlock();
+            selectionMpb.SetColor(ColorPropId, new Color(1f, 1f, 1f, a));
+            selectionRenderer.SetPropertyBlock(selectionMpb);
+        }
+
+        /// <summary>
+        /// 水面のゆらぎ(表示のみ)。Ocean/Coast タイルの頂点色を最大10回/秒だけ更新する。
+        /// キャッシュ済みバッファのみを使い、毎tickの割り当てはゼロ。バッファと頂点数が
+        /// 一致しない場合(再構築の途中など)は何もしない。
+        /// </summary>
+        void TickWater()
+        {
+            if (terrainMesh == null || waterEntries == null || waterEntries.Length == 0) return;
+            if (terrainColors == null || terrainMesh.vertexCount != terrainColors.Length) return;
+
+            waterClock += Time.unscaledDeltaTime;
+            if (waterClock < nextWaterTick) return;
+            nextWaterTick = waterClock + WaterTickInterval;
+
+            float w = waterClock * (Mathf.PI * 2f / WaterPeriod);
+            for (int i = 0; i < waterEntries.Length; i++)
+            {
+                var e = waterEntries[i];
+                float b = 1f + WaterAmp * Mathf.Sin(w + e.Phase);
+                var c = e.BaseCol;
+                var sc = new Color32(
+                    (byte)Mathf.Clamp((int)(c.r * b), 0, 255),
+                    (byte)Mathf.Clamp((int)(c.g * b), 0, 255),
+                    (byte)Mathf.Clamp((int)(c.b * b), 0, 255),
+                    c.a);
+                int vb = e.VertBase;
+                for (int k = 0; k < 7; k++) terrainColors[vb + k] = sc;
+            }
+            terrainMesh.colors32 = terrainColors;    // キャッシュ配列をそのまま書き込む
+        }
+
+        void BuildDecorations()
+        {
+            builder.Clear();
+            foreach (var t in state.Map.AllTiles)
+            {
+                // 丘陵タイル上のデコレーション(内側ヘクス・森・資源)は持ち上げに追従する
+                var c = t.Coord.ToWorld(); c.y = DecoY + RenderUtil.TileVisualHeight(t);
+
+                if (t.Terrain == TerrainType.Mountain)
+                {
+                    AddMountain(c);
+                }
+                else
+                {
+                    if (t.HasHill) AddHill(c, t);
+                    if (t.HasForest) AddForest(c, t.Coord);
+                }
+
+                if (t.Resource != ResourceType.None)
+                    AddResource(c, t.Resource);
+            }
+            decoMesh = builder.Build(decoMesh);
+            RenderUtil.NewMeshChild(transform, "Decorations", decoMesh, mat, Vector3.zero, SortDeco);
+        }
+
+        void AddHill(Vector3 c, Tile t)
+        {
+            var baseCol = t.Def.Color;
+            var col = new Color(baseCol.r * 0.78f, baseCol.g * 0.78f, baseCol.b * 0.78f, 1f);
+            builder.AddHex(c, 0.55f, col);
+        }
+
+        static readonly Vector2[] TreeOffsets =
+        {
+            new Vector2(-0.30f, -0.08f),
+            new Vector2(0.24f, 0.20f),
+            new Vector2(0.06f, -0.38f),
+        };
+
+        void AddForest(Vector3 c, HexCoord coord)
+        {
+            Color g1 = new Color(0.08f, 0.30f, 0.12f, 1f);
+            Color g2 = new Color(0.11f, 0.36f, 0.15f, 1f);
+            int count = 2 + (RenderUtil.HashInt(coord) & 1);   // 2〜3本
+            for (int i = 0; i < count; i++)
+            {
+                var o = TreeOffsets[i];
+                var col = (i % 2 == 0) ? g1 : g2;
+                builder.AddTriangle(
+                    c + new Vector3(o.x - 0.15f, 0f, o.y - 0.16f),
+                    c + new Vector3(o.x, 0f, o.y + 0.22f),
+                    c + new Vector3(o.x + 0.15f, 0f, o.y - 0.16f),
+                    col);
+            }
+        }
+
+        void AddMountain(Vector3 c)
+        {
+            Color m1 = new Color(0.36f, 0.34f, 0.34f, 1f);
+            Color m2 = new Color(0.48f, 0.46f, 0.45f, 1f);
+            Color snow = new Color(0.92f, 0.93f, 0.96f, 1f);
+            // 主峰
+            builder.AddTriangle(
+                c + new Vector3(-0.52f, 0f, -0.42f),
+                c + new Vector3(-0.06f, 0f, 0.52f),
+                c + new Vector3(0.34f, 0f, -0.42f), m1);
+            // 副峰
+            builder.AddTriangle(
+                c + new Vector3(0.10f, 0f, -0.42f),
+                c + new Vector3(0.36f, 0f, 0.12f),
+                c + new Vector3(0.62f, 0f, -0.42f), m2);
+            // 冠雪
+            builder.AddTriangle(
+                c + new Vector3(-0.20f, 0f, 0.23f),
+                c + new Vector3(-0.06f, 0f, 0.52f),
+                c + new Vector3(0.08f, 0f, 0.23f), snow);
+        }
+
+        // ---- 資源の形状アイコン(2026-07-21 一律ひし形から置き換え。表示のみ) ----
+        // 小麦=金色の縦棒3本 / 牛・鹿=茶色の角(三角形ペア) / 鉄=濃灰の十字 / 馬=蹄鉄の弧。
+        // 色は ResourceDef.Color を使い、既存デコレーション層(DecoY)にフラットメッシュで
+        // 構築する。呼び出し元の c が丘陵の持ち上げ高さを含むため、丘陵上でも追従する。
+        void AddResource(Vector3 c, ResourceType res)
+        {
+            var def = GameRules.Resources[res];
+            Vector3 p = c + new Vector3(0f, 0f, -0.55f);
+
+            // 視認性のための暗い下敷き(従来の縁取りひし形の役割を引き継ぐ)
+            builder.AddHex(p, 0.21f, new Color(0.05f, 0.05f, 0.05f, 0.80f));
+
+            switch (res)
+            {
+                case ResourceType.Wheat:
+                    // 金色の小さな縦棒3本(麦の穂)
+                    for (int i = -1; i <= 1; i++)
+                    {
+                        float x = i * 0.095f;
+                        builder.AddQuad(
+                            p + new Vector3(x - 0.028f, 0f, 0.13f),
+                            p + new Vector3(x + 0.028f, 0f, 0.13f),
+                            p + new Vector3(x + 0.028f, 0f, -0.13f),
+                            p + new Vector3(x - 0.028f, 0f, -0.13f),
+                            def.Color);
+                    }
+                    break;
+
+                case ResourceType.Cattle:
+                case ResourceType.Deer:
+                    // 茶色の三角形ペア(角)
+                    builder.AddTriangle(
+                        p + new Vector3(-0.155f, 0f, -0.11f),
+                        p + new Vector3(-0.105f, 0f, 0.14f),
+                        p + new Vector3(-0.025f, 0f, -0.05f),
+                        def.Color);
+                    builder.AddTriangle(
+                        p + new Vector3(0.155f, 0f, -0.11f),
+                        p + new Vector3(0.025f, 0f, -0.05f),
+                        p + new Vector3(0.105f, 0f, 0.14f),
+                        def.Color);
+                    break;
+
+                case ResourceType.Iron:
+                    // 濃灰の十字
+                    builder.AddQuad(
+                        p + new Vector3(-0.038f, 0f, 0.15f),
+                        p + new Vector3(0.038f, 0f, 0.15f),
+                        p + new Vector3(0.038f, 0f, -0.15f),
+                        p + new Vector3(-0.038f, 0f, -0.15f),
+                        def.Color);
+                    builder.AddQuad(
+                        p + new Vector3(-0.15f, 0f, 0.038f),
+                        p + new Vector3(0.15f, 0f, 0.038f),
+                        p + new Vector3(0.15f, 0f, -0.038f),
+                        p + new Vector3(-0.15f, 0f, -0.038f),
+                        def.Color);
+                    break;
+
+                case ResourceType.Horses:
+                    // 黄褐色の弧(蹄鉄。下側が開いた約250°のリング)
+                    {
+                        const int segs = 8;
+                        const float aStart = (-55f) * Mathf.Deg2Rad;   // 開口部は下(-Z)側
+                        const float aEnd = (235f) * Mathf.Deg2Rad;
+                        const float rIn = 0.085f;
+                        const float rOut = 0.15f;
+                        for (int i = 0; i < segs; i++)
+                        {
+                            float a0 = Mathf.Lerp(aStart, aEnd, i / (float)segs);
+                            float a1 = Mathf.Lerp(aStart, aEnd, (i + 1) / (float)segs);
+                            Vector3 d0 = new Vector3(Mathf.Cos(a0), 0f, Mathf.Sin(a0));
+                            Vector3 d1 = new Vector3(Mathf.Cos(a1), 0f, Mathf.Sin(a1));
+                            builder.AddQuad(p + d0 * rOut, p + d1 * rOut, p + d1 * rIn, p + d0 * rIn, def.Color);
+                        }
+                    }
+                    break;
+
+                default:
+                    // 未知の資源種別は従来どおりのひし形(将来の追加に対する安全策)
+                    builder.AddDiamond(p, 0.16f, def.Color);
+                    break;
+            }
+        }
+
+        void BuildFog()
+        {
+            var list = new List<Tile>();
+            foreach (var t in state.Map.AllTiles) list.Add(t);
+            tileOrder = list.ToArray();
+
+            builder.Clear();
+            fogVertBase = new int[tileOrder.Length];
+            fogVertCount = new int[tileOrder.Length];
+            for (int i = 0; i < tileOrder.Length; i++)
+            {
+                var t = tileOrder[i];
+                float h = RenderUtil.TileVisualHeight(t);
+                fogVertBase[i] = builder.VertexCount;
+
+                var c = t.Coord.ToWorld(); c.y = FogY + h;
+                builder.AddHex(c, 1f, Color.black);
+
+                // 丘陵タイルは霧にも側面スカートを張り、傾いたカメラから見たときに
+                // 持ち上げた地形の側面が霧の隙間から覗かないようにする。
+                if (h > 0f)
+                {
+                    var w = t.Coord.ToWorld();
+                    for (int d = 0; d < 6; d++)
+                    {
+                        var n = state.Map.Get(t.Coord.Neighbor(d));
+                        float nh = (n == null) ? 0f : RenderUtil.TileVisualHeight(n);
+                        if (nh >= h) continue;
+
+                        Vector3 ca = RenderUtil.Corners[RenderUtil.EdgeCornerA[d]];
+                        Vector3 cb = RenderUtil.Corners[RenderUtil.EdgeCornerB[d]];
+                        Vector3 topA = w + ca; topA.y = FogY + h;
+                        Vector3 topB = w + cb; topB.y = FogY + h;
+                        Vector3 botA = w + ca; botA.y = FogY + nh;
+                        Vector3 botB = w + cb; botB.y = FogY + nh;
+                        builder.AddQuad(topA, topB, botB, botA, Color.black);
+                    }
+                }
+
+                fogVertCount[i] = builder.VertexCount - fogVertBase[i];
+            }
+            fogMesh = builder.Build(fogMesh);
+            fogMesh.MarkDynamic();
+            fogColors = new Color32[fogMesh.vertexCount];
+            RenderUtil.NewMeshChild(transform, "Fog", fogMesh, mat, Vector3.zero, SortFog);
+        }
+
+        // ------------------------------------------------------------------
+        // 動的更新
+        // ------------------------------------------------------------------
+
+        void UpdateFog()
+        {
+            var human = state.HumanPlayer;
+            for (int i = 0; i < tileOrder.Length; i++)
+            {
+                Color32 col;
+                if (human == null)
+                    col = FogVisible;                                        // 観戦モード:全て可視
+                else if (!human.Explored.Contains(tileOrder[i].Coord))
+                    col = FogUnexplored;
+                else if (!human.Visible.Contains(tileOrder[i].Coord))
+                    col = FogExplored;
+                else
+                    col = FogVisible;
+
+                // タイル別頂点範囲(平地=7頂点、丘陵はスカート分を含む)へ一括適用
+                int b = fogVertBase[i];
+                int n = fogVertCount[i];
+                for (int k = 0; k < n; k++) fogColors[b + k] = col;
+            }
+            fogMesh.colors32 = fogColors;
+        }
+
+        /// <summary>
+        /// 領土の面塗り(ごく薄い所有者色のウォッシュ)。所有タイルの地形頂点色へ
+        /// 所有者色を TerritoryTint(約7%)だけ混ぜる。可視ルールは国境と同じで、
+        /// 通常プレイでは未探索タイルを塗らない。毎回タイル基準色から計算し直すため
+        /// 混合が累積することはない。スカート壁の頂点色は変更しない(面塗りは上面のみ)。
+        /// 水面ゆらぎの基準色も塗り後の色へ更新し、ゆらぎが面塗りを打ち消さないようにする。
+        /// キャッシュ済み配列のみを使い、呼び出しごとの割り当てはゼロ。
+        /// </summary>
+        void UpdateTerritoryTint()
+        {
+            if (terrainMesh == null || terrainColors == null || tileBaseCols == null) return;
+            if (tileOrder == null || tileOrder.Length != tileBaseCols.Length) return;
+            if (terrainMesh.vertexCount != terrainColors.Length) return;
+
+            var human = state.HumanPlayer;
+            for (int i = 0; i < tileOrder.Length; i++)
+            {
+                var t = tileOrder[i];
+                Color32 col = tileBaseCols[i];
+
+                if (t.OwnerPlayerId >= 0 &&
+                    (human == null || human.Explored.Contains(t.Coord)))
+                {
+                    var owner = state.GetPlayer(t.OwnerPlayerId);
+                    if (owner != null)
+                    {
+                        Color oc = owner.Color;
+                        col = new Color32(
+                            (byte)Mathf.Clamp((int)(col.r * (1f - TerritoryTint) + oc.r * 255f * TerritoryTint), 0, 255),
+                            (byte)Mathf.Clamp((int)(col.g * (1f - TerritoryTint) + oc.g * 255f * TerritoryTint), 0, 255),
+                            (byte)Mathf.Clamp((int)(col.b * (1f - TerritoryTint) + oc.b * 255f * TerritoryTint), 0, 255),
+                            col.a);
+                    }
+                }
+
+                int vb = i * 7;
+                for (int k = 0; k < 7; k++) terrainColors[vb + k] = col;
+            }
+
+            // 水面ゆらぎの基準色を面塗り後の色へ同期(領有された沿岸タイルなど)
+            if (waterEntries != null)
+            {
+                for (int i = 0; i < waterEntries.Length; i++)
+                    waterEntries[i].BaseCol = terrainColors[waterEntries[i].VertBase];
+            }
+
+            terrainMesh.colors32 = terrainColors;
+        }
+
+        void RebuildBorders()
+        {
+            var human = state.HumanPlayer;
+            builder.Clear();
+
+            for (int i = 0; i < tileOrder.Length; i++)
+            {
+                var t = tileOrder[i];
+                if (t.OwnerPlayerId < 0) continue;
+                if (human != null && !human.Explored.Contains(t.Coord)) continue;
+
+                var owner = state.GetPlayer(t.OwnerPlayerId);
+                if (owner == null) continue;
+                Color col = owner.Color;
+                col.a = 0.85f;
+
+                Vector3 c = t.Coord.ToWorld(); c.y = BorderY + RenderUtil.TileVisualHeight(t);
+                for (int d = 0; d < 6; d++)
+                {
+                    var n = state.Map.Get(t.Coord.Neighbor(d));
+                    if (n != null && n.OwnerPlayerId == t.OwnerPlayerId) continue;   // 同じ所有者 → 境界なし
+
+                    Vector3 ca = RenderUtil.Corners[RenderUtil.EdgeCornerA[d]];
+                    Vector3 cb = RenderUtil.Corners[RenderUtil.EdgeCornerB[d]];
+                    builder.AddQuad(c + ca * 0.96f, c + cb * 0.96f, c + cb * 0.80f, c + ca * 0.80f, col);
+                }
+            }
+
+            borderMesh = builder.Build(borderMesh);
+        }
+    }
+}
