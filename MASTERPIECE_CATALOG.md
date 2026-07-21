@@ -8,19 +8,19 @@
 順次追加します。
 
 第1弾150件に演劇・映画各30件を加えた210件を固定し、さらに7分野へ
-6地域から各1件ずつ追加する均衡バッチを2回実施しました。現在は **294件** です。
+6地域から各1件ずつ追加する均衡バッチを3回実施しました。現在は **336件** です。
 
 | 分野 | 件数 | 収録範囲 |
 |---|---:|---|
-| 書籍 | 42 | 粘土板、写本、巻物、口承叙事詩、歴史書、戯曲、小説を含む |
-| 絵画 | 42 | 壁画、絵巻、屏風、木版画、樹皮画を含む |
-| 彫刻 | 42 | 丸彫、浮彫、記念碑、儀礼造形、共同体の彫刻伝統を含む |
-| 建築 | 42 | 単体建築、都市・祭祀複合体、景観と一体の建築群を含む |
-| 音楽 | 42 | 記譜作品、組曲、歌唱・器楽・舞踊と結び付く継承伝統を含む |
-| 演劇 | 42 | 戯曲、仮面劇、人形劇、影絵、舞踊劇、即興演劇を含む |
-| 映画 | 42 | 無声映画、劇映画、実験映画、記録映画、共同製作を含む |
+| 書籍 | 48 | 粘土板、写本、巻物、口承叙事詩、歴史書、戯曲、小説を含む |
+| 絵画 | 48 | 壁画、絵巻、屏風、木版画、樹皮画、染織・記録図像を含む |
+| 彫刻 | 48 | 丸彫、浮彫、記念碑、儀礼造形、共同体の彫刻伝統を含む |
+| 建築 | 48 | 単体建築、都市・祭祀複合体、住居伝統、景観と一体の建築群を含む |
+| 音楽 | 48 | 記譜作品、組曲、歌唱・器楽・舞踊と結び付く継承伝統を含む |
+| 演劇 | 48 | 戯曲、仮面劇、人形劇、影絵、舞踊劇、即興演劇を含む |
+| 映画 | 48 | 無声映画、劇映画、実験映画、記録映画、共同製作を含む |
 
-地域は既存の世界史台帳と同じ6区分を使い、各地域49件（各分野7件）です。
+地域は既存の世界史台帳と同じ6区分を使い、各地域56件（各分野8件）です。
 
 - アフリカ
 - 西・南アジア
@@ -29,7 +29,7 @@
 - アメリカ大陸
 - オセアニア
 
-全294件の名称・時期・作者／担い手・要約・関連文明／偉人は
+全336件の名称・時期・作者／担い手・要約・関連文明／偉人は
 `Assets/Scripts/Core/MasterpieceCatalog.cs` にあり、ゲーム内の
 「世界史図鑑」→「作品史」でも地域別に閲覧できます。
 
@@ -109,9 +109,34 @@
 - Fiji National Archives「メケの記録と継承」: https://www.fiji.gov.fj/Media-Centre/News/NATIONAL-ARCHIVES-TO-SHOWCASE-MEMORY-OF-THE-WORLD-INITIATIVE
 - University of Hawai‘i「ヴィルソニ・ヘレニコ」: https://manoa.hawaii.edu/cinema/staff-member/vilsoni-hereniko/
 
+第4弾42件では、第4弾文明に直接関係する作品に加え、個人制作へ還元できない記録・
+染織・住居・生きた芸能を同じ地域配分で追加しました。代表的な確認先は次のとおりです。
+
+- UNESCO Memory of the World「マレー年代記」: https://www.unesco.org/fr/memory-world/sejarah-melayu-malay-annals
+- Encyclopaedia Iranica「アルダシール1世の事績の書」: https://www.iranicaonline.org/articles/karnamag-i-ardasir/
+- National Park Service「ブラック・エルク」: https://www.nps.gov/people/black-elk.htm
+- Bishop Museum Press「Ancient Tahiti」: https://bishopmuseumpress.org/products/ancient-tahiti
+- The Met「メリナのランバ・アコティファハナ」: https://www.metmuseum.org/art/collection/search/85585
+- Smarthistory / Victoria and Albert Museum「アクバル・ナーマの象狩り」: https://smarthistory.org/akbarnama/
+- Gyeongju National Museum「天馬塚と天馬図」: https://gyeongju.museum.go.kr/eng/html/sub02/0202.html?cp_gubun=P&d_mng_no=193&mode=VD
+- Museu Nacional de Arte Antiga「サン・ヴィセンテの祭壇画」: https://www.museudearteantiga.pt/colecoes/pintura-portuguesa/paineis-de-sao-vicente
+- National Museum of the American Indian「ローン・ドッグの冬数え」: https://americanindian.si.edu/nk360/resources/Lone-Dogs-Winter-Count
+- The Met「二人のタヒチ女性」: https://www.metmuseum.org/art/collection/search/436446
+- Brooklyn Museum「クバ王を表すンドップ像」: https://www.brooklynmuseum.org/objects/4791
+- UNESCO「石窟庵と仏国寺」: https://whc.unesco.org/en/list/736
+- UBC Museum of Anthropology「ワタリガラスと最初の人々」: https://moa.ubc.ca/2020/01/the-raven-and-the-first-men-from-conception-to-completion/
+- British Museum「ラロトンガの杖形神像」: https://www.britishmuseum.org/collection/object/E_Oc1919-1014-1
+- UNESCO「ベレンの塔」: https://whc.unesco.org/en/list/263
+- UNESCO「ヒラガシ」: https://ich.unesco.org/en/RL/hiragasy-a-performing-art-of-the-central-highlands-of-madagascar-01740
+- UNESCO「マッ・ヨン劇」: https://ich.unesco.org/en/RL/mak-yong-theatre-00167
+- Canadian Theatre Encyclopedia「Dry Lips Oughta Move to Kapuskasing」: https://www.canadiantheatre.com/dict.pl?term=Dry+Lips+Oughta+Move+to+Kapuskasing
+- Maison de la Culture de Tahiti「アンリ・ヒロと『イ・タイ』」: https://www.maisondelaculture.pf/exposition-henri-hiro-fou-ou-visionnaire/
+- Library of Congress「The Daughter of Dawn」: https://www.loc.gov/programs/national-film-preservation-board/film-registry/complete-national-film-registry-listing/
+- New Zealand Film Commission「Mauri」: https://www.nzfilm.co.nz/films/mauri
+
 ## 次回以降の追加手順
 
-次のバッチも、7分野・6地域の偏りを点検して追加します。既存294件のIDと順序は
+次のバッチも、7分野・6地域の偏りを点検して追加します。既存336件のIDと順序は
 固定し、候補ごとに重複、異名、
 年代、制作者表記、現存／継承状況、既存文明・偉人との直接関係を確認し、専用テストで
 ID一意性と参照整合性を検証します。これにより「全部」を虚偽なく、一件ずつ拡張します。

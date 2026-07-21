@@ -6,7 +6,7 @@ using HexCiv.Core.AI;
 using UnityEditor;
 using UnityEngine;
 
-/// <summary>作品史追加84件の後方互換、地域・分野均衡、ゲーム収蔵、セーブ往復を検証する。</summary>
+/// <summary>作品史追加126件の後方互換、地域・分野均衡、ゲーム収蔵、セーブ往復を検証する。</summary>
 public static class MasterpieceExpansionSmokeTest
 {
     static readonly string[] Regions =
@@ -58,6 +58,25 @@ public static class MasterpieceExpansionSmokeTest
         "cherokee_word_for_water_film", "land_has_eyes_film",
     };
 
+    static readonly string[] FourthBatchIds =
+    {
+        "book_bornu_wars", "karnamag_ardashir", "sejarah_melayu",
+        "tale_bygone_years", "black_elk_speaks", "ancient_tahiti",
+        "merina_lamba_akotifahana", "akbar_hawai_akbarnama",
+        "cheonmado_heavenly_horse", "saint_vincent_panels",
+        "lone_dog_winter_count", "two_tahitian_women",
+        "kuba_ndop_1760", "colossal_shapur_i", "seokguram_buddha",
+        "tomb_ines_de_castro", "raven_first_men", "rarotonga_staff_god",
+        "manjakamiadana_palace", "taq_kasra", "bunhwangsa_pagoda",
+        "belem_tower", "powhatan_yehakin", "para_o_tane_palace",
+        "hiragasy_music", "qawwali_qaul", "cheoyongga_silla",
+        "portuguese_fado", "maple_leaf_rag", "te_atua_mou_e",
+        "marriage_anansewa", "indar_sabha", "mak_yong_theatre",
+        "auto_barca_inferno", "dry_lips_kapuskasing", "i_tai_henri_hiro",
+        "tabataba_film", "chess_players_film", "hang_tuah_film",
+        "aniki_bobo_film", "daughter_dawn_film", "mauri_film",
+    };
+
     public static void Run()
     {
         try
@@ -77,7 +96,7 @@ public static class MasterpieceExpansionSmokeTest
 
     static void ValidateAppendOnlyCatalog()
     {
-        if (MasterpieceCatalog.All.Count != 294)
+        if (MasterpieceCatalog.All.Count != 336)
             throw new Exception("作品史総数が不正: " + MasterpieceCatalog.All.Count);
         if (MasterpieceCatalog.All[209].Id != "vai_film")
             throw new Exception("既存210件の末尾または順序が変化した");
@@ -87,6 +106,9 @@ public static class MasterpieceExpansionSmokeTest
         if (MasterpieceCatalog.All[252].Id != ThirdBatchIds[0] ||
             MasterpieceCatalog.All[293].Id != ThirdBatchIds[ThirdBatchIds.Length - 1])
             throw new Exception("第3弾42件が既存252件の末尾に連続していない");
+        if (MasterpieceCatalog.All[294].Id != FourthBatchIds[0] ||
+            MasterpieceCatalog.All[335].Id != FourthBatchIds[FourthBatchIds.Length - 1])
+            throw new Exception("第4弾42件が既存294件の末尾に連続していない");
 
         var ids = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         for (int i = 0; i < MasterpieceCatalog.All.Count; i++)
@@ -110,16 +132,19 @@ public static class MasterpieceExpansionSmokeTest
         for (int i = 0; i < ThirdBatchIds.Length; i++)
             if (MasterpieceCatalog.Find(ThirdBatchIds[i]) == null)
                 throw new Exception("第3弾作品が見つからない: " + ThirdBatchIds[i]);
+        for (int i = 0; i < FourthBatchIds.Length; i++)
+            if (MasterpieceCatalog.Find(FourthBatchIds[i]) == null)
+                throw new Exception("第4弾作品が見つからない: " + FourthBatchIds[i]);
     }
 
     static void ValidateBalancedBatch()
     {
-        if (ThirdBatchIds.Length != 42) throw new Exception("第3弾ID数が42ではない");
-        var batch = new HashSet<string>(ThirdBatchIds, StringComparer.OrdinalIgnoreCase);
+        if (FourthBatchIds.Length != 42) throw new Exception("第4弾ID数が42ではない");
+        var batch = new HashSet<string>(FourthBatchIds, StringComparer.OrdinalIgnoreCase);
         foreach (MasterpieceKind kind in Enum.GetValues(typeof(MasterpieceKind)))
         {
-            if (MasterpieceCatalog.ForKind(kind).Count != 42)
-                throw new Exception(kind + "の総数が42ではない");
+            if (MasterpieceCatalog.ForKind(kind).Count != 48)
+                throw new Exception(kind + "の総数が48ではない");
             for (int r = 0; r < Regions.Length; r++)
             {
                 int count = 0;
@@ -131,8 +156,8 @@ public static class MasterpieceExpansionSmokeTest
             }
         }
         for (int r = 0; r < Regions.Length; r++)
-            if (MasterpieceCatalog.ForRegion(Regions[r]).Count != 49)
-                throw new Exception(Regions[r] + "の総数が49ではない");
+            if (MasterpieceCatalog.ForRegion(Regions[r]).Count != 56)
+                throw new Exception(Regions[r] + "の総数が56ではない");
     }
 
     static void ValidateCollectionAndSave()
@@ -151,14 +176,14 @@ public static class MasterpieceExpansionSmokeTest
         player.MasterpiecePoints = 10000;
         if (player.Cities.Count == 0)
             player.Cities.Add(new City { Id = 9742, PlayerId = player.Id, NameJa = "追加作品検証都市", Population = 1 });
-        if (!MasterpieceSystem.TryCollect(state, player, "basekabaka_be_buganda"))
-            throw new Exception("第3弾作品を収蔵できない");
+        if (!MasterpieceSystem.TryCollect(state, player, "book_bornu_wars"))
+            throw new Exception("第4弾作品を収蔵できない");
 
         state.LastSavedAtIso = "2026-07-21T20:00:00";
         string json = SaveLoad.Serialize(state);
         var restored = SaveLoad.Deserialize(json);
         if (!restored.GetPlayer(player.Id).CollectedMasterpieces.Contains(
-            "basekabaka_be_buganda"))
-            throw new Exception("第3弾作品の収蔵IDがセーブ往復で失われた");
+            "book_bornu_wars"))
+            throw new Exception("第4弾作品の収蔵IDがセーブ往復で失われた");
     }
 }
