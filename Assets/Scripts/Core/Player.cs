@@ -55,6 +55,14 @@ namespace HexCiv.Core
         /// <summary>この文明が収蔵した作品Id。作品は世界全体で一度だけ収蔵できる。</summary>
         public HashSet<string> CollectedMasterpieces = new HashSet<string>();
 
+        // ---- 国家運営（バージョン10からセーブ対象） ----
+        public int Treasury = AdministrationSystem.StartingTreasury;
+        public TaxPolicy Taxation = TaxPolicy.Balanced;
+        public int Stability = AdministrationSystem.StartingStability;
+        public int WarWeariness;
+        public int LastRevenue;
+        public int LastExpenses;
+
         public HashSet<HexCoord> Explored = new HashSet<HexCoord>();
         public HashSet<HexCoord> Visible = new HashSet<HexCoord>();
 
@@ -119,6 +127,7 @@ namespace HexCiv.Core
             if (capitalAlive && CapitalCityId >= 0) total += GameRules.BaseSciencePerCiv;
             total += MasterpieceSystem.SciencePerTurnBonus(this);
             total = CultureSystem.ScaleScience(this, total);
+            total = AdministrationSystem.ScaleOutput(this, total);
             // AI文明は難易度に応じて科学産出を補正(普通=100%で無変換。2026-07-20 追加)
             return DifficultyRules.ScaleForAI(s, this, total, DifficultyRules.AISciencePercent);
         }

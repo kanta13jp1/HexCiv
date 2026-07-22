@@ -141,8 +141,9 @@ namespace HexCiv.Core
             if (CurrentProduction != null)
             {
                 int culturalProduction = CultureSystem.ScaleProduction(owner, y.Production);
+                int administrativeProduction = AdministrationSystem.ScaleOutput(owner, culturalProduction);
                 // AI都市は難易度に応じて生産蓄積を補正(普通=100%で無変換。2026-07-20 追加)
-                ProductionStored += DifficultyRules.ScaleForAI(s, owner, culturalProduction, DifficultyRules.AIProductionPercent);
+                ProductionStored += DifficultyRules.ScaleForAI(s, owner, administrativeProduction, DifficultyRules.AIProductionPercent);
                 if (ProductionStored >= CurrentProduction.Cost)
                 {
                     if (CurrentProduction.Kind == ProductionKind.Building)

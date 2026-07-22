@@ -43,6 +43,12 @@ namespace HexCiv.Core.AI
             if (state.IsGameOver || player.IsEliminated) return;
 
             // 各フェーズは失敗してもターン全体を止めない
+            try
+            {
+                AdministrationSystem.SetTaxPolicy(state, player,
+                    AdministrationSystem.RecommendTaxPolicy(player), writeLog: false);
+            }
+            catch (Exception) { }
             try { ChooseResearch(state, player); } catch (Exception) { }
             bool madePeace = false;
             try { madePeace = ConsiderPeace(state, player); } catch (Exception) { }

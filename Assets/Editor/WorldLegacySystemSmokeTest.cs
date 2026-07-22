@@ -126,12 +126,12 @@ public static class WorldLegacySystemSmokeTest
             throw new Exception("遺産・偉人進行の復元に失敗");
 
         // 旧版番号を受け入れ、TurnManagerのBindで空配置を移行できることも確認する。
-        var legacy = SaveLoad.Deserialize(json1.Replace("\"version\":9", "\"version\":7"));
+        var legacy = SaveLoad.Deserialize(json1.Replace("\"version\":10", "\"version\":7"));
         legacy.HeritageSites.Clear();
         new TurnManager(legacy, new AIController());
         if (legacy.HeritageSites.Count == 0)
             throw new Exception("旧セーブ相当の遺産配置移行に失敗");
-        Debug.Log("[Legacy] 偉人世界一意・分野別効果・セーブv9往復・旧版移行OK");
+        Debug.Log("[Legacy] 偉人世界一意・分野別効果・セーブv10往復・旧版移行OK");
     }
 
     static GameState BuildState(int seed)

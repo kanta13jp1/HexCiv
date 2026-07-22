@@ -10,7 +10,7 @@ namespace HexCiv.Core
     // Serialize(Deserialize(json)) == json が成立する(スモークテストで検証)。
     // ======================================================================
 
-    /// <summary>セーブファイル全体(バージョン9)。</summary>
+    /// <summary>セーブファイル全体(バージョン10)。</summary>
     [Serializable]
     public class SaveData
     {
@@ -93,6 +93,14 @@ namespace HexCiv.Core
         public int masterpiecePoints;
         public int totalMasterpiecePoints;
         public List<string> collectedMasterpieces = new List<string>();  // 序数順ソート
+        // ---- 国家運営(バージョン10追加) ----
+        // 初期化子はバージョン9以前のセーブを読む際の互換既定値になる。
+        public int treasury = AdministrationSystem.StartingTreasury;
+        public int taxPolicy = (int)TaxPolicy.Balanced;
+        public int stability = AdministrationSystem.StartingStability;
+        public int warWeariness;
+        public int lastRevenue;
+        public int lastExpenses;
         public int capitalCityId = -1;
         public List<int> atWarWith = new List<int>();          // 昇順ソート
         // ---- 開戦ターン(バージョン4追加。JsonUtility は Dictionary 非対応のため並行配列) ----
@@ -157,9 +165,10 @@ namespace HexCiv.Core
     {
         // 1: 初版 / 2: スロット表示用メタデータ追加 / 3: 指導者ID追加 / 4: 開戦ターン(和平)追加 /
         // 5: マップ種別(MapType)追加 / 6: 難易度(Difficulty)追加 / 7: 文化進行・政策・影響力追加 / 
-        // 8: 遺産配置・発見と偉人ポイント・登用追加 / 9: 作品ポイント・収蔵追加。
+        // 8: 遺産配置・発見と偉人ポイント・登用追加 / 9: 作品ポイント・収蔵追加 /
+        // 10: 国庫・税制・安定度・戦争疲弊追加。
         // 旧バージョンのセーブも FromData で読み込める(欠落フィールドは既定値になる)。
-        public const int CurrentVersion = 9;
+        public const int CurrentVersion = 10;
 
         // ================= 公開API =================
 
@@ -316,6 +325,12 @@ namespace HexCiv.Core
                     totalGreatPersonPoints = p.TotalGreatPersonPoints,
                     masterpiecePoints = p.MasterpiecePoints,
                     totalMasterpiecePoints = p.TotalMasterpiecePoints,
+                    treasury = p.Treasury,
+                    taxPolicy = (int)AdministrationSystem.NormalizePolicy(p.Taxation),
+                    stability = p.Stability,
+                    warWeariness = p.WarWeariness,
+                    lastRevenue = p.LastRevenue,
+                    lastExpenses = p.LastExpenses,
                     capitalCityId = p.CapitalCityId,
                     knownTechs = new List<string>(p.KnownTechs),
                     knownCulturePolicies = new List<string>(p.KnownCulturePolicies),
@@ -516,6 +531,12 @@ namespace HexCiv.Core
                     TotalGreatPersonPoints = pd.totalGreatPersonPoints,
                     MasterpiecePoints = pd.masterpiecePoints,
                     TotalMasterpiecePoints = pd.totalMasterpiecePoints,
+                    Treasury = pd.treasury,
+                    Taxation = AdministrationSystem.PolicyFromSaveValue(pd.taxPolicy),
+                    Stability = pd.stability,
+                    WarWeariness = pd.warWeariness,
+                    LastRevenue = pd.lastRevenue,
+                    LastExpenses = pd.lastExpenses,
                     CapitalCityId = pd.capitalCityId,
                 };
                 // フィールド初期化子の StartingTech を消してセーブ内容で置き換える

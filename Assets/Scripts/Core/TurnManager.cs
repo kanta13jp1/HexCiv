@@ -104,6 +104,9 @@ namespace HexCiv.Core
                 // ---- 作品収蔵 ----
                 MasterpieceSystem.AdvancePlayer(state, p);
 
+                // ---- 国家運営 ----
+                AdministrationSystem.AdvancePlayer(state, p);
+
                 Visibility.Recompute(state, p);
             }
 
