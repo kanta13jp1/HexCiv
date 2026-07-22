@@ -26,6 +26,16 @@ CodexとClaude Codeは、以後この `HexCiv` プロジェクトだけを更新
 
 ## 最新状況
 
+### 2026-07-22 Codex: 政治制度第4段階・生活技術72件
+
+- `Core/PoliticalSystem.cs`: 政治資本・正統性・学識者／商人／伝統派／軍事派の支持率と、長老評議会・地域民会・商業特許状・市民兵制の4法令を決定論的に実装した。支持率と正統性は1ターン最大2点だけ変動し、税収・文化・満足度・維持費・補給範囲へ法令効果を接続。AIも戦争・国庫・教育から法令を選ぶ。
+- `UI/PoliticsPanel.cs`: **F6**または上部の天秤ボタンで政治画面を開き、4派閥の支持、正統性、政治資本、法令効果と制定可否を確認できる。観戦中は閲覧専用。天秤アイコンと0.18秒のスライド演出は実行時生成し、既存パネルSEと`UIManager.NotifyExternalPanel`へ接続した。
+- `Core/MaterialCultureCatalog.cs`: 名産品・特産品・名物・料理・船・車・飛行機・ロケット・武器・踊り・歌・武道／武術を、6地域から各1件ずつ計72件収録した。生きた伝統を固定的な所有物とみなさない説明を付し、歌詞・設計図は収録していない。
+- `UI/WorldHistoryPanel.cs` / `GlobalHistoryIndex.cs`: 世界史図鑑に第9タブ「生活技術」を追加。総合台帳を**25分類・1195件**へ更新した。これは「歴史上のすべて」を完了と断言する数ではなく、安定IDを維持して後方追加する継続台帳である。
+- `SaveLoad` version 13: 政治資本、正統性、現行法令、4派閥支持を保存。v12以前は政治資本20・正統性60・長老評議会・各支持50へ安全に移行する。
+- 専用テストは `POLITICAL SYSTEM SMOKE OK` / `MATERIAL CULTURE CATALOG SMOKE OK` / `GLOBAL HISTORY INDEX SMOKE OK`。国家運営・人口社会・兵站・作品収蔵の回帰テストも全合格。Unity 6.3総合テストは `SMOKE OK`、新しい決定論的基準値は **turn150 units=113 cities=21 techs=179 wars=1**。
+- Windowsビルドは `BUILD OK: 97770520 bytes, 34.8s`。`Build/HexCiv.exe`を25秒起動しUnity `6000.3.20f1`、例外・クラッシュ0。Claude Code第16弾の `GameAudio` / `EntityRenderer` / `UIManager` は編集・ステージせず、共有ワークツリーの統合検証にだけ含めた。
+
 ### 2026-07-22 Claude Code: 兵站・国家運営の盤面可視化、全検証合格
 
 テーマ: **Codexの新シミュレーションを盤面から読めるようにする**(Core/ は全て読み取り専用。しきい値・分類規則はすべてCodex実装から取得し、独自の数値は一切導入していません)。

@@ -8,7 +8,7 @@ using HexCiv.Core;
 namespace HexCiv.UI
 {
     /// <summary>
-    /// 文明・指導者・遺跡・偉人・研究史・文化史・7分野の作品史を横断する独立した世界史図鑑UI。
+    /// 文明・指導者・遺跡・偉人・研究史・文化史・作品史・生活技術史を横断する独立図鑑UI。
     /// UIManagerとは別Canvasに置き、共同開発中のゲーム設定・セーブUIへ依存しない。
     /// </summary>
     public sealed class WorldHistoryPanel : MonoBehaviour
@@ -24,7 +24,8 @@ namespace HexCiv.UI
             People,
             Research,
             Culture,
-            Works
+            Works,
+            MaterialCulture
         }
 
         enum RowIconKind
@@ -42,7 +43,8 @@ namespace HexCiv.UI
             Architecture,
             Music,
             Theater,
-            Film
+            Film,
+            MaterialCulture
         }
 
         static readonly string[] Regions =
@@ -66,6 +68,7 @@ namespace HexCiv.UI
         Button researchTab;
         Button cultureTab;
         Button worksTab;
+        Button materialCultureTab;
         Button prevButton;
         Button nextButton;
 
@@ -79,6 +82,7 @@ namespace HexCiv.UI
         Texture2D researchCultureEmblems;
         Texture2D masterpieceEmblems;
         Texture2D theaterFilmEmblems;
+        Texture2D materialCultureIcon;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         static void AutoSpawn()
@@ -152,6 +156,7 @@ namespace HexCiv.UI
                 "History/research_culture_emblems");
             masterpieceEmblems = Resources.Load<Texture2D>("History/masterpiece_emblems");
             theaterFilmEmblems = Resources.Load<Texture2D>("History/theater_film_emblems");
+            materialCultureIcon = CreateMaterialCultureIcon();
             var bannerTexture = Resources.Load<Texture2D>("History/world_history_banner");
             if (bannerTexture != null)
             {
@@ -178,42 +183,47 @@ namespace HexCiv.UI
             overviewTab = UIStyle.CreateButton(panel.transform, "OverviewTab", "総合", 12,
                 () => SwitchMode(CatalogMode.Overview));
             UIStyle.SetRect(overviewTab.gameObject, new Vector2(0f, 1f), new Vector2(0f, 1f),
-                new Vector2(0f, 1f), new Vector2(28f, -55f), new Vector2(66f, 38f));
+                new Vector2(0f, 1f), new Vector2(28f, -55f), new Vector2(58f, 38f));
 
             civilizationsTab = UIStyle.CreateButton(panel.transform, "CivilizationsTab", "文明", 12,
                 () => SwitchMode(CatalogMode.Civilizations));
             UIStyle.SetRect(civilizationsTab.gameObject, new Vector2(0f, 1f), new Vector2(0f, 1f),
-                new Vector2(0f, 1f), new Vector2(98f, -55f), new Vector2(66f, 38f));
+                new Vector2(0f, 1f), new Vector2(89f, -55f), new Vector2(58f, 38f));
 
             leadersTab = UIStyle.CreateButton(panel.transform, "LeadersTab", "指導者", 12,
                 () => SwitchMode(CatalogMode.Leaders));
             UIStyle.SetRect(leadersTab.gameObject, new Vector2(0f, 1f), new Vector2(0f, 1f),
-                new Vector2(0f, 1f), new Vector2(168f, -55f), new Vector2(66f, 38f));
+                new Vector2(0f, 1f), new Vector2(150f, -55f), new Vector2(58f, 38f));
 
             sitesTab = UIStyle.CreateButton(panel.transform, "SitesTab", "遺跡", 12,
                 () => SwitchMode(CatalogMode.Sites));
             UIStyle.SetRect(sitesTab.gameObject, new Vector2(0f, 1f), new Vector2(0f, 1f),
-                new Vector2(0f, 1f), new Vector2(238f, -55f), new Vector2(66f, 38f));
+                new Vector2(0f, 1f), new Vector2(211f, -55f), new Vector2(58f, 38f));
 
             peopleTab = UIStyle.CreateButton(panel.transform, "PeopleTab", "偉人", 12,
                 () => SwitchMode(CatalogMode.People));
             UIStyle.SetRect(peopleTab.gameObject, new Vector2(0f, 1f), new Vector2(0f, 1f),
-                new Vector2(0f, 1f), new Vector2(308f, -55f), new Vector2(66f, 38f));
+                new Vector2(0f, 1f), new Vector2(272f, -55f), new Vector2(58f, 38f));
 
             researchTab = UIStyle.CreateButton(panel.transform, "ResearchTab", "研究", 12,
                 () => SwitchMode(CatalogMode.Research));
             UIStyle.SetRect(researchTab.gameObject, new Vector2(0f, 1f), new Vector2(0f, 1f),
-                new Vector2(0f, 1f), new Vector2(378f, -55f), new Vector2(66f, 38f));
+                new Vector2(0f, 1f), new Vector2(333f, -55f), new Vector2(58f, 38f));
 
             cultureTab = UIStyle.CreateButton(panel.transform, "CultureTab", "文化", 12,
                 () => SwitchMode(CatalogMode.Culture));
             UIStyle.SetRect(cultureTab.gameObject, new Vector2(0f, 1f), new Vector2(0f, 1f),
-                new Vector2(0f, 1f), new Vector2(448f, -55f), new Vector2(66f, 38f));
+                new Vector2(0f, 1f), new Vector2(394f, -55f), new Vector2(58f, 38f));
 
             worksTab = UIStyle.CreateButton(panel.transform, "WorksTab", "作品", 12,
                 () => SwitchMode(CatalogMode.Works));
             UIStyle.SetRect(worksTab.gameObject, new Vector2(0f, 1f), new Vector2(0f, 1f),
-                new Vector2(0f, 1f), new Vector2(518f, -55f), new Vector2(66f, 38f));
+                new Vector2(0f, 1f), new Vector2(455f, -55f), new Vector2(58f, 38f));
+
+            materialCultureTab = UIStyle.CreateButton(panel.transform, "MaterialCultureTab", "生活技術", 11,
+                () => SwitchMode(CatalogMode.MaterialCulture));
+            UIStyle.SetRect(materialCultureTab.gameObject, new Vector2(0f, 1f), new Vector2(0f, 1f),
+                new Vector2(0f, 1f), new Vector2(516f, -55f), new Vector2(58f, 38f));
 
             var regionButton = UIStyle.CreateButton(panel.transform, "Region", "", 15, CycleRegion);
             UIStyle.SetRect(regionButton.gameObject, new Vector2(1f, 1f), new Vector2(1f, 1f),
@@ -299,6 +309,7 @@ namespace HexCiv.UI
             SetTabColor(researchTab, mode == CatalogMode.Research);
             SetTabColor(cultureTab, mode == CatalogMode.Culture);
             SetTabColor(worksTab, mode == CatalogMode.Works);
+            SetTabColor(materialCultureTab, mode == CatalogMode.MaterialCulture);
 
             if (mode == CatalogMode.Overview)
             {
@@ -349,12 +360,19 @@ namespace HexCiv.UI
                 UpdateFooter(items.Count, "文化史");
                 titleText.text = "世界史図鑑　―　文化史";
             }
-            else
+            else if (mode == CatalogMode.Works)
             {
                 var items = FilteredWorks();
                 BuildWorkRows(items);
                 UpdateFooter(items.Count, "作品");
                 titleText.text = "世界史図鑑　―　作品史";
+            }
+            else
+            {
+                var items = FilteredMaterialCulture();
+                BuildMaterialCultureRows(items);
+                UpdateFooter(items.Count, "生活・技術史");
+                titleText.text = "世界史図鑑　―　生活・技術史";
             }
         }
 
@@ -369,7 +387,8 @@ namespace HexCiv.UI
                 case CatalogMode.People: return FilteredPeople().Count;
                 case CatalogMode.Research: return FilteredResearch().Count;
                 case CatalogMode.Culture: return FilteredCulture().Count;
-                default: return FilteredWorks().Count;
+                case CatalogMode.Works: return FilteredWorks().Count;
+                default: return FilteredMaterialCulture().Count;
             }
         }
 
@@ -413,6 +432,11 @@ namespace HexCiv.UI
             return MasterpieceCatalog.ForRegion(regionIndex == 0 ? null : Regions[regionIndex]);
         }
 
+        List<MaterialCultureDef> FilteredMaterialCulture()
+        {
+            return MaterialCultureCatalog.ForRegion(regionIndex == 0 ? null : Regions[regionIndex]);
+        }
+
         void BuildOverviewRows(List<GlobalHistoryIndexEntry> items)
         {
             int start = page * ItemsPerPage;
@@ -429,7 +453,8 @@ namespace HexCiv.UI
                     item.Id == "research" ? RowIconKind.Research :
                     item.Id == "culture" ? RowIconKind.Culture :
                     item.Id == "theater" ? RowIconKind.Theater :
-                    item.Id == "film" ? RowIconKind.Film : RowIconKind.None;
+                    item.Id == "film" ? RowIconKind.Film :
+                    IsMaterialIndexId(item.Id) ? RowIconKind.MaterialCulture : RowIconKind.None;
                 CreateEntryRow(i - start, "Index_" + item.Id, text, iconKind);
             }
         }
@@ -549,6 +574,29 @@ namespace HexCiv.UI
             }
         }
 
+        void BuildMaterialCultureRows(List<MaterialCultureDef> items)
+        {
+            int start = page * ItemsPerPage;
+            int end = Mathf.Min(items.Count, start + ItemsPerPage);
+            for (int i = start; i < end; i++)
+            {
+                var item = items[i];
+                string text = item.NameJa + "　［" + item.KindNameJa + "］　" + item.PlaceJa +
+                    " / " + item.PeriodJa + "\n" + item.SummaryJa;
+                CreateEntryRow(i - start, "MaterialCulture_" + item.Id, text,
+                    RowIconKind.MaterialCulture);
+            }
+        }
+
+        static bool IsMaterialIndexId(string id)
+        {
+            return id == "specialty_products" || id == "regional_products" ||
+                id == "local_icons" || id == "cuisine" || id == "ships" ||
+                id == "vehicles" || id == "aircraft" || id == "rockets" ||
+                id == "weapons" || id == "dances" || id == "songs" ||
+                id == "martial_arts";
+        }
+
         static RowIconKind IconForMasterpiece(MasterpieceKind kind)
         {
             switch (kind)
@@ -619,6 +667,10 @@ namespace HexCiv.UI
                         ? new Rect(0f, 0f, 0.5f, 1f)
                         : new Rect(0.5f, 0f, 0.5f, 1f);
                 }
+            }
+            else if (iconKind == RowIconKind.MaterialCulture)
+            {
+                iconTexture = materialCultureIcon;
             }
 
             if (iconTexture != null)
@@ -718,6 +770,54 @@ namespace HexCiv.UI
             if (root == null) return;
             for (int i = root.childCount - 1; i >= 0; i--)
                 Destroy(root.GetChild(i).gameObject);
+        }
+
+        static Texture2D CreateMaterialCultureIcon()
+        {
+            const int size = 48;
+            var texture = new Texture2D(size, size, TextureFormat.RGBA32, false)
+            {
+                name = "MaterialCultureIcon",
+                filterMode = FilterMode.Point,
+                wrapMode = TextureWrapMode.Clamp
+            };
+            var pixels = new Color32[size * size];
+            var clear = new Color32(0, 0, 0, 0);
+            var gold = new Color32(236, 192, 65, 255);
+            var blue = new Color32(85, 174, 207, 255);
+            var dark = new Color32(21, 30, 47, 255);
+            for (int i = 0; i < pixels.Length; i++) pixels[i] = clear;
+
+            // 船鉢と歯車を組み合わせた、外部素材に依存しない生活・技術アイコン。
+            Fill(pixels, size, 7, 25, 31, 29, gold);
+            Fill(pixels, size, 11, 30, 27, 34, gold);
+            Fill(pixels, size, 15, 35, 23, 38, gold);
+            Fill(pixels, size, 18, 10, 20, 24, blue);
+            Fill(pixels, size, 20, 13, 29, 15, blue);
+            Fill(pixels, size, 25, 16, 31, 18, blue);
+            for (int y = 9; y <= 22; y++)
+                for (int x = 30; x <= 43; x++)
+                {
+                    int dx = x - 36, dy = y - 16;
+                    int d = dx * dx + dy * dy;
+                    if (d >= 25 && d <= 49) pixels[y * size + x] = gold;
+                    else if (d < 10) pixels[y * size + x] = dark;
+                }
+            texture.SetPixels32(pixels);
+            texture.Apply(false, true);
+            return texture;
+        }
+
+        static void Fill(Color32[] pixels, int size, int x0, int y0, int x1, int y1, Color32 color)
+        {
+            for (int y = Mathf.Max(0, y0); y <= Mathf.Min(size - 1, y1); y++)
+                for (int x = Mathf.Max(0, x0); x <= Mathf.Min(size - 1, x1); x++)
+                    pixels[y * size + x] = color;
+        }
+
+        void OnDestroy()
+        {
+            if (materialCultureIcon != null) Destroy(materialCultureIcon);
         }
     }
 }

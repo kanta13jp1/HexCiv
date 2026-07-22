@@ -204,6 +204,7 @@ namespace HexCiv.Core
                 _ => 0,
             };
             satisfactionTarget -= player.WarWeariness / 10;
+            satisfactionTarget += PoliticalSystem.SatisfactionBonus(player);
             if (player.SocialFocus == SocialFocus.Balanced) satisfactionTarget += 2;
             city.Satisfaction = MoveTowards(city.Satisfaction,
                 Math.Clamp(satisfactionTarget, 0, 100), 2);

@@ -104,6 +104,14 @@ namespace HexCiv.Core
         public int capitalCityId = -1;
         // ---- 人口社会（バージョン12追加） ----
         public int socialFocus = (int)SocialFocus.Balanced;
+        // ---- 政治・法律（バージョン13追加） ----
+        public int politicalCapital = PoliticalSystem.StartingPoliticalCapital;
+        public int legitimacy = PoliticalSystem.StartingLegitimacy;
+        public int activeLaw = (int)CivicLaw.CouncilOfElders;
+        public int scholarSupport = PoliticalSystem.StartingSupport;
+        public int merchantSupport = PoliticalSystem.StartingSupport;
+        public int traditionalSupport = PoliticalSystem.StartingSupport;
+        public int militarySupport = PoliticalSystem.StartingSupport;
         public List<int> atWarWith = new List<int>();          // 昇順ソート
         // ---- 開戦ターン(バージョン4追加。JsonUtility は Dictionary 非対応のため並行配列) ----
         // warStartEnemyIds は昇順ソートし、warStartTurns[i] が対応する開戦ターン(決定的)。
@@ -183,9 +191,9 @@ namespace HexCiv.Core
         // 5: マップ種別(MapType)追加 / 6: 難易度(Difficulty)追加 / 7: 文化進行・政策・影響力追加 / 
         // 8: 遺産配置・発見と偉人ポイント・登用追加 / 9: 作品ポイント・収蔵追加 /
         // 10: 国庫・税制・安定度・戦争疲弊追加 / 11: ユニット補給状態・孤立ターン追加 /
-        // 12: 社会重点・人口階層・需要・教育・満足度・移住追加。
+        // 12: 社会重点・人口階層・需要・教育・満足度・移住追加 / 13: 政治・法律追加。
         // 旧バージョンのセーブも FromData で読み込める(欠落フィールドは既定値になる)。
-        public const int CurrentVersion = 12;
+        public const int CurrentVersion = 13;
 
         // ================= 公開API =================
 
@@ -350,6 +358,14 @@ namespace HexCiv.Core
                     lastExpenses = p.LastExpenses,
                     capitalCityId = p.CapitalCityId,
                     socialFocus = (int)PopulationSystem.NormalizeFocus(p.SocialFocus),
+                    politicalCapital = Math.Clamp(p.PoliticalCapital, 0,
+                        PoliticalSystem.MaximumPoliticalCapital),
+                    legitimacy = Math.Clamp(p.Legitimacy, 0, 100),
+                    activeLaw = (int)PoliticalSystem.NormalizeLaw(p.ActiveLaw),
+                    scholarSupport = Math.Clamp(p.ScholarSupport, 0, 100),
+                    merchantSupport = Math.Clamp(p.MerchantSupport, 0, 100),
+                    traditionalSupport = Math.Clamp(p.TraditionalSupport, 0, 100),
+                    militarySupport = Math.Clamp(p.MilitarySupport, 0, 100),
                     knownTechs = new List<string>(p.KnownTechs),
                     knownCulturePolicies = new List<string>(p.KnownCulturePolicies),
                     discoveredHeritageSites = new List<string>(p.DiscoveredHeritageSites),
@@ -568,7 +584,16 @@ namespace HexCiv.Core
                     LastExpenses = pd.lastExpenses,
                     CapitalCityId = pd.capitalCityId,
                     SocialFocus = PopulationSystem.FocusFromSaveValue(pd.socialFocus),
+                    PoliticalCapital = Math.Clamp(pd.politicalCapital, 0,
+                        PoliticalSystem.MaximumPoliticalCapital),
+                    Legitimacy = Math.Clamp(pd.legitimacy, 0, 100),
+                    ActiveLaw = PoliticalSystem.LawFromSaveValue(pd.activeLaw),
+                    ScholarSupport = Math.Clamp(pd.scholarSupport, 0, 100),
+                    MerchantSupport = Math.Clamp(pd.merchantSupport, 0, 100),
+                    TraditionalSupport = Math.Clamp(pd.traditionalSupport, 0, 100),
+                    MilitarySupport = Math.Clamp(pd.militarySupport, 0, 100),
                 };
+                if (d.version <= 12) PoliticalSystem.Initialize(p);
                 // フィールド初期化子の StartingTech を消してセーブ内容で置き換える
                 p.KnownTechs.Clear();
                 if (pd.knownTechs != null)

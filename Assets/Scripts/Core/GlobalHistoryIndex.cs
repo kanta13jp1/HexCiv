@@ -37,6 +37,7 @@ namespace HexCiv.Core
             var works = MasterpieceCatalog.ForRegion(Filter(regionJa));
             var research = ResearchMilestoneCatalog.ForRegion(Filter(regionJa));
             var culture = CulturalTraditionCatalog.ForRegion(Filter(regionJa));
+            var material = MaterialCultureCatalog.ForRegion(Filter(regionJa));
             bool all = IsAll(regionJa);
 
             return new List<GlobalHistoryIndexEntry>
@@ -68,6 +69,30 @@ namespace HexCiv.Core
                         : "地域別の学術・技術・知識体系の史実マイルストーン"),
                 Entry("culture", "文化", culture.Count,
                     "言語・信仰・芸能・工芸・生活・社会制度を含む文化史台帳"),
+                MaterialEntry("specialty_products", MaterialCultureKind.SpecialtyProduct, material,
+                    "地域に結び付く産物を、生産者・環境・交易の歴史とともに記録"),
+                MaterialEntry("regional_products", MaterialCultureKind.RegionalProduct, material,
+                    "地域産業と手仕事を横断する検索分類"),
+                MaterialEntry("local_icons", MaterialCultureKind.LocalIcon, material,
+                    "土地の象徴として語られる品物を固定的な地域像にせず紹介"),
+                MaterialEntry("cuisine", MaterialCultureKind.Cuisine, material,
+                    "調理法・共食・移動・交流から捉える料理文化"),
+                MaterialEntry("ships", MaterialCultureKind.Ship, material,
+                    "河川・海洋の移動、航海知識、造船技術"),
+                MaterialEntry("vehicles", MaterialCultureKind.Vehicle, material,
+                    "陸上交通と産業・労働・都市の変化"),
+                MaterialEntry("aircraft", MaterialCultureKind.Aircraft, material,
+                    "航空技術と民間・軍事・社会史"),
+                MaterialEntry("rockets", MaterialCultureKind.Rocket, material,
+                    "ロケット工学と宇宙開発・軍事技術の両面"),
+                MaterialEntry("weapons", MaterialCultureKind.Weapon, material,
+                    "武器の技術と制度を、戦争被害を美化せず記録"),
+                MaterialEntry("dances", MaterialCultureKind.Dance, material,
+                    "共同体が継承・再創造する舞踊実践"),
+                MaterialEntry("songs", MaterialCultureKind.Song, material,
+                    "歌唱伝統と作品名を、歌詞を複製せず記録"),
+                MaterialEntry("martial_arts", MaterialCultureKind.MartialArt, material,
+                    "武道・武術・格闘文化の身体技法と社会的背景"),
             };
         }
 
@@ -120,6 +145,13 @@ namespace HexCiv.Core
         static GlobalHistoryIndexEntry Entry(string id, string name, int count, string detail)
         {
             return new GlobalHistoryIndexEntry(id, name, count, detail);
+        }
+
+        static GlobalHistoryIndexEntry MaterialEntry(string id, MaterialCultureKind kind,
+            List<MaterialCultureDef> items, string detail)
+        {
+            return Entry(id, MaterialCultureCatalog.KindNameJa(kind),
+                MaterialCultureCatalog.CountKind(items, kind), detail);
         }
 
         static int CountKind(List<MasterpieceDef> works, MasterpieceKind kind)

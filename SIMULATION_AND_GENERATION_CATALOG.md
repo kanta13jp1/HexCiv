@@ -1,6 +1,6 @@
 # シミュレーションゲーム要素・生成技術台帳
 
-最終更新: 2026-07-22 / 第3版
+最終更新: 2026-07-22 / 第4版
 
 ## この台帳の役割
 
@@ -11,7 +11,7 @@
 3. 台帳へ候補を追加し、Coreの決定論とセーブ互換を守って一群ずつ実装する。
 4. 他作品の画像・音・文章・固有UI・数値表を複製せず、仕組みはHexCiv用に再設計する。
 
-文明・指導者・遺跡・偉人・研究・文化・作品の収録状況は、既存の `GLOBAL_HISTORY_CATALOG.md`、`WORLD_HISTORY_CATALOG.md`、`RESEARCH_CULTURE_CATALOG.md`、`MASTERPIECE_CATALOG.md` が正本です。この文書は、ゲーム機構とメディア生成技術の正本です。
+文明・指導者・遺跡・偉人・研究・文化・作品・生活技術の収録状況は、既存の `GLOBAL_HISTORY_CATALOG.md`、`WORLD_HISTORY_CATALOG.md`、`RESEARCH_CULTURE_CATALOG.md`、`MASTERPIECE_CATALOG.md`、`MATERIAL_CULTURE_CATALOG.md` が正本です。この文書は、ゲーム機構とメディア生成技術の正本です。
 
 ## シミュレーションゲーム設計参照索引（第1群）
 
@@ -35,9 +35,9 @@
 | 軍事 | Unity of Command | 補給線、作戦機動、限定ターン目標 | **補給線を第2実装** |
 | 軍事 | Gary Grigsby's War in the East | 兵站、指揮、疲労、戦域規模 | **戦争疲弊を第1実装** |
 | 軍事 | Wargame / WARNO | 偵察、指揮域、増援、複合兵科 | 偵察済み、指揮域候補 |
-| 政治 | Democracy | 有権者集団、政策連鎖、支持率、選挙 | 文化政策済み、支持層候補 |
-| 政治 | Suzerain | 政策決定、予算、派閥、物語分岐 | 国庫済み、事件・派閥候補 |
-| 政治 | Tropico | 派閥、住民需要、選挙、経済 | **需要・満足度を第3実装**、派閥候補 |
+| 政治 | Democracy | 有権者集団、政策連鎖、支持率、選挙 | **支持層・法律を第4実装**、選挙候補 |
+| 政治 | Suzerain | 政策決定、予算、派閥、物語分岐 | **派閥・法律を第4実装**、事件候補 |
+| 政治 | Tropico | 派閥、住民需要、選挙、経済 | **需要・満足・派閥を第3・第4実装**、選挙候補 |
 | 政治 | Geo-Political Simulator | 省庁、指標、国際関係、危機 | 国家指標を第1実装 |
 | 政治 | Hidden Agenda | 閣僚、予算、治安、政治的圧力 | 閣僚・治安候補 |
 | 政治 | The Political Process | 選挙区、世論、運動、法案 | 選挙・法案候補 |
@@ -91,7 +91,7 @@
 | 軍事 | The Operational Art of War | 作戦規模、補給、増援、戦闘準備 | 補給済み、戦闘準備候補 |
 | 軍事 | Armored Brigade | 指揮遅延、士気、視界、諸兵科 | 視界済み、士気・指揮遅延候補 |
 | 軍事 | Rule the Waves | 海軍設計、予算、造船、外交圧力 | 国庫済み、海軍・造船候補 |
-| 政治 | Lawgivers | 議会、法案、政党、選挙、支持 | 第4段階の法令・評議会候補 |
+| 政治 | Lawgivers | 議会、法案、政党、選挙、支持 | **法律・支持を第4実装**、議会・選挙候補 |
 | 政治 | Political Animals | 有権者属性、地域運動、選挙資源 | 支持層・選挙候補 |
 | 政治 | Crisis in the Kremlin | 省庁予算、派閥、改革、国家指標 | 国庫・安定度済み、派閥候補 |
 | 政治 | NationStates | 政策事件、選択、指標の長期変化 | 選択式事件候補 |
@@ -107,7 +107,7 @@
 | 1 | 国家運営 | 国庫、税制、人口・都市収入、都市・軍事維持費、安定度、戦争疲弊、AI税制 | 実装済み |
 | 2 | 兵站 | 都市からの補給到達、地形コスト、敵遮断、孤立、補給切れ、技術・穀物庫 | **実装済み**（道路タイル・港は次拡張） |
 | 3 | 人口社会 | 人口階層、職業、需要、教育、満足度、移住、AI社会重点 | **実装済み** |
-| 4 | 政治 | 派閥、支持、法令、評議会、事件選択 | 設計候補 |
+| 4 | 政治 | 派閥、支持、法令、評議会、事件選択 | **派閥・支持・法律・正統性を実装済み**（事件・選挙は次拡張） |
 | 5 | 市場 | 資源在庫、交易路、価格、生産連鎖 | 設計候補 |
 | 6 | 人物史 | 特性、任命、関係、継承、家系 | 設計候補 |
 
@@ -144,9 +144,19 @@
 - **UI・演出**: 左下「人口社会」またはF7。三色の人物アイコンを実行時生成し、0.18秒のスライドフェードと既存パネルSEを使用する。
 - **セーブ**: version 12。version 11以前は均衡、全員農民、教育20、満足60、需要100/100/50へ移行する。
 
+## 第4実装: 政治・利害集団・法律
+
+- **政治資源**: 政治力0〜999。都市数、正統性、現行法を支持する集団から毎ターン得る。法律変更は30を消費する。
+- **正統性**: 0〜100。安定度、平均満足度、現行法への支持、戦争疲弊から目標値を求め、毎ターン最大2ずつ漸進する。
+- **利害集団**: 学術層・商業層・伝統層・軍事層。実在社会の固定的身分ではなく、教育、職能、建物、国庫、戦争から計算する抽象的な政策支持である。
+- **法律**: 長老評議会（正統性）、地域民会（文化・満足／税収減）、商業特許状（税収／満足低下）、市民兵制（補給距離／維持費増）の4種類。
+- **AI**: 戦時は市民兵制、赤字危機は商業特許状、高教育社会は地域民会、それ以外は長老評議会を勧告する。乱数は使わない。
+- **UI・演出**: 左下「政治」またはF6。4支持バー、法律カード、実行時生成の天秤アイコン、0.18秒のスライドフェード、既存パネルSE。
+- **セーブ**: version 13。version 12以前は政治力20、正統性60、長老評議会、各支持50へ移行する。
+
 ## 画像・動画・音楽・音声生成技術の分類台帳
 
-「生成」は手続き生成、シミュレーション、制作支援、機械学習による合成を含みます。製品名の網羅ではなく、技術系譜を追跡します。第3版は8系統を増補し、累計41技術系譜です。
+「生成」は手続き生成、シミュレーション、制作支援、機械学習による合成を含みます。製品名の網羅ではなく、技術系譜を追跡します。第4版は8系統を増補し、累計49技術系譜です。
 
 | 媒体 | 技術系譜 | 代表的な方式 | HexCiv方針・状態 |
 |---|---|---|---|
@@ -191,6 +201,14 @@
 | 音声 | 感情・韻律制御 | duration、pitch、energy、style token | ナレーション表現候補 |
 | 音声 | 少量話者適応 | speaker embedding、few-shot adaptation、voice cloning | 本人同意を記録できる声のみ候補 |
 | 音声 | 対話音声生成 | streaming TTS、turn-taking、contextual prosody | 架空ナレーター・明示設定時のみ候補 |
+| 画像 | 距離場・陰関数描画 | signed distance field、implicit contour、analytic antialiasing | 軽量な紋章・地図記号の候補 |
+| 画像 | 減色・ディザ生成 | palette quantization、ordered/error diffusion dithering | 低解像度ミニマップ・生成アイコンの候補 |
+| 動画 | イベント駆動モーション | gameplay event、animation graph、procedural timing | 戦闘・移住・UI開閉のイベント演出で一部実装済み |
+| 動画 | 時空間超解像 | frame synthesis、temporal upscaling、motion compensation | 実行時導入なし。低性能環境では軽量化を優先 |
+| 音楽 | 生成的編曲・声部進行 | motif grammar、voice leading、constraint orchestration | 地域・時代BGMの自作旋律拡張候補 |
+| 音楽 | パラメトリック音色変形 | spectral morphing、cross-synthesis、dynamic filtering | 戦時レイヤー・時代クロスフェードで一部実装済み |
+| 音声 | 発音生成・多言語正規化 | grapheme-to-phoneme、phoneme lexicon、text normalization | 日本語・現地名読み上げの将来候補 |
+| 音声 | 音声修復・強調 | denoise、dereverberation、bandwidth extension | 権利確認済み自作録音だけに適用する候補 |
 
 ### 導入規則
 
@@ -204,6 +222,9 @@
 - [Cities: Skylines II — Economy & Production](https://www.paradoxinteractive.com/games/cities-skylines-ii/features/economy-production)
 - [Victoria 3 — Dev Diary #57: The Journey So Far](https://www.paradoxinteractive.com/games/victoria-3/news/dev-diary-57-the-journey-so-far)
 - [Victoria 3 — About](https://www.paradoxinteractive.com/games/victoria-3/about)
+- [Victoria 3 — Law Enactment and Revolution Clock](https://www.paradoxinteractive.com/games/victoria-3/news/dev-diary-80-law-enactment-and-revolution-clock-in-13)
+- [Victoria 3 — Elections](https://www.paradoxinteractive.com/games/victoria-3/news/dev-diary-45-elections)
+- [Victoria 3 — Political Parties](https://www.paradoxinteractive.com/games/victoria-3/news/dev-diary-46-political-parties)
 - [Anno Union — Residential Tiers](https://www.anno-union.com/devblog-residential-tiers/)
 - [Anno Union — Fulfil Needs Your Way](https://www.anno-union.com/devblog-fulfil-needs-your-way/)
 - [Millennia — Economy Part One](https://www.paradoxinteractive.com/games/millennia/news/economy-part-one)

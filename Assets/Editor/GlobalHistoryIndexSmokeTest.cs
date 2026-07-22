@@ -33,7 +33,7 @@ public static class GlobalHistoryIndexSmokeTest
     static void ValidateAllCounts()
     {
         var entries = GlobalHistoryIndex.Entries(GlobalHistoryIndex.AllRegions);
-        if (entries.Count != 13) throw new Exception("総合分類数が不正: " + entries.Count);
+        if (entries.Count != 25) throw new Exception("総合分類数が不正: " + entries.Count);
 
         var expected = new Dictionary<string, int>
         {
@@ -41,6 +41,11 @@ public static class GlobalHistoryIndexSmokeTest
             { "great_people", 132 }, { "books", 48 }, { "paintings", 48 },
             { "sculptures", 48 }, { "architecture", 48 }, { "music", 48 },
             { "theater", 48 }, { "film", 48 }, { "research", 132 }, { "culture", 132 },
+            { "specialty_products", 6 }, { "regional_products", 6 },
+            { "local_icons", 6 }, { "cuisine", 6 }, { "ships", 6 },
+            { "vehicles", 6 }, { "aircraft", 6 }, { "rockets", 6 },
+            { "weapons", 6 }, { "dances", 6 }, { "songs", 6 },
+            { "martial_arts", 6 },
         };
         int total = 0;
         for (int i = 0; i < entries.Count; i++)
@@ -52,8 +57,8 @@ public static class GlobalHistoryIndexSmokeTest
                 throw new Exception("総合索引説明が不足: " + entry.Id);
             total += entry.Count;
         }
-        if (total != 1123) throw new Exception("台帳レコード総数が不正: " + total);
-        Debug.Log("[GlobalHistory] 13分類・台帳1123件 OK");
+        if (total != 1195) throw new Exception("台帳レコード総数が不正: " + total);
+        Debug.Log("[GlobalHistory] 25分類・台帳1195件 OK");
     }
 
     static void ValidateRegionalPartition()

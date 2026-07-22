@@ -44,6 +44,7 @@ namespace HexCiv.Core
             total += CulturePolicyCatalog.EffectTotal(player, CulturePolicyEffect.Culture);
             total += MasterpieceSystem.CulturePerTurnBonus(player);
             total += PopulationSystem.CultureBonus(player);
+            total += PoliticalSystem.CultureBonus(player);
             return AdministrationSystem.ScaleOutput(player, Math.Max(0, total));
         }
 

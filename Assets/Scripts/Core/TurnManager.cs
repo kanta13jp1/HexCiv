@@ -87,6 +87,9 @@ namespace HexCiv.Core
                 // ---- 人口階層・需要・教育・移住 ----
                 PopulationSystem.AdvancePlayer(state, p);
 
+                // ---- 政治・派閥・法律 ----
+                PoliticalSystem.AdvancePlayer(state, p);
+
                 // ---- 研究 ----
                 p.ScienceStored += p.SciencePerTurn(state);
                 if (!string.IsNullOrEmpty(p.CurrentResearchId))

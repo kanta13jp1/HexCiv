@@ -66,6 +66,15 @@ namespace HexCiv.Core
         // ---- 人口社会（バージョン12からセーブ対象） ----
         public SocialFocus SocialFocus = SocialFocus.Balanced;
 
+        // ---- 政治・法律（バージョン13からセーブ対象） ----
+        public int PoliticalCapital = PoliticalSystem.StartingPoliticalCapital;
+        public int Legitimacy = PoliticalSystem.StartingLegitimacy;
+        public CivicLaw ActiveLaw = CivicLaw.CouncilOfElders;
+        public int ScholarSupport = PoliticalSystem.StartingSupport;
+        public int MerchantSupport = PoliticalSystem.StartingSupport;
+        public int TraditionalSupport = PoliticalSystem.StartingSupport;
+        public int MilitarySupport = PoliticalSystem.StartingSupport;
+
         public HashSet<HexCoord> Explored = new HashSet<HexCoord>();
         public HashSet<HexCoord> Visible = new HashSet<HexCoord>();
 

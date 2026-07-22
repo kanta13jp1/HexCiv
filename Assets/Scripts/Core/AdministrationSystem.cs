@@ -81,7 +81,8 @@ namespace HexCiv.Core
         public static int Revenue(Player player)
         {
             if (player == null) return 0;
-            return GrossRevenue(player) * TaxPercent(player.Taxation) / 100;
+            int taxed = GrossRevenue(player) * TaxPercent(player.Taxation) / 100;
+            return taxed * PoliticalSystem.RevenuePercent(player) / 100;
         }
 
         public static int UnitMaintenance(Player player)
@@ -104,7 +105,8 @@ namespace HexCiv.Core
             if (player == null) return 0;
             int cityMaintenance = player.Cities.Count * 2;
             int warAdministration = player.AtWarWith.Count * 3;
-            return cityMaintenance + UnitMaintenance(player) + warAdministration;
+            return cityMaintenance + UnitMaintenance(player) + warAdministration +
+                PoliticalSystem.AdditionalExpenses(player);
         }
 
         public static int Balance(Player player) => Revenue(player) - Expenses(player);
