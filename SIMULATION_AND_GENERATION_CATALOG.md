@@ -1,6 +1,6 @@
 # シミュレーションゲーム要素・生成技術台帳
 
-最終更新: 2026-07-22 / 第4版
+最終更新: 2026-07-22 / 第5版
 
 ## この台帳の役割
 
@@ -22,7 +22,7 @@
 | 歴史 | Civilization | ターン制4X、都市、技術、文化、複数勝利 | 基盤実装済み |
 | 歴史 | Europa Universalis | 国家外交、講和、交易、国家制度 | 宣戦・和平済み、外交拡張候補 |
 | 歴史 | Crusader Kings | 人物特性、関係、家系、継承、評議会 | 指導者台帳済み、人物政治は候補 |
-| 歴史 | Victoria | 人口集団、産業、市場、政治運動、国庫 | **国庫・税制・人口社会を第1・第3実装** |
+| 歴史 | Victoria | 人口集団、産業、市場、政治運動、国庫 | **国庫・人口社会・市場を第1・第3・第5実装** |
 | 歴史 | Total War | 戦略地図と戦術戦闘の階層 | 戦略戦闘済み、戦術層は長期候補 |
 | 歴史 | Old World | 命令資源、家族、事件、野心 | 事件・人物関係候補 |
 | 歴史 | HUMANKIND | 時代遷移、文化継承、名声 | 時代表示済み、継承候補 |
@@ -45,10 +45,10 @@
 | 政治 | Rogue State | 省庁予算、国際圧力、国内安定 | **安定度を第1実装** |
 | 経営 | SimCity | 都市予算、税、需要、公共サービス | **税制・維持費を第1実装** |
 | 経営 | Cities: Skylines | 税収、維持費、人口、産業・物流 | **収入・支出を第1実装** |
-| 経営 | OpenTTD | 路線、輸送需要、利益、設備更新 | 交易路・輸送候補 |
-| 経営 | Railroad Tycoon | 路線網、地域市場、株式、輸送価格 | 市場・金融候補 |
-| 経営 | Capitalism | 生産連鎖、価格、在庫、競争 | 生産連鎖候補 |
-| 経営 | Anno | 人口階層、需要、生産網、海上交易 | **人口階層・需要を第3実装**、交易候補 |
+| 経営 | OpenTTD | 路線、輸送需要、利益、設備更新 | **抽象貨物・輸送容量を第5実装**、明示路線候補 |
+| 経営 | Railroad Tycoon | 路線網、地域市場、株式、輸送価格 | **地域市場・輸送価格を第5実装**、金融候補 |
+| 経営 | Capitalism | 生産連鎖、価格、在庫、競争 | **抽象5財・価格・在庫を第5実装**、企業競争候補 |
+| 経営 | Anno | 人口階層、需要、生産網、海上交易 | **人口階層・需要・地域産業・交易を第3・第5実装** |
 | 経営 | RollerCoaster Tycoon | 来訪者行動、価格、保守、満足度 | 観光・保守候補 |
 | 経営 | Theme Hospital | 職員、設備、待ち行列、品質 | 専門家・公共施設候補 |
 | 経営 | Football Manager | 人材、契約、育成、戦術、データ分析 | 人材登用・成長候補 |
@@ -100,6 +100,29 @@
 | 経営 | Oxygen Not Included | 個体需要、職能、物流、環境循環 | 職能・需要済み、環境循環候補 |
 | 経営 | Railway Empire | 路線、貨物需要、都市成長、競争 | 人口成長済み、交易路候補 |
 
+## シミュレーションゲーム設計参照索引（第4群）
+
+第4群では市場・交易・産業・輸送を中心に16系統を追加し、累計82系統とした。作品固有の経済数値やUIを移植せず、需要、供給、在庫、価格、輸送制約、戦時遮断という比較軸だけを抽出する。
+
+| 系統 | 代表的な参照作品 | 抽出する設計要素 | HexCivでの状態 |
+|---|---|---|---|
+| 歴史 | Sid Meier's Colonization | 特産物、加工、港湾、船舶、交易価格 | **地域産業・5財・価格を第5実装**、港湾候補 |
+| 歴史 | Imperialism | 国家産業、原料、鉄道、世界市場、外交 | **素材・製品・市場アクセスを第5実装** |
+| 歴史 | Imperialism II | 探索、植民、交易品、加工、海上輸送 | **地域産業・交易を第5実装**、植民表現は慎重に扱う |
+| 歴史 | Grand Tactician: The Civil War | 国家経済、補給、鉄道、士官、戦域 | 国庫・補給・市場済み、士官候補 |
+| 軍事 | War in the Pacific: Admiral's Edition | 海運、港湾、燃料、工業、長距離補給 | 抽象輸送・補給済み、海上船団候補 |
+| 軍事 | Command Ops 2 | 司令部、補給、命令遅延、作戦テンポ | 補給済み、指揮遅延候補 |
+| 軍事 | Strategic Command | 国家資源、研究、補給、外交、戦域 | 国庫・研究・補給済み、戦域候補 |
+| 軍事 | The Operational Art of War IV | 補給、戦備、増援、作戦目標、時限 | 補給済み、戦備・目標候補 |
+| 政治 | President Elect | 選挙区、世論、運動資源、候補者 | 支持層済み、選挙候補 |
+| 政治 | Shadow President | 国家指標、外交危機、軍事・経済判断 | 国家指標済み、危機事件候補 |
+| 政治 | SuperPower 2 | 予算、税、貿易、外交、軍事 | **国庫・税・交易を第1・第5実装** |
+| 経営 | Patrician | 港市市場、需給、船団、倉庫、商人競争 | **在庫・価格・平時交易を第5実装**、港市候補 |
+| 経営 | Port Royale | カリブ海交易、生産、船団、価格差、護衛 | **価格差交易・戦時遮断を第5実装**、護衛候補 |
+| 経営 | Rise of Industry | 原料、工場、需要、輸送、生産連鎖 | **抽象5財と需要を第5実装**、多段加工候補 |
+| 経営 | Industry Giant | 産業立地、加工、物流、小売、需要 | **地域産業・在庫を第5実装**、施設立地候補 |
+| 経営 | Offworld Trading Company | 動的価格、資源競争、市場操作、企業戦略 | **不足・余剰価格を第5実装**、市場操作は候補 |
+
 ### 機構実装ロードマップ
 
 | 段階 | 機構 | 内容 | 状態 |
@@ -108,7 +131,7 @@
 | 2 | 兵站 | 都市からの補給到達、地形コスト、敵遮断、孤立、補給切れ、技術・穀物庫 | **実装済み**（道路タイル・港は次拡張） |
 | 3 | 人口社会 | 人口階層、職業、需要、教育、満足度、移住、AI社会重点 | **実装済み** |
 | 4 | 政治 | 派閥、支持、法令、評議会、事件選択 | **派閥・支持・法律・正統性を実装済み**（事件・選挙は次拡張） |
-| 5 | 市場 | 資源在庫、交易路、価格、生産連鎖 | 設計候補 |
+| 5 | 市場 | 資源在庫、交易路、価格、生産連鎖 | **5財・需要・在庫・価格・自動交易・地域産業を実装済み**（明示路線・港・多段加工は次拡張） |
 | 6 | 人物史 | 特性、任命、関係、継承、家系 | 設計候補 |
 
 ## 第1実装: 国家運営
@@ -154,9 +177,21 @@
 - **UI・演出**: 左下「政治」またはF6。4支持バー、法律カード、実行時生成の天秤アイコン、0.18秒のスライドフェード、既存パネルSE。
 - **セーブ**: version 13。version 12以前は政治力20、正統性60、長老評議会、各支持50へ移行する。
 
+## 第5実装: 市場・交易・地域産業
+
+- **5つの抽象財**: 食料、素材、製品、知識、輸送。職能、都市、建物、技術、地域産業から生産し、人口・都市・軍事が消費する。
+- **在庫と価格**: 国内需要を在庫から充足し、不足が大きい財ほど価格が上がり、余剰在庫が多い財ほど下がる。価格は1～20。
+- **文明間交易**: 文明ID順・財種順に、輸出側の余剰と輸入側の不足を接続する。市場アクセス、輸送在庫、首都間距離、商業特許状、市場方針が容量を決める。
+- **戦争と交易**: 交戦中の文明間は直接交易を禁止する。戦時動員は素材・輸送を増やす代わりに知識と市場アクセスを下げる。
+- **市場方針**: 自給優先・均衡市場・輸出振興・戦時動員。AIは戦争、需要充足、国庫、直近交易収支から選ぶ。
+- **地域産業**: 生活技術72件を各地域12件の発展候補へ接続する。歌・踊り・武術を交換可能な物品とみなさず、知識・文化への継承効果として扱う。
+- **他システム**: 需要充足は満足、製品は生産、知識と交通技術は科学、料理・踊り・歌は文化、輸送在庫は補給、交易収支は国庫へ接続する。
+- **UI・演出**: 右側「市場」またはF4。5財、需給、価格、交易、地域産業、4方針を表示し、実行時生成の木箱・双方向矢印アイコンと0.18秒スライドフェードを使う。
+- **セーブ**: version 14。version 13以前は均衡市場、各在庫3、市場アクセス50、需要充足75、地域産業なしへ移行する。
+
 ## 画像・動画・音楽・音声生成技術の分類台帳
 
-「生成」は手続き生成、シミュレーション、制作支援、機械学習による合成を含みます。製品名の網羅ではなく、技術系譜を追跡します。第4版は8系統を増補し、累計49技術系譜です。
+「生成」は手続き生成、シミュレーション、制作支援、機械学習による合成を含みます。製品名の網羅ではなく、技術系譜を追跡します。第5版は8系統を増補し、累計57技術系譜です。
 
 | 媒体 | 技術系譜 | 代表的な方式 | HexCiv方針・状態 |
 |---|---|---|---|
@@ -209,6 +244,14 @@
 | 音楽 | パラメトリック音色変形 | spectral morphing、cross-synthesis、dynamic filtering | 戦時レイヤー・時代クロスフェードで一部実装済み |
 | 音声 | 発音生成・多言語正規化 | grapheme-to-phoneme、phoneme lexicon、text normalization | 日本語・現地名読み上げの将来候補 |
 | 音声 | 音声修復・強調 | denoise、dereverberation、bandwidth extension | 権利確認済み自作録音だけに適用する候補 |
+| 画像 | グラフ駆動アイコン合成 | semantic graph、primitive composition、layout constraint | 市場の木箱・双方向矢印アイコンを規則合成して一部実装済み |
+| 画像 | データ駆動配色生成 | categorical palette、contrast constraint、color-blind-safe mapping | 5財マーカーと国家色の可読性改善候補 |
+| 動画 | スプライトシート生成 | pose sequence、atlas packing、frame timing | 軽量ユニット動作・交易荷役の候補 |
+| 動画 | 群集エージェント動作 | steering、flow field、behavior tree、density animation | 都市人口・祭礼の抽象群集演出候補 |
+| 音楽 | 状態変数連動スコア | tension curve、parameter mapping、rule-based orchestration | 戦争状態レイヤー済み、市場繁栄レイヤーは候補 |
+| 音楽 | 手続き打楽器パターン | Euclidean rhythm、accent grammar、tempo subdivision | 戦時BGMレイヤーで一部実装済み |
+| 音声 | 音素単位の固有名合成 | multilingual phoneme inventory、prosody rule、unit concatenation | 文明・人物・地名の権利安全な読み上げ候補 |
+| 音声 | 空間音響シーン生成 | source placement、distance attenuation、procedural ambience | 都市・市場・戦場の抽象環境音候補 |
 
 ### 導入規則
 
@@ -225,8 +268,12 @@
 - [Victoria 3 — Law Enactment and Revolution Clock](https://www.paradoxinteractive.com/games/victoria-3/news/dev-diary-80-law-enactment-and-revolution-clock-in-13)
 - [Victoria 3 — Elections](https://www.paradoxinteractive.com/games/victoria-3/news/dev-diary-45-elections)
 - [Victoria 3 — Political Parties](https://www.paradoxinteractive.com/games/victoria-3/news/dev-diary-46-political-parties)
+- [Victoria 3 — Trade Revisions](https://www.paradoxinteractive.com/games/victoria-3/news/dev-diary-54-trade-revisions)
 - [Anno Union — Residential Tiers](https://www.anno-union.com/devblog-residential-tiers/)
 - [Anno Union — Fulfil Needs Your Way](https://www.anno-union.com/devblog-fulfil-needs-your-way/)
+- [Anno Union — Your own trading empire](https://www.anno-union.com/devblog-your-own-trading-empire/)
+- [OpenTTD Manual — Cargo](https://wiki.openttd.org/en/Manual/Cargo)
+- [Transport Fever 2 Manual — Towns](https://wiki.transportfever2.com/doku.php?id=gamemanual:towns)
 - [Millennia — Economy Part One](https://www.paradoxinteractive.com/games/millennia/news/economy-part-one)
 - [Crusader Kings III — About](https://www.paradoxinteractive.com/games/crusader-kings-iii/about)
 - [Unity of Command — Developer Diary 5: The Supply Network](https://unityofcommand.net/blog/2016/04/06/development-diary-5-the-supply-network/)

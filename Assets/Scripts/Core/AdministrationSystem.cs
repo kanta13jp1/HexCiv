@@ -109,7 +109,8 @@ namespace HexCiv.Core
                 PoliticalSystem.AdditionalExpenses(player);
         }
 
-        public static int Balance(Player player) => Revenue(player) - Expenses(player);
+        public static int Balance(Player player) => Revenue(player) - Expenses(player) +
+            (player != null ? player.LastTradeBalance : 0);
 
         /// <summary>安定度と税制が科学・文化・生産に与える共通倍率。100が標準。</summary>
         public static int OutputPercent(Player player)
@@ -147,8 +148,8 @@ namespace HexCiv.Core
         {
             if (player == null) return;
 
-            player.LastRevenue = Revenue(player);
-            player.LastExpenses = Expenses(player);
+            player.LastRevenue = Revenue(player) + Math.Max(0, player.LastTradeBalance);
+            player.LastExpenses = Expenses(player) + Math.Max(0, -player.LastTradeBalance);
             long treasury = (long)player.Treasury + player.LastRevenue - player.LastExpenses;
             player.Treasury = (int)Math.Clamp(treasury, MinimumTreasury, MaximumTreasury);
 

@@ -75,6 +75,27 @@ namespace HexCiv.Core
         public int TraditionalSupport = PoliticalSystem.StartingSupport;
         public int MilitarySupport = PoliticalSystem.StartingSupport;
 
+        // ---- 市場・交易・産業（バージョン14からセーブ対象） ----
+        public EconomicPolicy EconomicPolicy = EconomicPolicy.BalancedMarkets;
+        public int FoodGoods = MarketSystem.StartingStock;
+        public int MaterialGoods = MarketSystem.StartingStock;
+        public int ManufacturedGoods = MarketSystem.StartingStock;
+        public int KnowledgeGoods = MarketSystem.StartingStock;
+        public int TransportGoods = MarketSystem.StartingStock;
+        public int FoodPrice = MarketSystem.BasePrice(MarketGood.Food);
+        public int MaterialPrice = MarketSystem.BasePrice(MarketGood.Materials);
+        public int ManufacturedPrice = MarketSystem.BasePrice(MarketGood.Manufactures);
+        public int KnowledgePrice = MarketSystem.BasePrice(MarketGood.Knowledge);
+        public int TransportPrice = MarketSystem.BasePrice(MarketGood.Transport);
+        public int MarketAccess = MarketSystem.StartingMarketAccess;
+        public int DemandFulfillment = MarketSystem.StartingDemandFulfillment;
+        public int LastImports;
+        public int LastExports;
+        public int LastTradeBalance;
+        public int LastTradePartnerId = -1;
+        public string FeaturedIndustryId;
+        public HashSet<string> DevelopedMaterialCultures = new HashSet<string>();
+
         public HashSet<HexCoord> Explored = new HashSet<HexCoord>();
         public HashSet<HexCoord> Visible = new HashSet<HexCoord>();
 
@@ -139,6 +160,7 @@ namespace HexCiv.Core
             }
             if (capitalAlive && CapitalCityId >= 0) total += GameRules.BaseSciencePerCiv;
             total += MasterpieceSystem.SciencePerTurnBonus(this);
+            total += MarketSystem.ScienceBonus(this);
             total = CultureSystem.ScaleScience(this, total);
             total = AdministrationSystem.ScaleOutput(this, total);
             // AI文明は難易度に応じて科学産出を補正(普通=100%で無変換。2026-07-20 追加)

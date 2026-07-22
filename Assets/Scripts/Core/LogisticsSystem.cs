@@ -33,6 +33,7 @@ namespace HexCiv.Core
             if (player.HasTech("wheel")) range += WheelRangeBonus;
             if (player.HasTech("construction")) range += ConstructionRangeBonus;
             range += PoliticalSystem.SupplyRangeBonus(player);
+            range += MarketSystem.SupplyRangeBonus(player);
             return range;
         }
 

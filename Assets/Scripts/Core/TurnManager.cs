@@ -67,6 +67,9 @@ namespace HexCiv.Core
             if (state.IsGameOver) return;
             state.TurnNumber++;
 
+            // ---- 市場・交易・地域産業（全文明を同時に処理） ----
+            MarketSystem.AdvanceMarkets(state);
+
             for (int i = 0; i < state.Players.Count; i++)
             {
                 var p = state.Players[i];

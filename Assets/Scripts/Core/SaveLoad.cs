@@ -10,7 +10,7 @@ namespace HexCiv.Core
     // Serialize(Deserialize(json)) == json が成立する(スモークテストで検証)。
     // ======================================================================
 
-    /// <summary>セーブファイル全体(バージョン12)。</summary>
+    /// <summary>セーブファイル全体(バージョン14)。</summary>
     [Serializable]
     public class SaveData
     {
@@ -112,6 +112,26 @@ namespace HexCiv.Core
         public int merchantSupport = PoliticalSystem.StartingSupport;
         public int traditionalSupport = PoliticalSystem.StartingSupport;
         public int militarySupport = PoliticalSystem.StartingSupport;
+        // ---- 市場・交易・地域産業（バージョン14追加） ----
+        public int economicPolicy = (int)EconomicPolicy.BalancedMarkets;
+        public int foodGoods = MarketSystem.StartingStock;
+        public int materialGoods = MarketSystem.StartingStock;
+        public int manufacturedGoods = MarketSystem.StartingStock;
+        public int knowledgeGoods = MarketSystem.StartingStock;
+        public int transportGoods = MarketSystem.StartingStock;
+        public int foodPrice = 2;
+        public int materialPrice = 3;
+        public int manufacturedPrice = 5;
+        public int knowledgePrice = 6;
+        public int transportPrice = 4;
+        public int marketAccess = MarketSystem.StartingMarketAccess;
+        public int demandFulfillment = MarketSystem.StartingDemandFulfillment;
+        public int lastImports;
+        public int lastExports;
+        public int lastTradeBalance;
+        public int lastTradePartnerId = -1;
+        public string featuredIndustryId = "";
+        public List<string> developedMaterialCultures = new List<string>();
         public List<int> atWarWith = new List<int>();          // 昇順ソート
         // ---- 開戦ターン(バージョン4追加。JsonUtility は Dictionary 非対応のため並行配列) ----
         // warStartEnemyIds は昇順ソートし、warStartTurns[i] が対応する開戦ターン(決定的)。
@@ -191,9 +211,10 @@ namespace HexCiv.Core
         // 5: マップ種別(MapType)追加 / 6: 難易度(Difficulty)追加 / 7: 文化進行・政策・影響力追加 / 
         // 8: 遺産配置・発見と偉人ポイント・登用追加 / 9: 作品ポイント・収蔵追加 /
         // 10: 国庫・税制・安定度・戦争疲弊追加 / 11: ユニット補給状態・孤立ターン追加 /
-        // 12: 社会重点・人口階層・需要・教育・満足度・移住追加 / 13: 政治・法律追加。
+        // 12: 社会重点・人口階層・需要・教育・満足度・移住追加 / 13: 政治・法律追加 /
+        // 14: 市場方針・5財・価格・交易実績・地域産業追加。
         // 旧バージョンのセーブも FromData で読み込める(欠落フィールドは既定値になる)。
-        public const int CurrentVersion = 13;
+        public const int CurrentVersion = 14;
 
         // ================= 公開API =================
 
@@ -366,6 +387,25 @@ namespace HexCiv.Core
                     merchantSupport = Math.Clamp(p.MerchantSupport, 0, 100),
                     traditionalSupport = Math.Clamp(p.TraditionalSupport, 0, 100),
                     militarySupport = Math.Clamp(p.MilitarySupport, 0, 100),
+                    economicPolicy = (int)MarketSystem.NormalizePolicy(p.EconomicPolicy),
+                    foodGoods = Math.Clamp(p.FoodGoods, 0, MarketSystem.MaximumStock),
+                    materialGoods = Math.Clamp(p.MaterialGoods, 0, MarketSystem.MaximumStock),
+                    manufacturedGoods = Math.Clamp(p.ManufacturedGoods, 0, MarketSystem.MaximumStock),
+                    knowledgeGoods = Math.Clamp(p.KnowledgeGoods, 0, MarketSystem.MaximumStock),
+                    transportGoods = Math.Clamp(p.TransportGoods, 0, MarketSystem.MaximumStock),
+                    foodPrice = Math.Clamp(p.FoodPrice, 1, 20),
+                    materialPrice = Math.Clamp(p.MaterialPrice, 1, 20),
+                    manufacturedPrice = Math.Clamp(p.ManufacturedPrice, 1, 20),
+                    knowledgePrice = Math.Clamp(p.KnowledgePrice, 1, 20),
+                    transportPrice = Math.Clamp(p.TransportPrice, 1, 20),
+                    marketAccess = Math.Clamp(p.MarketAccess, 0, 100),
+                    demandFulfillment = Math.Clamp(p.DemandFulfillment, 0, 100),
+                    lastImports = Math.Max(0, p.LastImports),
+                    lastExports = Math.Max(0, p.LastExports),
+                    lastTradeBalance = p.LastTradeBalance,
+                    lastTradePartnerId = p.LastTradePartnerId,
+                    featuredIndustryId = p.FeaturedIndustryId ?? "",
+                    developedMaterialCultures = new List<string>(p.DevelopedMaterialCultures),
                     knownTechs = new List<string>(p.KnownTechs),
                     knownCulturePolicies = new List<string>(p.KnownCulturePolicies),
                     discoveredHeritageSites = new List<string>(p.DiscoveredHeritageSites),
@@ -379,6 +419,7 @@ namespace HexCiv.Core
                 pd.discoveredHeritageSites.Sort(StringComparer.Ordinal);
                 pd.recruitedGreatPeople.Sort(StringComparer.Ordinal);
                 pd.collectedMasterpieces.Sort(StringComparer.Ordinal);
+                pd.developedMaterialCultures.Sort(StringComparer.Ordinal);
                 pd.atWarWith.Sort();
                 pd.explored.Sort(CompareCoord);
 
@@ -592,8 +633,27 @@ namespace HexCiv.Core
                     MerchantSupport = Math.Clamp(pd.merchantSupport, 0, 100),
                     TraditionalSupport = Math.Clamp(pd.traditionalSupport, 0, 100),
                     MilitarySupport = Math.Clamp(pd.militarySupport, 0, 100),
+                    EconomicPolicy = MarketSystem.PolicyFromSaveValue(pd.economicPolicy),
+                    FoodGoods = Math.Clamp(pd.foodGoods, 0, MarketSystem.MaximumStock),
+                    MaterialGoods = Math.Clamp(pd.materialGoods, 0, MarketSystem.MaximumStock),
+                    ManufacturedGoods = Math.Clamp(pd.manufacturedGoods, 0, MarketSystem.MaximumStock),
+                    KnowledgeGoods = Math.Clamp(pd.knowledgeGoods, 0, MarketSystem.MaximumStock),
+                    TransportGoods = Math.Clamp(pd.transportGoods, 0, MarketSystem.MaximumStock),
+                    FoodPrice = Math.Clamp(pd.foodPrice, 1, 20),
+                    MaterialPrice = Math.Clamp(pd.materialPrice, 1, 20),
+                    ManufacturedPrice = Math.Clamp(pd.manufacturedPrice, 1, 20),
+                    KnowledgePrice = Math.Clamp(pd.knowledgePrice, 1, 20),
+                    TransportPrice = Math.Clamp(pd.transportPrice, 1, 20),
+                    MarketAccess = Math.Clamp(pd.marketAccess, 0, 100),
+                    DemandFulfillment = Math.Clamp(pd.demandFulfillment, 0, 100),
+                    LastImports = Math.Max(0, pd.lastImports),
+                    LastExports = Math.Max(0, pd.lastExports),
+                    LastTradeBalance = pd.lastTradeBalance,
+                    LastTradePartnerId = pd.lastTradePartnerId,
+                    FeaturedIndustryId = NullIfEmpty(pd.featuredIndustryId),
                 };
                 if (d.version <= 12) PoliticalSystem.Initialize(p);
+                if (d.version <= 13) MarketSystem.Initialize(p);
                 // フィールド初期化子の StartingTech を消してセーブ内容で置き換える
                 p.KnownTechs.Clear();
                 if (pd.knownTechs != null)
@@ -610,6 +670,10 @@ namespace HexCiv.Core
                 if (pd.collectedMasterpieces != null)
                     for (int j = 0; j < pd.collectedMasterpieces.Count; j++)
                         p.CollectedMasterpieces.Add(pd.collectedMasterpieces[j]);
+                if (d.version >= 14 && pd.developedMaterialCultures != null)
+                    for (int j = 0; j < pd.developedMaterialCultures.Count; j++)
+                        if (MaterialCultureCatalog.Find(pd.developedMaterialCultures[j]) != null)
+                            p.DevelopedMaterialCultures.Add(pd.developedMaterialCultures[j]);
                 if (pd.cultureInfluencePlayerIds != null && pd.cultureInfluenceValues != null)
                 {
                     int m = Math.Min(pd.cultureInfluencePlayerIds.Count,
