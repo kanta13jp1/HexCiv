@@ -161,7 +161,7 @@ public static class MasterpieceSystemSmokeTest
         player.TotalMasterpiecePoints = 654;
         state.LastSavedAtIso = "2026-07-21T15:00:00";
         string json1 = SaveLoad.Serialize(state);
-        if (!json1.Contains("\"version\":10")) throw new Exception("セーブversion 10ではない");
+        if (!json1.Contains("\"version\":11")) throw new Exception("セーブversion 11ではない");
         var restored = SaveLoad.Deserialize(json1);
         string json2 = SaveLoad.Serialize(restored);
         if (json1 != json2) throw new Exception("作品収蔵を含むセーブ往復が非決定的");

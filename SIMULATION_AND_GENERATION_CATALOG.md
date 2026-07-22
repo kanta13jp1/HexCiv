@@ -1,6 +1,6 @@
 # シミュレーションゲーム要素・生成技術台帳
 
-最終更新: 2026-07-22 / 第1版
+最終更新: 2026-07-22 / 第2版
 
 ## この台帳の役割
 
@@ -54,12 +54,35 @@
 | 経営 | Football Manager | 人材、契約、育成、戦術、データ分析 | 人材登用・成長候補 |
 | 経営 | RimWorld | 個人特性、仕事、需要、事件生成 | 人物・事件候補 |
 
+## シミュレーションゲーム設計参照索引（第2群）
+
+第2群では参照範囲を16系統増やし、累計50系統とした。作品名の収集自体を目的にせず、未収録の設計要素を後方追加する。
+
+| 系統 | 代表的な参照作品 | 抽出する設計要素 | HexCivでの状態 |
+|---|---|---|---|
+| 歴史 | Imperator: Rome | 人口、文化統合、属州、交易品 | 人口社会・属州候補 |
+| 歴史 | Nobunaga's Ambition | 武将配置、城域、内政、外交 | 指導者済み、任命候補 |
+| 歴史 | Field of Glory: Empires | 国家衰退、地域、文化、戦闘連携 | 安定度済み、衰退候補 |
+| 歴史 | Rise of Nations | 国境、時代、資源、消耗 | 国境・時代・**補給消耗を第2実装** |
+| 軍事 | Decisive Campaigns | 補給、司令部、参謀、決断カード | **都市補給網を第2実装**、指揮候補 |
+| 軍事 | Graviteam Tactics | 弾薬、士気、通信、命令遅延 | 補給基盤済み、弾薬・通信候補 |
+| 軍事 | Flashpoint Campaigns | 指揮統制、非同期命令、偵察 | 視界済み、命令周期候補 |
+| 軍事 | Radio Commander | 不完全報告、通信、指揮判断 | 戦場の霧済み、報告遅延候補 |
+| 政治 | The Political Machine | 選挙運動、地域支持、資金、世論 | 国庫済み、選挙候補 |
+| 政治 | Republic: The Revolution | 人脈、影響圏、工作、派閥 | 文化影響済み、派閥候補 |
+| 政治 | Realpolitiks | 国家指標、外交、国際機構、危機 | 国家指標済み、機構候補 |
+| 政治 | Power & Revolution | 法律、予算、省庁、支持率 | 国庫済み、法律・省庁候補 |
+| 経営 | Dwarf Fortress | 個体、労働、物資、創発的事件 | 人物・在庫・事件候補 |
+| 経営 | Factorio | 生産連鎖、自動化、物流容量 | **補給網を第2実装**、生産連鎖候補 |
+| 経営 | Workers & Resources: Soviet Republic | 建設資材、物流、労働、国家経済 | 国庫・補給済み、資材候補 |
+| 経営 | Transport Fever | 旅客・貨物需要、路線、輸送能力 | 補給基盤済み、交易路候補 |
+
 ### 機構実装ロードマップ
 
 | 段階 | 機構 | 内容 | 状態 |
 |---|---|---|---|
 | 1 | 国家運営 | 国庫、税制、人口・都市収入、都市・軍事維持費、安定度、戦争疲弊、AI税制 | 実装済み |
-| 2 | 兵站 | 都市からの補給到達、孤立、補給切れ、道路・港 | 次候補 |
+| 2 | 兵站 | 都市からの補給到達、地形コスト、敵遮断、孤立、補給切れ、技術・穀物庫 | **実装済み**（道路タイル・港は次拡張） |
 | 3 | 人口社会 | 人口階層、職業、需要、教育、移住 | 設計候補 |
 | 4 | 政治 | 派閥、支持、法令、評議会、事件選択 | 設計候補 |
 | 5 | 市場 | 資源在庫、交易路、価格、生産連鎖 | 設計候補 |
@@ -76,9 +99,20 @@
 - **UI**: 左下「国家運営」またはF8。全存続文明の国庫、収支、安定度、疲弊、税制を比較できる。
 - **セーブ**: version 10。version 9以前は国庫120、均衡税、安定度60へ移行する。
 
+## 第2実装: 補給・兵站
+
+- **補給源**: 全自都市。穀物庫のある都市は強化拠点として補給コストを2軽減する。
+- **到達**: 基本6。車輪+2、建築学+1。友好領土は通りやすく、森林・丘陵・中立地・敵領土はコストが増える。
+- **遮断**: 交戦中の敵部隊・敵都市がいるヘクスを補給は通過できない。複数経路があれば最小コスト経路へ迂回する。
+- **補給逼迫**: 到達距離を1〜4超過。回復半減、実効戦闘力90%。
+- **孤立**: 回復不能、移動力-1、実効戦闘力75%。2ターン目以降、非民間部隊は毎ターンHP5を消耗するが、補給消耗だけでは消滅しない。
+- **AI**: 攻撃候補の損害見積もりへ補給倍率を適用する。経路そのものを守る戦略AIは次拡張。
+- **UI**: 左下「兵站」またはF10。文明別集計と自軍部隊の状態を表示し、生成補給箱アイコンとスライドフェードを使用する。
+- **セーブ**: version 11。version 10以前は補給良好・連続孤立0ターンへ移行する。
+
 ## 画像・動画・音楽・音声生成技術の分類台帳
 
-「生成」は手続き生成、シミュレーション、制作支援、機械学習による合成を含みます。製品名の網羅ではなく、技術系譜を追跡します。
+「生成」は手続き生成、シミュレーション、制作支援、機械学習による合成を含みます。製品名の網羅ではなく、技術系譜を追跡します。第2版は8系統を増補し、累計33技術系譜です。
 
 | 媒体 | 技術系譜 | 代表的な方式 | HexCiv方針・状態 |
 |---|---|---|---|
@@ -91,22 +125,30 @@
 | 画像 | 潜在生成 | VAE、GAN、正規化フロー | オフライン制作候補 |
 | 画像 | 拡散・フロー | diffusion、latent diffusion、flow matching | 国家運営のオリジナル装飾画像で導入済み |
 | 画像 | 自己回帰・マルチモーダル | token生成、画像言語モデル | 制作支援候補 |
+| 画像 | 微分可能・逆レンダリング | differentiable rendering、inverse graphics | 史跡再構成の研究候補 |
+| 画像 | 条件制御生成 | edge/depth/pose conditioning、adapter | オリジナルUI素材の構図制御候補 |
 | 動画 | 伝統的アニメーション | セル、ストップモーション、キーフレーム | UIキーフレーム相当を実装済み |
 | 動画 | 補間・トゥイーン | 線形/曲線補間、モーフィング、フレーム補間 | 国家運営画面のフェード・拡大で実装済み |
 | 動画 | キャラクター動作 | スケルタル、IK、モーションキャプチャ | ユニット高度化候補 |
 | 動画 | 手続き・物理 | パーティクル、群衆、流体、剛体 | 戦闘・環境演出に一部実装済み |
 | 動画 | ニューラル合成 | GAN動画、動画拡散、自己回帰世界モデル | 実行時導入なし。事前生成のみ候補 |
+| 動画 | モーショングラフ | 動作断片接続、状態機械、行動遷移 | ユニット動作拡張候補 |
+| 動画 | 手続きカメラ | 注視点、衝突回避、イベント優先度 | 歴史ツアー・観戦カメラで一部実装済み |
 | 音楽 | 規則・確率生成 | 音楽文法、Markov連鎖、セル・オートマトン | 実行時作曲へ拡張候補 |
 | 音楽 | 記号生成 | MIDI、RNN、Transformer | 制作支援候補 |
 | 音楽 | 音響合成 | 加算・減算・FM・ウェーブテーブル・物理モデル | 手続きBGM/SEで実装済み |
 | 音楽 | サンプル処理 | サンプリング、グラニュラー、タイムストレッチ | 外部素材なし方針では限定利用 |
 | 音楽 | ニューラル音響 | neural codec、波形生成、音声拡散 | オリジナル事前生成のみ候補 |
+| 音楽 | 適応型レイヤリング | stems、vertical remixing、horizontal resequencing | 時代・地域BGM切替で一部実装済み |
+| 音楽 | 探索・進化生成 | genetic algorithm、constraint search | 制作支援候補 |
 | 音声 | 規則合成 | フォルマント、調音モデル | ナレーション候補 |
 | 音声 | 連結合成 | diphone、unit selection | 権利確認済み録音が必要 |
 | 音声 | 統計的音声 | HMM、パラメトリック音声、vocoder | 歴史的系譜として記録 |
 | 音声 | 音声符号化 | LPC、CELP、neural audio codec | 軽量保存・伝送の将来候補 |
 | 音声 | ニューラルTTS | seq2seq、Transformer、neural vocoder、diffusion TTS | 将来の読み上げ候補 |
 | 音声 | 声質・歌唱変換 | voice conversion、singing synthesis | 権利・同意のある声のみ候補 |
+| 音声 | 音声対音声生成 | speech-to-speech、prosody transfer | 同意済み架空音声のみ将来候補 |
+| 音声 | 感情・韻律制御 | duration、pitch、energy、style token | ナレーション表現候補 |
 
 ### 導入規則
 
@@ -120,5 +162,8 @@
 - [Cities: Skylines II — Economy & Production](https://www.paradoxinteractive.com/games/cities-skylines-ii/features/economy-production)
 - [Victoria 3 — Dev Diary #57: The Journey So Far](https://www.paradoxinteractive.com/games/victoria-3/news/dev-diary-57-the-journey-so-far)
 - [Crusader Kings III — About](https://www.paradoxinteractive.com/games/crusader-kings-iii/about)
+- [Unity of Command — Developer Diary 5: The Supply Network](https://unityofcommand.net/blog/2016/04/06/development-diary-5-the-supply-network/)
+- [Unity of Command — The Power of Supply](https://unityofcommand.net/blog/2011/11/03/the-power-of-supply/)
+- [Shadow Empire — Official Game Manual (Matrix Games)](https://www.matrixgames.com/amazon/PDF/SE/Shadow_Empire_manual_EBOOK.pdf)
 - [Unity 6 `Texture2D.SetPixels32`](https://docs.unity3d.com/6000.0/Documentation/ScriptReference/Texture2D.SetPixels32.html)
 - [Unity 6 `AudioClip.Create`](https://docs.unity3d.com/6000.0/Documentation/ScriptReference/AudioClip.Create.html)

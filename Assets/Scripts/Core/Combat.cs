@@ -40,6 +40,7 @@ namespace HexCiv.Core
                 var u = tile.Unit;
                 int baseStr = Math.Max(1, u.Def.Strength); // 民間人は強さ1で防御
                 float eff = GameRules.HealthScaledStrength(baseStr, u.Hp, GameRules.UnitMaxHp);
+                eff = LogisticsSystem.ScaleCombat(u, eff);
                 float bonus = 1f + GameRules.DefenseBonusAt(tile) + (u.Fortified ? GameRules.FortifyDefenseBonus : 0f);
                 return eff * bonus;
             }
@@ -63,6 +64,7 @@ namespace HexCiv.Core
             bool ranged = attacker.Def.IsRanged;
             int atkBase = ranged ? attacker.Def.RangedStrength : attacker.Def.Strength;
             float atkEff = GameRules.HealthScaledStrength(atkBase, attacker.Hp, GameRules.UnitMaxHp);
+            atkEff = LogisticsSystem.ScaleCombat(attacker, atkEff);
             // AI攻撃側は難易度に応じて実効戦闘力を補正(普通=±0で無変換。2026-07-20 追加)
             atkEff = DifficultyRules.ScaleCombatForAI(s, attacker.PlayerId, atkEff);
 

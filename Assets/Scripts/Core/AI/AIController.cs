@@ -693,6 +693,7 @@ namespace HexCiv.Core.AI
             bool melee = !u.Def.IsRanged;
             int atkBase = melee ? u.Def.Strength : u.Def.RangedStrength;
             float atkEff = GameRules.HealthScaledStrength(atkBase, u.Hp, GameRules.UnitMaxHp);
+            atkEff = LogisticsSystem.ScaleCombat(u, atkEff);
 
             Tile best = null;
             float bestScore = float.MinValue;

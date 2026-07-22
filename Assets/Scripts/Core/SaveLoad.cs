@@ -10,7 +10,7 @@ namespace HexCiv.Core
     // Serialize(Deserialize(json)) == json が成立する(スモークテストで検証)。
     // ======================================================================
 
-    /// <summary>セーブファイル全体(バージョン10)。</summary>
+    /// <summary>セーブファイル全体(バージョン11)。</summary>
     [Serializable]
     public class SaveData
     {
@@ -140,6 +140,10 @@ namespace HexCiv.Core
         public int movesLeft;
         public bool fortified;
         public bool actedThisTurn;
+        // ---- 補給・兵站(バージョン11追加) ----
+        // 初期化子0は旧セーブを補給良好として安全に移行する。
+        public int supplyLevel = (int)SupplyLevel.Supplied;
+        public int turnsOutOfSupply;
         public List<HexCoord> gotoPath = new List<HexCoord>();
     }
 
@@ -166,9 +170,9 @@ namespace HexCiv.Core
         // 1: 初版 / 2: スロット表示用メタデータ追加 / 3: 指導者ID追加 / 4: 開戦ターン(和平)追加 /
         // 5: マップ種別(MapType)追加 / 6: 難易度(Difficulty)追加 / 7: 文化進行・政策・影響力追加 / 
         // 8: 遺産配置・発見と偉人ポイント・登用追加 / 9: 作品ポイント・収蔵追加 /
-        // 10: 国庫・税制・安定度・戦争疲弊追加。
+        // 10: 国庫・税制・安定度・戦争疲弊追加 / 11: ユニット補給状態・孤立ターン追加。
         // 旧バージョンのセーブも FromData で読み込める(欠落フィールドは既定値になる)。
-        public const int CurrentVersion = 10;
+        public const int CurrentVersion = 11;
 
         // ================= 公開API =================
 
@@ -401,6 +405,8 @@ namespace HexCiv.Core
                         movesLeft = u.MovesLeft,
                         fortified = u.Fortified,
                         actedThisTurn = u.ActedThisTurn,
+                        supplyLevel = (int)LogisticsSystem.LevelFromSaveValue((int)u.Supply),
+                        turnsOutOfSupply = Math.Max(0, u.TurnsOutOfSupply),
                         gotoPath = u.GotoPath != null ? new List<HexCoord>(u.GotoPath) : new List<HexCoord>(),
                     });
                 }
@@ -655,6 +661,8 @@ namespace HexCiv.Core
                         MovesLeft = ud.movesLeft,
                         Fortified = ud.fortified,
                         ActedThisTurn = ud.actedThisTurn,
+                        Supply = LogisticsSystem.LevelFromSaveValue(ud.supplyLevel),
+                        TurnsOutOfSupply = Math.Max(0, ud.turnsOutOfSupply),
                         GotoPath = (ud.gotoPath != null && ud.gotoPath.Count > 0)
                             ? new List<HexCoord>(ud.gotoPath)
                             : null,

@@ -24,11 +24,11 @@ with exactly these signatures, because other modules are written against them in
 | Module | Files (under Assets/Scripts unless noted) |
 |---|---|
 | Foundation (DONE, frozen) | `Core/HexCoord.cs, Core/Enums.cs, Core/Yields.cs, Core/Defs.cs, Core/GameRules.cs, Core/Tile.cs, Core/HexMap.cs, Core/GameConfig.cs, Core/GameState.cs, Core/Contracts.cs` |
-| Simulation | `Core/GameStateOps.cs, Core/Player.cs, Core/Unit.cs, Core/City.cs, Core/Combat.cs, Core/Pathfinder.cs, Core/Visibility.cs, Core/TurnManager.cs, Core/SaveLoad.cs, Core/CivilizationCatalog.cs, Core/LeaderCatalog.cs, Core/HeritageSiteCatalog.cs, Core/GreatPersonCatalog.cs, Core/ResearchMilestoneCatalog.cs, Core/CulturalTraditionCatalog.cs, Core/MasterpieceCatalog.cs, Core/GlobalHistoryIndex.cs, Core/TechnologyCatalog.cs, Core/CulturePolicyCatalog.cs, Core/CultureSystem.cs, Core/WorldLegacySystem.cs, Core/MasterpieceSystem.cs, Core/AdministrationSystem.cs` (SaveLoad: 決定的なセーブ/ロード直列化。CivilizationCatalog: 92文明。LeaderCatalog: 指導者179件。HeritageSiteCatalog: 遺跡・史跡120件。GreatPersonCatalog: 偉人132人。ResearchMilestoneCatalog: 研究史132件。CulturalTraditionCatalog: 文化史132件。MasterpieceCatalog: 書籍・絵画・彫刻・建築・音楽・演劇・映画336件。GlobalHistoryIndex: 13分類・台帳1123件の横断集計と文明詳細地域の6地域写像。TechnologyCatalog: 既存12技術+研究史132件。CulturePolicyCatalog/CultureSystem: 文化史132件の政策化、文化ポイント、交流、文化勝利。WorldLegacySystem: 遺産12件の決定的配置・発見報酬、偉人ポイント・世界一意の登用・分野別効果・文明地域親和性。MasterpieceSystem: 作品ポイント、世界一意の収蔵、7分野効果、偉人連携。AdministrationSystem: 国庫・税制・維持費・安定度・戦争疲弊・総合産出倍率・AI税制勧告。各Catalog/SystemはMonoBehaviour非依存の純データ/ロジック) |
+| Simulation | `Core/GameStateOps.cs, Core/Player.cs, Core/Unit.cs, Core/City.cs, Core/Combat.cs, Core/Pathfinder.cs, Core/Visibility.cs, Core/TurnManager.cs, Core/SaveLoad.cs, Core/CivilizationCatalog.cs, Core/LeaderCatalog.cs, Core/HeritageSiteCatalog.cs, Core/GreatPersonCatalog.cs, Core/ResearchMilestoneCatalog.cs, Core/CulturalTraditionCatalog.cs, Core/MasterpieceCatalog.cs, Core/GlobalHistoryIndex.cs, Core/TechnologyCatalog.cs, Core/CulturePolicyCatalog.cs, Core/CultureSystem.cs, Core/WorldLegacySystem.cs, Core/MasterpieceSystem.cs, Core/AdministrationSystem.cs, Core/LogisticsSystem.cs` (SaveLoad: 決定的なセーブ/ロード直列化。CivilizationCatalog: 92文明。LeaderCatalog: 指導者179件。HeritageSiteCatalog: 遺跡・史跡120件。GreatPersonCatalog: 偉人132人。ResearchMilestoneCatalog: 研究史132件。CulturalTraditionCatalog: 文化史132件。MasterpieceCatalog: 書籍・絵画・彫刻・建築・音楽・演劇・映画336件。GlobalHistoryIndex: 13分類・台帳1123件の横断集計と文明詳細地域の6地域写像。TechnologyCatalog: 既存12技術+研究史132件。CulturePolicyCatalog/CultureSystem: 文化史132件の政策化、文化ポイント、交流、文化勝利。WorldLegacySystem: 遺産12件の決定的配置・発見報酬、偉人ポイント・世界一意の登用・分野別効果・文明地域親和性。MasterpieceSystem: 作品ポイント、世界一意の収蔵、7分野効果、偉人連携。AdministrationSystem: 国庫・税制・維持費・安定度・戦争疲弊・総合産出倍率・AI税制勧告。LogisticsSystem: 都市起点の決定的補給網、地形・領有・敵遮断、技術・穀物庫、逼迫・孤立・消耗・戦闘補正。各Catalog/SystemはMonoBehaviour非依存の純データ/ロジック) |
 | Map generation | `Core/MapGenerator.cs` |
 | AI | `Core/AI/AIController.cs` (helpers allowed in `Core/AI/`) |
 | Rendering | `Rendering/MapRenderer.cs, Rendering/EntityRenderer.cs, Rendering/HeritageRenderer.cs` (HeritageRenderer: 探索済み遺産タイルの独立マーカー。helpers allowed in `Rendering/`) |
-| UI | `UI/UIManager.cs, UI/UIStyle.cs, UI/WorldHistoryPanel.cs, UI/CulturePanel.cs, UI/LegacyPanel.cs, UI/AdministrationPanel.cs` (WorldHistoryPanel: 総合・文明・指導者を含む世界史台帳8画面とゲーム内状態を閲覧。CulturePanel: 文化政策・影響力。LegacyPanel: 遺産探索・偉人登用・作品収蔵。AdministrationPanel: 国庫・収支・税制・安定度・戦争疲弊を比較・操作し、手続き生成アイコン、開閉アニメーション、`Resources/Administration/administration_banner` のオリジナル装飾画像を持つ。いずれもsortingOrder 130以上の独立Canvas。helpers allowed in `UI/`) |
+| UI | `UI/UIManager.cs, UI/UIStyle.cs, UI/WorldHistoryPanel.cs, UI/CulturePanel.cs, UI/LegacyPanel.cs, UI/AdministrationPanel.cs, UI/LogisticsPanel.cs` (WorldHistoryPanel: 総合・文明・指導者を含む世界史台帳8画面とゲーム内状態を閲覧。CulturePanel: 文化政策・影響力。LegacyPanel: 遺産探索・偉人登用・作品収蔵。AdministrationPanel: 国家運営。LogisticsPanel: 文明・部隊別補給比較、手続き生成補給アイコン、スライドフェード、F10。いずれもsortingOrder 130以上の独立Canvas。helpers allowed in `UI/`) |
 | Input/Camera | `Control/CameraController.cs, Control/InputController.cs` |
 | Audio (added 2026-07-20, Codex) | `Audio/GameAudio.cs` — namespace `HexCiv.Audio`; procedural BGM/SFX, presentation-only (reads Core state, never mutates; no state.Rng usage) |
 | Integration | `GameBootstrap.cs`, `Assets/Editor/SmokeTest.cs`, `Assets/Editor/SceneSetup.cs`, `Assets/Editor/BuildScript.cs` |
@@ -40,7 +40,7 @@ Foundation summary: `HexCoord` (axial, pointy-top, `ToWorld/FromWorld/Range/Ring
 `GameConfig` (map 44x26, 4 civs, names/colors/city name lists), `IAIController`, `GameActions`, `ProductionItem`.
 Note: `GameActions` に `OnSaveGame` / `OnLoadGame` を追加(2026-07-20、セーブ/ロード。実装は `Core/SaveLoad.cs`、配線は GameBootstrap §9。UI: セーブ/ロードボタン+F5/F9)。
 Note: `GameConfig` に `MapType` を追加(2026-07-20、0=大陸(既定)/1=パンゲア/2=群島。`MapGenerator` が生成パラメータを分岐、SaveLoad version 5 で永続化(旧セーブは0)、UI: ゲーム設定「マップ種別」行。PlayerPrefs "HexCiv.MapType")。
-Note: SaveLoad version 10 で国庫・税制・安定度・戦争疲弊・直近収支を永続化。version 9以前は国庫120・均衡税・安定度60で補完する。version 9 で作品ポイント・収蔵を追加し、version 7以前は `TurnManager` 構築時にseed由来で遺産を決定的に補完する。
+Note: SaveLoad version 11 でユニット補給状態・連続孤立ターンを永続化し、version 10以前は補給良好・0ターンで補完する。version 10 で国庫・税制・安定度・戦争疲弊・直近収支を追加し、version 9以前は国庫120・均衡税・安定度60で補完する。
 
 ## 3. Simulation module (MUST-MATCH APIs)
 
@@ -98,6 +98,8 @@ public class Unit {
     public int MovesLeft;                        // in movement points
     public bool Fortified;
     public bool ActedThisTurn;                   // moved or attacked (blocks healing next turn-start)
+    public SupplyLevel Supply;                   // Supplied / Strained / Isolated, turn-start snapshot
+    public int TurnsOutOfSupply;                 // consecutive isolated turns, save version 11
     public List<HexCoord> GotoPath;              // pending multi-turn path, null if none
     public bool CanAct => MovesLeft > 0 && !IsDead;
     public bool IsDead { get; }

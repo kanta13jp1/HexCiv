@@ -20,6 +20,10 @@ namespace HexCiv.Core
         public bool Fortified;
         /// <summary>このターンに移動または攻撃した(翌ターン開始時の回復を妨げる)。</summary>
         public bool ActedThisTurn;
+        /// <summary>ターン開始時に都市補給網から確定した補給状態。</summary>
+        public SupplyLevel Supply = SupplyLevel.Supplied;
+        /// <summary>連続して孤立判定を受けたターン数。補給回復時に0へ戻る。</summary>
+        public int TurnsOutOfSupply;
         /// <summary>複数ターンにわたる移動経路。null なら無し。</summary>
         public List<HexCoord> GotoPath;
 
@@ -47,11 +51,12 @@ namespace HexCiv.Core
                 else
                     heal = GameRules.HealNeutral;
                 if (Fortified) heal += GameRules.HealFortifyBonus;
+                heal = LogisticsSystem.ScaleHealing(this, heal);
                 Hp = Math.Min(GameRules.UnitMaxHp, Hp + heal);
             }
 
             ActedThisTurn = false;
-            MovesLeft = Def.Moves;
+            MovesLeft = LogisticsSystem.MovementAllowance(this);
 
             // GotoPath の続行
             if (GotoPath != null && GotoPath.Count > 0)

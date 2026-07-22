@@ -72,6 +72,9 @@ namespace HexCiv.Core
                 var p = state.Players[i];
                 if (p.IsEliminated) continue;
 
+                // ---- 補給・兵站（移動力リセットと回復より先に確定） ----
+                LogisticsSystem.AdvancePlayer(state, p);
+
                 foreach (var u in new List<Unit>(p.Units))
                     if (!u.IsDead) u.ResetForNewTurn(state);
 

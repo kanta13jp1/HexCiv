@@ -26,6 +26,17 @@ CodexとClaude Codeは、以後この `HexCiv` プロジェクトだけを更新
 
 ## 最新状況
 
+### 2026-07-22 Codex: シミュレーション設計台帳第2版・補給兵站第2弾
+
+- `SIMULATION_AND_GENERATION_CATALOG.md` を第2版へ更新。歴史・軍事・政治・経営シミュレーションを第2群16系統追加して累計50系統、画像・動画・音楽・音声生成を8系統追加して累計33技術系譜とした。「すべて」は閉じた有限集合ではないため完全収録を断言せず、後方追加方式を維持する。
+- `Core/LogisticsSystem.cs`: 全自都市を補給源に地形・領有コスト付きで最小補給路を決定的に計算。敵部隊・敵都市は遮断、穀物庫は強化拠点、車輪+2／建築学+1で補給距離を延長する。逼迫は回復半減・戦闘90%、孤立は回復不能・移動-1・戦闘75%、2ターン目から非民間部隊HP-5（HP1下限）。乱数なし。
+- `Unit` / `TurnManager` / `Combat` / `AIController`: ターン開始時に補給を確定して移動・回復・継続消耗へ反映し、実戦闘とAIの攻撃損害見積もりへ同一の補給倍率を適用した。道路は車輪+友好領土の抽象表現で、明示的な道路タイル・港・海上補給・補給線防衛AIは次拡張。
+- `SaveLoad` version 11: ユニットの補給状態・連続孤立ターンを決定的に保存。version 10以前は補給良好・0ターンで補完。国家運営・作品テストの現行version期待値も11へ更新した。
+- `UI/LogisticsPanel.cs`: 左下「兵站」／F10の独立Canvas。文明別の良好・逼迫・孤立集計、自軍部隊のHP・補給状態・孤立ターン、補給距離・拠点数を表示。補給箱＋経路アイコンを `Texture2D.SetPixels32` で実行時生成し、0.18秒のスライドフェード、既存パネルSE、`UIManager.NotifyExternalPanel` へ接続した。F9は既存クイックロードのため使用していない。
+- `LogisticsSystemSmokeTest`: 都市到達、地形・領土コスト、車輪・建築学・穀物庫、敵による一本道遮断、孤立猶予・消耗・回復停止・移動・戦闘補正、セーブv11決定往復・v10移行を検証し `LOGISTICS SYSTEM SMOKE OK`。国家運営・作品収蔵の回帰テストも合格。
+- Unity 6.3総合 `SmokeTest` を2回実行し、ともに `SMOKE OK`。両回 turn150は **units=77 cities=19 techs=150 wars=2** で完全一致。補給探索を決定論的な最小ヒープへ最適化後も専用・総合テストを再実行し同値。Windowsビルド `BUILD OK: 97716304 bytes`、20秒ヘッドレス起動でUnity `6000.3.20f1`・例外0。Assembly-CSharp SHA-256は `128FAD44CAD4DB0634A1EF1A9020A107725F5D303FAB6C90B93FEF2D5BC7591D`。
+- Claude Code第14弾の `Audio/GameAudio` / `Control/CameraController` / `GameBootstrap` / `UIManager` / `AchievementPanel` / `ChroniclePanel` / `ScoreGraphPanel` は編集・ステージせず、共有ワークツリーの統合ビルドにのみ含めた。次候補は明示的道路・港・海上補給、または人口階層・職業・需要。
+
 ### 2026-07-22 Codex: シミュレーション設計台帳・国家運営第1弾
 
 - `SIMULATION_AND_GENERATION_CATALOG.md` を新設。歴史・軍事・政治・経営シミュレーション34作品系統を設計要素へ分解し、画像・動画・音楽・音声生成24技術系譜、導入済み／次候補、権利・同意・外部API規則を継続台帳化した。「全作品」は閉じた有限集合ではないため完全収録を断言せず、一次資料確認後に後方追加する。
