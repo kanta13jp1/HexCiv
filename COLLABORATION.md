@@ -31,11 +31,11 @@ CodexとClaude Codeは、以後この `HexCiv` プロジェクトだけを更新
 - `SIMULATION_AND_GENERATION_CATALOG.md` を新設。歴史・軍事・政治・経営シミュレーション34作品系統を設計要素へ分解し、画像・動画・音楽・音声生成24技術系譜、導入済み／次候補、権利・同意・外部API規則を継続台帳化した。「全作品」は閉じた有限集合ではないため完全収録を断言せず、一次資料確認後に後方追加する。
 - `Core/AdministrationSystem.cs`: 国庫、減税80%／均衡100%／重税130%、人口・都市・建物・首都の税源、都市・ユニット・戦争維持費、安定度、戦争疲弊、70〜120%の科学・文化・都市生産倍率、AI税制勧告を純ロジックで追加した。`Player` / `City` / `CultureSystem` / `TurnManager` / `AIController` へ接続し、乱数は追加していない。
 - `SaveLoad` version 10: 国庫・税制・安定度・戦争疲弊・直近収支を決定的に保存。version 9以前は国庫120・均衡税・安定度60へ移行する。作品／遺産テストの現行version期待値も10へ更新した。
-- `UI/AdministrationPanel.cs`: 左下「国家運営」／F8の独立Canvas。全存続文明の国庫・収支・安定・疲弊・税制を比較し、人間文明は税制を変更できる。国庫アイコンは `Texture2D.SetPixels32` による実行時生成、開く際は0.16秒のフェード＋拡大、既存パネルSEを使用。Claude Code第14弾の対象ファイルは編集せず、公開済み `UIManager.NotifyExternalPanel` を呼ぶだけにした。
+- `UI/AdministrationPanel.cs`: 左下「国家運営」／F8の独立Canvas。全存続文明の国庫・収支・安定・疲弊・税制を比較し、人間文明は税制を変更できる。国庫アイコンは `Texture2D.SetPixels32` による実行時生成、開く際は0.16秒のフェード＋拡大、既存パネルSEを使用。さらに画像生成スキルで、実在作品・人物・国旗・実在建築・文字を含まない台帳・天秤・抽象地図のオリジナル装飾バナーを制作し、`Resources/Administration/administration_banner.png` へ保存した。Claude Code第14弾の対象ファイルは編集せず、公開済み `UIManager.NotifyExternalPanel` を呼ぶだけにした。
 - `AdministrationSystemSmokeTest`: 税源19／維持費5、税制の収支・産出トレードオフ、長期戦疲弊、和平回復、AI判断、セーブv10決定往復、v9既定値移行を検証し `ADMINISTRATION SYSTEM SMOKE OK`。
 - Unity 6.3総合 `SmokeTest` を2回実行し、両方 `SMOKE OK`。両回 turn150は **units=73 cities=19 techs=147 wars=2** で完全一致。複数文明・群島・難易度・turn76セーブ往復も合格した。国家運営は意図的に産出とAI選択へ影響するため、旧基準69/23/155/2との差は仕様変更であり、2回一致により新基準の決定論を確認した。
-- Windowsビルド `BUILD OK: 97001116 bytes`。20秒ヘッドレス起動でUnity `6000.3.20f1`・例外0。`Build/HexCiv_Data/Managed/Assembly-CSharp.dll` SHA-256は `1C84376A83B7E4E5B0A9813B6A3F89E34F7DBE0D1064B17FA6FE431421700A34`。Windows実画面確認はPCがロック画面だったため安全規則に従い中止した。
-- 次の機構候補は都市から届く補給線、孤立、補給切れ、道路・港を扱う「兵站」。クラウド生成APIはAPIキー・費用・外部送信の明示許可がないため未導入で、今回はオフライン手続き生成だけを追加した。
+- 画像追加後のWindowsビルド `BUILD OK: 97701500 bytes`。同ビルドを20秒ヘッドレス起動しUnity `6000.3.20f1`・例外0、Unity再コンパイルと専用テストにも合格。`Build/HexCiv_Data/Managed/Assembly-CSharp.dll` SHA-256は `4F6925EB2DCD6AE0EE74EEC66AE42C7D44086987C69C59605E6C807902DA4708`。Windows実画面確認はPCがロック画面だったため安全規則に従い中止した。
+- 次の機構候補は都市から届く補給線、孤立、補給切れ、道路・港を扱う「兵站」。クラウド生成APIの実行時組込みはAPIキー・費用・外部送信の明示許可がないため未導入。今回はオフライン手続き生成に加え、制作時の画像生成を1点導入した。
 
 ### 2026-07-22 Claude Code: バナー重なり修正+時代表示+タイトル演出/BGM+演出モード、全検証合格
 

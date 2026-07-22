@@ -129,6 +129,20 @@ namespace HexCiv.UI
             UIStyle.SetRect(panel, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
                 new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(800f, 560f));
 
+            var bannerTexture = Resources.Load<Texture2D>("Administration/administration_banner");
+            if (bannerTexture != null)
+            {
+                var bannerGo = new GameObject("AdministrationBanner", typeof(RectTransform), typeof(RawImage));
+                bannerGo.transform.SetParent(panel.transform, false);
+                var banner = bannerGo.GetComponent<RawImage>();
+                banner.texture = bannerTexture;
+                banner.uvRect = new Rect(0f, 0.13f, 1f, 0.48f);
+                banner.color = new Color(1f, 1f, 1f, 0.34f);
+                banner.raycastTarget = false;
+                UIStyle.SetRect(bannerGo, new Vector2(0f, 1f), new Vector2(1f, 1f),
+                    new Vector2(0.5f, 1f), Vector2.zero, new Vector2(0f, 115f));
+            }
+
             var title = UIStyle.CreateText(panel.transform, "Title", "国家運営 — 国庫・税制・安定", 24,
                 TextAnchor.MiddleCenter, UIStyle.Accent);
             UIStyle.SetRect(title.gameObject, new Vector2(0f, 1f), new Vector2(1f, 1f),

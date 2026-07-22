@@ -28,7 +28,7 @@ with exactly these signatures, because other modules are written against them in
 | Map generation | `Core/MapGenerator.cs` |
 | AI | `Core/AI/AIController.cs` (helpers allowed in `Core/AI/`) |
 | Rendering | `Rendering/MapRenderer.cs, Rendering/EntityRenderer.cs, Rendering/HeritageRenderer.cs` (HeritageRenderer: 探索済み遺産タイルの独立マーカー。helpers allowed in `Rendering/`) |
-| UI | `UI/UIManager.cs, UI/UIStyle.cs, UI/WorldHistoryPanel.cs, UI/CulturePanel.cs, UI/LegacyPanel.cs, UI/AdministrationPanel.cs` (WorldHistoryPanel: 総合・文明・指導者を含む世界史台帳8画面とゲーム内状態を閲覧。CulturePanel: 文化政策・影響力。LegacyPanel: 遺産探索・偉人登用・作品収蔵。AdministrationPanel: 国庫・収支・税制・安定度・戦争疲弊を比較・操作し、手続き生成アイコンと開閉アニメーションを持つ。いずれもsortingOrder 130以上の独立Canvas。helpers allowed in `UI/`) |
+| UI | `UI/UIManager.cs, UI/UIStyle.cs, UI/WorldHistoryPanel.cs, UI/CulturePanel.cs, UI/LegacyPanel.cs, UI/AdministrationPanel.cs` (WorldHistoryPanel: 総合・文明・指導者を含む世界史台帳8画面とゲーム内状態を閲覧。CulturePanel: 文化政策・影響力。LegacyPanel: 遺産探索・偉人登用・作品収蔵。AdministrationPanel: 国庫・収支・税制・安定度・戦争疲弊を比較・操作し、手続き生成アイコン、開閉アニメーション、`Resources/Administration/administration_banner` のオリジナル装飾画像を持つ。いずれもsortingOrder 130以上の独立Canvas。helpers allowed in `UI/`) |
 | Input/Camera | `Control/CameraController.cs, Control/InputController.cs` |
 | Audio (added 2026-07-20, Codex) | `Audio/GameAudio.cs` — namespace `HexCiv.Audio`; procedural BGM/SFX, presentation-only (reads Core state, never mutates; no state.Rng usage) |
 | Integration | `GameBootstrap.cs`, `Assets/Editor/SmokeTest.cs`, `Assets/Editor/SceneSetup.cs`, `Assets/Editor/BuildScript.cs` |
