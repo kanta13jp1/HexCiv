@@ -84,6 +84,35 @@ namespace HexCiv
         /// 滅亡演出のカメラジャンプ先として直前の記録を使う。観戦モード中のみ更新)。</summary>
         readonly Dictionary<int, Vector3> lastKnownCapitalPos = new Dictionary<int, Vector3>();
 
+        // ---- 観戦オートカメラ「自動追尾」(2026-07-22 Claude Code 追加) ----
+        // 観戦モード限定。Tキー(GameBootstrap.Update が Input.GetKeyDown で直接読む)でトグルし、
+        // ONの間は戦闘・都市陥落の発生座標(直近~6秒)の重心へカメラを緩やかにグライドさせる。
+        // 手動カメラ操作が直近4秒以内にあれば追従を控え、イベントカメラジャンプ
+        // (ShowSimulationEvent の FocusOn)直後2秒も追従を控える(既存のイベント演出を最優先)。
+        // すべて非スケール時間基準で、シミュレーションには一切触れない(表示専用)。
+        /// <summary>自動追尾が有効か(観戦モードのみ。Tキーでトグル。既定OFF)。</summary>
+        bool autoFollowEnabled;
+        /// <summary>直近イベント座標のリングバッファ容量。</summary>
+        const int RecentEventCapacity = 8;
+        readonly Vector3[] recentEventPos = new Vector3[RecentEventCapacity];
+        readonly float[] recentEventTime = new float[RecentEventCapacity];
+        int recentEventHead;
+        int recentEventCount;
+        /// <summary>次に自動追尾のグライドを検討する時刻(Time.unscaledTime 基準)。</summary>
+        float nextAutoFollowAt;
+        /// <summary>直近のイベントカメラジャンプ時刻(Time.unscaledTime 基準。この後2秒はグライドを控える)。</summary>
+        float lastEventJumpAt = -999f;
+        /// <summary>自動追尾のグライド検討間隔(秒)。</summary>
+        const float AutoFollowIntervalSeconds = 2.5f;
+        /// <summary>この秒数以内に手動カメラ操作があれば自動追尾しない。</summary>
+        const float AutoFollowManualGraceSeconds = 4f;
+        /// <summary>重心に含める直近イベントの時間窓(秒)。</summary>
+        const float AutoFollowEventWindowSeconds = 6f;
+        /// <summary>イベントカメラジャンプ直後、自動追尾のグライドを控える秒数。</summary>
+        const float AutoFollowEventJumpCooldownSeconds = 2f;
+        /// <summary>自動追尾グライドの所要時間(秒)。</summary>
+        const float AutoFollowGlideSeconds = 1.5f;
+
         // 観戦演出バナーの配色(2026-07-20 Claude Code 追加)
         static readonly Color WarBannerColor = new Color(0.95f, 0.40f, 0.35f, 1f);
         static readonly Color PeaceBannerColor = new Color(0.45f, 0.85f, 0.55f, 1f);
@@ -126,6 +155,9 @@ namespace HexCiv
             if (state == null) return;
 
             if (inputController != null) inputController.Update();
+
+            // 観戦オートカメラ「自動追尾」(観戦モードのみ。Tキーのトグルと追従。2026-07-22 Claude Code 追加)
+            if (simulationMode) UpdateSpectatorAutoFollow();
 
             // シミュレーション観戦:スケジュール(1ターン=1/速度 秒、非スケール時間)が要求する分だけ
             // 自動進行する(2026-07-20 Claude Code 追加、2026-07-21 複数ターン/フレームのバッチ化)。
@@ -689,6 +721,14 @@ namespace HexCiv
             lastKnownCapitalPos.Clear();
             if (simulationMode) RememberCapitalPositions();
 
+            // 観戦オートカメラ「自動追尾」を初期化(新規/リスタート/ロードの全経路。2026-07-22 追加)。
+            // 前ゲームのトグル状態やホットスポットを持ち越さない。
+            autoFollowEnabled = false;
+            recentEventHead = 0;
+            recentEventCount = 0;
+            nextAutoFollowAt = Time.unscaledTime + AutoFollowIntervalSeconds;
+            lastEventJumpAt = -999f;
+
             lastSeenVersion = -1;
             gameOverShown = false;
         }
@@ -708,6 +748,7 @@ namespace HexCiv
             subscribedState.OnCityCaptured += HandleCityCaptured;
             subscribedState.OnPlayerEliminated += HandlePlayerEliminated;
             subscribedState.OnGameEnded += HandleGameEnded;
+            subscribedState.OnCombatResolved += HandleCombatResolved;   // 自動追尾のホットスポット記録(2026-07-22 追加)
         }
 
         void UnsubscribeStateEvents()
@@ -718,6 +759,7 @@ namespace HexCiv
             subscribedState.OnCityCaptured -= HandleCityCaptured;
             subscribedState.OnPlayerEliminated -= HandlePlayerEliminated;
             subscribedState.OnGameEnded -= HandleGameEnded;
+            subscribedState.OnCombatResolved -= HandleCombatResolved;   // 自動追尾のホットスポット記録(2026-07-22 追加)
             subscribedState = null;
         }
 
@@ -738,6 +780,7 @@ namespace HexCiv
         void HandleCityCaptured(City city, Player oldOwner, Player newOwner)
         {
             if (city == null || newOwner == null) return;
+            if (simulationMode) RecordSpectatorEvent(city.Coord.ToWorld());   // 自動追尾のホットスポット(2026-07-22 追加)
             ShowSimulationEvent(city.Coord.ToWorld(),
                 $"🏰 都市「{city.NameJa}」陥落 → {newOwner.NameJa}", CaptureBannerColor);
 
@@ -785,8 +828,84 @@ namespace HexCiv
                 return;
             }
             simulationEventHoldUntil = Time.unscaledTime + SimulationEventHoldSeconds;
-            if (focus.HasValue && cameraController != null) cameraController.FocusOn(focus.Value);
+            if (focus.HasValue && cameraController != null)
+            {
+                cameraController.FocusOn(focus.Value);
+                lastEventJumpAt = Time.unscaledTime;   // 自動追尾はこの直後2秒グライドを控える(2026-07-22 追加)
+            }
             if (uiManager != null) uiManager.ShowEventBanner(messageJa, accent);
+        }
+
+        // ==================================================================
+        // 観戦オートカメラ「自動追尾」(2026-07-22 Claude Code 追加)
+        // ==================================================================
+
+        /// <summary>
+        /// 観戦オートカメラの毎フレーム処理(観戦モードのみ Update から呼ばれる)。
+        /// Tキーで自動追尾をトグルし、ONの間は約2.5秒ごとに、直近~6秒の戦闘・都市陥落の
+        /// 発生座標の重心へカメラを緩やかにグライドさせる。ただし手動カメラ操作が直近4秒以内に
+        /// あるとき、またはイベントカメラジャンプ直後2秒はグライドしない(既存演出を最優先)。
+        /// 直近イベントが無ければ何もしない。カメラ操作以外の状態には一切触れない(表示専用)。
+        /// </summary>
+        void UpdateSpectatorAutoFollow()
+        {
+            if (Input.GetKeyDown(KeyCode.T))
+            {
+                autoFollowEnabled = !autoFollowEnabled;
+                if (uiManager != null)
+                    uiManager.AddLog(autoFollowEnabled ? "自動追尾: ON" : "自動追尾: OFF");
+            }
+            if (!autoFollowEnabled || cameraController == null || state.IsGameOver) return;
+
+            float now = Time.unscaledTime;
+            if (now - lastEventJumpAt < AutoFollowEventJumpCooldownSeconds) return;   // イベントジャンプ直後は控える
+            if (now < nextAutoFollowAt) return;                                       // 約2.5秒ごとに判定
+            nextAutoFollowAt = now + AutoFollowIntervalSeconds;
+            // 手動カメラ操作が直近4秒以内にあれば追従しない(プレイヤーの操作を尊重)
+            if (cameraController.SecondsSinceManualControl < AutoFollowManualGraceSeconds) return;
+            if (TryGetRecentEventCentroid(now, out var centroid))
+                cameraController.GlideTo(centroid, AutoFollowGlideSeconds);
+        }
+
+        /// <summary>
+        /// 戦闘解決イベント(表示専用)の受け口。観戦モードのとき対象座標を自動追尾のホットスポットへ
+        /// 記録する(2026-07-22 Claude Code 追加)。シミュレーション状態は読み取りのみで変更しない。
+        /// </summary>
+        void HandleCombatResolved(HexCoord attackerCoord, HexCoord targetCoord, int damageToDefender, int damageToAttacker)
+        {
+            if (!simulationMode) return;
+            RecordSpectatorEvent(targetCoord.ToWorld());
+        }
+
+        /// <summary>直近イベント座標をリングバッファ(容量8)へ記録する(アロケーションなし)。</summary>
+        void RecordSpectatorEvent(Vector3 worldPos)
+        {
+            recentEventPos[recentEventHead] = worldPos;
+            recentEventTime[recentEventHead] = Time.unscaledTime;
+            recentEventHead = (recentEventHead + 1) % RecentEventCapacity;
+            if (recentEventCount < RecentEventCapacity) recentEventCount++;
+        }
+
+        /// <summary>
+        /// 直近 AutoFollowEventWindowSeconds 秒以内に記録したイベント座標の重心を求める。
+        /// 該当が無ければ false(呼び出し側はグライドしない)。
+        /// </summary>
+        bool TryGetRecentEventCentroid(float now, out Vector3 centroid)
+        {
+            centroid = Vector3.zero;
+            Vector3 sum = Vector3.zero;
+            int n = 0;
+            for (int i = 0; i < recentEventCount; i++)
+            {
+                if (now - recentEventTime[i] <= AutoFollowEventWindowSeconds)
+                {
+                    sum += recentEventPos[i];
+                    n++;
+                }
+            }
+            if (n == 0) return false;
+            centroid = sum / n;
+            return true;
         }
 
         /// <summary>

@@ -40,8 +40,31 @@ namespace HexCiv.Control
         float shakeStartTime = float.NegativeInfinity;
         float shakeSeed;
 
+        // ---- 手動操作の追跡 + 自動追尾グライド(2026-07-22 Claude Code 追加) ----
+        // 観戦オートカメラ(GameBootstrap の「自動追尾」)が、直近の手動操作からの経過秒数を
+        // 読んで追従可否を判断し(SecondsSinceManualControl)、GlideTo で注視点を緩やかに
+        // 寄せるために使う。手動操作(キーボードパン/ホイールズーム/各種ドラッグパン)があった
+        // 時刻を記録し、グライド中に新たな手動操作があれば即座に中断する(手動操作を最優先)。
+        // FocusOn(事件ジャンプ等の即時フォーカス)もグライドを打ち切る。すべて非スケール時間基準
+        // (観戦モードの Time.timeScale 変更の影響を受けない)。既存のパン/ズーム/シェイク/
+        // FocusOn の挙動は追加前と同一(グライド未使用時は完全な no-op)。
+        float lastManualControlTime = -999f;
+        bool gliding;
+        Vector3 glideStart;
+        Vector3 glideTarget;
+        float glideStartTime;
+        float glideDuration;
+
         /// <summary>制御中のカメラ。Init 前は null。</summary>
         public Camera Cam => cam;
+
+        /// <summary>
+        /// 直近の手動カメラ操作(キーボードパン・ホイールズーム・中/左/右ボタンのドラッグパン)からの
+        /// 経過秒数(非スケール時間)。一度も操作されていなければ十分大きな値を返す。
+        /// 観戦オートカメラが「手動操作から一定時間経ったら追従する」判断に使う読み取り専用API
+        /// (2026-07-22 Claude Code 追加。既存挙動には影響しない)。
+        /// </summary>
+        public float SecondsSinceManualControl => Time.unscaledTime - lastManualControlTime;
 
         /// <summary>
         /// 初期化。Camera.main を再利用し、無ければ新規作成する。
@@ -82,9 +105,27 @@ namespace HexCiv.Control
         public void FocusOn(Vector3 worldPos)
         {
             if (!initialized || cam == null) return;
+            gliding = false;   // 事件ジャンプ等の即時フォーカスは進行中のグライドを打ち切る(2026-07-22 追加)
             focus = new Vector3(worldPos.x, 0f, worldPos.z);
             ClampFocus();
             Apply();
+        }
+
+        /// <summary>
+        /// 注視点を指定のワールド座標(XZ平面)へ、duration 秒(非スケール時間)かけて滑らかに寄せる
+        /// (2026-07-22 Claude Code 追加。観戦オートカメラの緩やかな追従用)。スムーズステップ補間で
+        /// 加減速し、スナップしない。開始後に手動操作(パン/ズーム/ドラッグ)があれば即中断し、
+        /// FocusOn による即時フォーカスでも打ち切られる。Init 前や非正の duration は無害に扱う。
+        /// 高さ(ズーム)には触れず注視点のみを動かすため、既存のパン/ズーム/シェイクと競合しない。
+        /// </summary>
+        public void GlideTo(Vector3 worldPos, float duration)
+        {
+            if (!initialized || cam == null) return;
+            glideStart = focus;
+            glideTarget = new Vector3(worldPos.x, 0f, worldPos.z);
+            glideStartTime = Time.unscaledTime;
+            glideDuration = Mathf.Max(0.01f, duration);
+            gliding = true;
         }
 
         void Update()
@@ -95,9 +136,33 @@ namespace HexCiv.Control
             HandleZoom();
             HandleMiddleDrag();
 
+            UpdateGlide();   // 自動追尾グライドの進行(手動操作があれば内部で中断。2026-07-22 追加)
+
             ClampFocus();
             Apply();
         }
+
+        /// <summary>
+        /// 自動追尾グライドの進行(2026-07-22 Claude Code 追加)。グライド中でなければ即 return
+        /// (=従来と完全に同一挙動)。グライド開始後に手動操作があれば中断して手動を優先する。
+        /// スムーズステップ補間で注視点を目標へ寄せ、完了したらグライドを終える。
+        /// </summary>
+        void UpdateGlide()
+        {
+            if (!gliding) return;
+            // グライド開始後に手動操作(パン/ズーム/ドラッグ)があれば即中断(手動を最優先)
+            if (lastManualControlTime > glideStartTime) { gliding = false; return; }
+            float elapsed = Time.unscaledTime - glideStartTime;
+            float u = glideDuration <= 0f ? 1f : Mathf.Clamp01(elapsed / glideDuration);
+            float s = u * u * (3f - 2f * u);   // スムーズステップ(自然な加減速)
+            focus = new Vector3(
+                Mathf.Lerp(glideStart.x, glideTarget.x, s), 0f,
+                Mathf.Lerp(glideStart.z, glideTarget.z, s));
+            if (u >= 1f) gliding = false;
+        }
+
+        /// <summary>手動カメラ操作(パン/ズーム/ドラッグ)の発生時刻を記録する(2026-07-22 Claude Code 追加)。</summary>
+        void MarkManualControl() => lastManualControlTime = Time.unscaledTime;
 
         void HandleKeyboardPan()
         {
@@ -107,6 +172,7 @@ namespace HexCiv.Control
             if (Input.GetKey(KeyCode.W) || Input.GetKey(KeyCode.UpArrow)) dz += 1f;
             if (Input.GetKey(KeyCode.S) || Input.GetKey(KeyCode.DownArrow)) dz -= 1f;
             if (dx == 0f && dz == 0f) return;
+            MarkManualControl();   // 自動追尾の中断判定用(2026-07-22 追加)
 
             // ズームアウトするほど速く動かす
             float speed = 2f + height * 1.1f;
@@ -119,6 +185,7 @@ namespace HexCiv.Control
             if (IsPointerOverUI()) return;
             float scroll = Input.GetAxis("Mouse ScrollWheel");
             if (Mathf.Abs(scroll) < 0.0001f) return;
+            MarkManualControl();   // 自動追尾の中断判定用(2026-07-22 追加)
             height = Mathf.Clamp(height - scroll * (4f + height * 0.5f), MinHeight, MaxHeight);
         }
 
@@ -212,6 +279,7 @@ namespace HexCiv.Control
         {
             if (TryGetGroundPoint(screenPos, out var cur))
             {
+                MarkManualControl();   // 中/左/右ボタンのドラッグパン共通の手動操作記録(2026-07-22 追加)
                 var delta = anchor - cur;
                 delta.y = 0f;
                 focus += delta;

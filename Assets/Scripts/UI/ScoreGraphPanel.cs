@@ -54,6 +54,14 @@ namespace HexCiv.UI
         int lastSampledTurn = int.MinValue;
         bool textureDirty;
 
+        /// <summary>
+        /// 戦況グラフの表示を UIManager のモーダル計数へ通知済みか(2026-07-22 Claude Code 追加)。
+        /// イベントバナーが戦況グラフへ重なるのを防ぐため、開閉を必ず対で通知する
+        /// (「戦況」ボタン・×・Esc・終了画面の「最終戦況」の全経路をポーリングで捕捉)。
+        /// 本パネルは UIManager のCanvasの子だが、退避の責務は各パネルの自己申告へ一本化する。
+        /// </summary>
+        bool externalPanelNotified;
+
         public bool IsVisible => panel != null && panel.activeSelf;
 
         /// <summary>UI構築と初期サンプル。UIManager.Init から新しいゲームごとに呼ばれる。</summary>
@@ -79,10 +87,18 @@ namespace HexCiv.UI
         void OnDestroy()
         {
             if (graphTexture != null) Destroy(graphTexture);
+            // 表示中に破棄された場合でも計数を必ず戻す(退避カウンタの取り残し防止。2026-07-22 追加)
+            if (externalPanelNotified)
+            {
+                externalPanelNotified = false;
+                UIManager.NotifyExternalPanel(false);
+            }
         }
 
         void Update()
         {
+            // 戦況グラフ表示中はイベントバナーを退避させる(state 未設定でも計数は正しく戻す。2026-07-22 追加)
+            SyncModalNotify();
             if (state == null) return;
             // ターンが進んだらサンプリング(観戦・通常プレイ共通。Version の変化は
             // ターン内の細かい更新も含むため、記録はターン番号の変化に揃える)
@@ -113,6 +129,19 @@ namespace HexCiv.UI
         public void Hide()
         {
             if (panel != null) panel.SetActive(false);
+        }
+
+        /// <summary>
+        /// 戦況グラフの表示状態を UIManager のモーダル計数へ反映する(2026-07-22 Claude Code 追加)。
+        /// 開閉の全経路を毎フレームのポーリングで捕捉し、必ず true/false を対で通知する。
+        /// UIManager.NotifyExternalPanel は静的で、ヘッドレスや UIManager 不在でも null 安全。
+        /// </summary>
+        void SyncModalNotify()
+        {
+            bool visible = panel != null && panel.activeSelf;
+            if (visible == externalPanelNotified) return;
+            externalPanelNotified = visible;
+            UIManager.NotifyExternalPanel(visible);
         }
 
         void BuildPanel()

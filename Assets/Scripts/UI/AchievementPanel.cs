@@ -136,6 +136,13 @@ namespace HexCiv.UI
         GameState boundState;
         float nextPollAt;
 
+        /// <summary>
+        /// 実績一覧パネルの表示を UIManager のモーダル計数へ通知済みか(2026-07-22 Claude Code 追加)。
+        /// イベントバナーが実績パネルへ重なるのを防ぐため、開閉を必ず対で通知する
+        /// (表示/非表示の全経路 — 「実績」ボタン・×・Esc — を毎フレームのポーリングで捕捉)。
+        /// </summary>
+        bool externalPanelNotified;
+
         // 購読解除のために保持するイベントハンドラ(Awakeで一度だけ生成)
         System.Action<City, Player, Player> captureHandler;
         System.Action<Player> eliminatedHandler;
@@ -205,12 +212,32 @@ namespace HexCiv.UI
             }
 
             UpdateToast();
+            SyncModalNotify();   // 実績パネル表示中はイベントバナーを退避させる(2026-07-22 追加)
         }
 
         void OnDestroy()
         {
             Unbind();
+            // 表示中に破棄された場合でも計数を必ず戻す(退避カウンタの取り残し防止。2026-07-22 追加)
+            if (externalPanelNotified)
+            {
+                externalPanelNotified = false;
+                UIManager.NotifyExternalPanel(false);
+            }
             if (Instance == this) Instance = null;
+        }
+
+        /// <summary>
+        /// 実績一覧パネルの表示状態を UIManager のモーダル計数へ反映する(2026-07-22 Claude Code 追加)。
+        /// 開閉の全経路を毎フレームのポーリングで捕捉し、必ず true/false を対で通知する。
+        /// UIManager.NotifyExternalPanel は静的で、ヘッドレスや UIManager 不在でも null 安全。
+        /// </summary>
+        void SyncModalNotify()
+        {
+            bool visible = panel != null && panel.activeSelf;
+            if (visible == externalPanelNotified) return;
+            externalPanelNotified = visible;
+            UIManager.NotifyExternalPanel(visible);
         }
 
         // ==================================================================

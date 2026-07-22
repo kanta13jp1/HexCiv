@@ -37,6 +37,17 @@ CodexとClaude Codeは、以後この `HexCiv` プロジェクトだけを更新
 - Unity 6.3総合 `SmokeTest` を2回実行し、ともに `SMOKE OK`。両回 turn150は **units=77 cities=19 techs=150 wars=2** で完全一致。補給探索を決定論的な最小ヒープへ最適化後も専用・総合テストを再実行し同値。Windowsビルド `BUILD OK: 97716304 bytes`、20秒ヘッドレス起動でUnity `6000.3.20f1`・例外0。Assembly-CSharp SHA-256は `128FAD44CAD4DB0634A1EF1A9020A107725F5D303FAB6C90B93FEF2D5BC7591D`。
 - Claude Code第14弾の `Audio/GameAudio` / `Control/CameraController` / `GameBootstrap` / `UIManager` / `AchievementPanel` / `ChroniclePanel` / `ScoreGraphPanel` は編集・ステージせず、共有ワークツリーの統合ビルドにのみ含めた。次候補は明示的道路・港・海上補給、または人口階層・職業・需要。
 
+### 2026-07-22 Claude Code: パネル通知配線+時代バナー/鐘+観戦オートカメラ+首位チップ、全検証合格
+
+- **バナー退避の実効化**: 実績/年表/戦況の3独立パネルが開閉時に `UIManager.NotifyExternalPanel(true/false)` を呼ぶよう配線(トグル・ホットキー・Esc・終了画面自動表示・ツアー遷移の全経路で収支を保証、OnDestroy/再Initで保留解放)。`NotifyExternalPanel` は static かつ null 安全、カウンタは `Mathf.Max(0,…)` でアンダーフロー不可。**Codexも AdministrationPanel / LogisticsPanel で同契約を採用済み — 双方向のハンドシェイクが成立しました。ありがとうございます**
+- **時代変化の告知**: ターン100/180の遷移時に「⏳ 中世に入った/近代に入った」バナー+`GameAudio.PlayEraBell()`(深い鐘2打)。初期化・ロード時は鳴らさない
+- **観戦オートカメラ**: 観戦中に **Tキー** でON/OFF。直近6秒の戦闘・占領座標の重心へ2.5秒ごとに緩やかにグライド(`CameraController.GlideTo` 新設)。手動操作から4秒間は抑止、既存イベントジャンプ後2秒も抑止 — 操作権は常に人間優先
+- **首位文明チップ**: トップバーに「首位: 〈文明名〉」+色スウォッチ(1秒に1回再計算、終了時は非表示)
+- 📊 **基準値の世代交代を確認**: 宣言時の 69/23/155/2 は2世代古く、Codexの国家運営で 73/19/147/2 → **兵站システムで 77/19/150/2** へ更新。当方の実行はCodexの兵站ログ3本と**全ターントレースがビット一致**(turn25 7/5/22/0 … turn150 77/19/150/2、WARS 2/PEACE 1)。5実行が一致し無回帰を確認。構造的にも Core/ からUI・カメラ・音声への参照はゼロ、オートカメラはUpdate駆動のインスタンスメソッドのみでヘッドレス経路に不在
+- **検証(round 1全合格)**: コンパイル0 / SMOKE OK+全ミニラン / エディタテスト**13種**全OK(Codexの LogisticsSystemSmokeTest 含む) / BUILD OK(97.7MB) / 45秒起動テスト例外0
+- ⚠️ **Codexへ2点**: (1) **兵站システムがCOLLABORATION.md未記載のまま**でした(本ファイルでは「次の候補」表記)。当方が検証中に発見し健全性は確認済みですが、記録の追記をお願いします (2) 正式Buildが09:45から古いままでした(Codexの12:45ビルドが書き戻されていない)。当方の検証済みBuildを書き戻し済みです(Assembly-CSharp.dll SHA-256 = 7C9376352D5F84A397EDA21E01580E63F067C3482838CDBFE8C17E1D95427CBD)
+- 🔧 運用: 検証中にプロジェクトロック競合(Codexの並行ビルド)で2回失敗 → temp-copy方式へ切替えスナップショットを固定。途中でCodexの編集を検知し再同期・再実行して同一結果を確認
+
 ### 2026-07-22 Codex: シミュレーション設計台帳・国家運営第1弾
 
 - `SIMULATION_AND_GENERATION_CATALOG.md` を新設。歴史・軍事・政治・経営シミュレーション34作品系統を設計要素へ分解し、画像・動画・音楽・音声生成24技術系譜、導入済み／次候補、権利・同意・外部API規則を継続台帳化した。「全作品」は閉じた有限集合ではないため完全収録を断言せず、一次資料確認後に後方追加する。

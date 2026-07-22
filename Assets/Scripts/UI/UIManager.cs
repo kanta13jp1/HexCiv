@@ -233,6 +233,20 @@ namespace HexCiv.UI
         /// <summary>観戦時のX(観戦バー x340〜940 を避けた二段目左端。ログは y-80 へ移動済み)。</summary>
         const float EraIndicatorSimulationX = 12f;
 
+        // ---- 首位文明チップ(2026-07-22 Claude Code 追加) ----
+        /// <summary>トップバー二段目の「首位: <文明名>」チップ(色スウォッチ+ラベル)。表示専用・raycast無効。</summary>
+        GameObject leaderChip;
+        Image leaderChipSwatch;
+        Text leaderChipLabel;
+        /// <summary>次に首位を再計算する時刻(最大毎秒1回。Time.unscaledTime 基準)。</summary>
+        float nextLeaderChipAt;
+        /// <summary>通常時のX(ログ 〜x478 の右、時代表示 x614 の左の空き x478〜614 に収める)。</summary>
+        const float LeaderChipNormalX = 480f;
+        /// <summary>観戦時のX(時代表示 x12〜98 の右、観戦バー x340 の左の空き x98〜340 に収める)。</summary>
+        const float LeaderChipSimulationX = 104f;
+        /// <summary>首位チップの幅(通常の空き x478〜614・観戦の空き x98〜340 の双方に収まる)。</summary>
+        const float LeaderChipWidth = 132f;
+
         // ---- 独立Canvas UIの開閉検知(2026-07-21 Claude Code 追加。参照のみ・一切変更しない) ----
         /// <summary>Codex 実装の世界史図鑑(独立Canvas)。Esc のフルスクリーン解除判定のため開閉のみ読む。</summary>
         WorldHistoryPanel worldHistoryRef;
@@ -446,6 +460,7 @@ namespace HexCiv.UI
             BuildSimulationBar();
             BuildScoreGraph();
             BuildEraIndicator();
+            BuildLeaderChip();
             BuildControlHint();
             BuildTutorial();
             BuildTooltip();
@@ -480,6 +495,7 @@ namespace HexCiv.UI
             UpdateEventBanners();
             UpdateConfetti();                 // 勝利画面の紙吹雪(非表示時は即return。2026-07-21 追加)
             DecorateExternalPanelButtons();   // 左下ボタンのアイコン付与(完了後は即return。2026-07-21 追加)
+            UpdateLeaderChip();               // 首位文明チップ(最大毎秒1回。2026-07-22 追加)
         }
 
         void BuildCanvas()
@@ -1088,11 +1104,35 @@ namespace HexCiv.UI
             if (eraLabelText == null || eraIconImage == null || state == null) return;
             int era = state.TurnNumber <= 100 ? 0 : (state.TurnNumber <= 180 ? 1 : 2);
             if (era == eraShownIndex) return;
+            int prev = eraShownIndex;
             eraShownIndex = era;
             eraLabelText.text = EraNamesJa[era];
             eraLabelText.color = EraTints[era];
             eraIconImage.sprite = EraIconSprite(era);
             eraIconImage.color = EraTints[era];
+
+            // 実プレイ中の実際の時代遷移のみ告知する(2026-07-22 Claude Code 追加)。
+            // prev < 0 は Init/ロード直後の初回設定 → 告知せず基準として静かに表示するだけ。
+            // era > prev の前進遷移かつゲーム進行中(未終了)の時だけ告知バナー+鐘を出す。
+            if (prev >= 0 && era > prev && !state.IsGameOver)
+                AnnounceEraChange(era);
+        }
+
+        /// <summary>
+        /// 時代前進の告知(2026-07-22 Claude Code 追加)。中世(1)/近代(2)に入った時、
+        /// 時代アクセント色のイベントバナー(観戦=大/通常=コンパクト)を出し、GameAudio の
+        /// 時代の鐘を鳴らす。古代(0)は開始時代のため告知しない。表示専用で
+        /// シミュレーションには一切影響しない。
+        /// </summary>
+        void AnnounceEraChange(int era)
+        {
+            if (era < 1 || era >= EraNamesJa.Length) return;
+            string msg = "⏳ " + EraNamesJa[era] + "に入った";
+            Color accent = EraTints[era];
+            if (simulationModeActive) ShowEventBanner(msg, accent);
+            else ShowEventBannerCompact(msg, accent);
+            // Codex が本ラウンドで追加する時代の鐘。GameAudio 不在(ヘッドレス等)は ?. で null 安全。
+            GameAudio.Instance?.PlayEraBell();
         }
 
         /// <summary>時代表示の位置を現在モードへ合わせる(通常=x614/観戦=x12。UpdateLogPosition と同じ流儀)。</summary>
@@ -1196,6 +1236,102 @@ namespace HexCiv.UI
                     return false;
                 }
             }
+        }
+
+        // ================= 首位文明チップ(2026-07-22 Claude Code 追加) =================
+
+        /// <summary>
+        /// 首位文明チップ。トップバー二段目の空きに「首位: <文明名>」を色スウォッチ付きで表示する。
+        /// 勝利画面と同じスコア式(Σ人口×3+都市数×8+技術数×5 = GameOverScoreOf)で首位文明を求め、
+        /// 最大毎秒1回だけ再計算する(UpdateLeaderChip)。ゲーム終了時は隠す。表示専用(raycast無効)で
+        /// クリックを一切遮らず、シミュレーションには影響しない。位置は時代表示と同じくモードで
+        /// 切り替える(通常=x480/観戦=x104。UpdateLeaderChipPosition)。
+        /// </summary>
+        void BuildLeaderChip()
+        {
+            leaderChip = UIStyle.CreateContainer(canvas.transform, "LeaderChip");
+            UIStyle.SetRect(leaderChip, new Vector2(0f, 1f), new Vector2(0f, 1f),
+                new Vector2(0f, 1f), new Vector2(LeaderChipNormalX, -38f),
+                new Vector2(LeaderChipWidth, 26f));
+
+            var sgo = new GameObject("LeaderSwatch", typeof(RectTransform), typeof(Image));
+            sgo.transform.SetParent(leaderChip.transform, false);
+            leaderChipSwatch = sgo.GetComponent<Image>();
+            leaderChipSwatch.raycastTarget = false;
+            UIStyle.SetRect(sgo, new Vector2(0f, 0.5f), new Vector2(0f, 0.5f),
+                new Vector2(0f, 0.5f), new Vector2(0f, 0f), new Vector2(14f, 14f));
+
+            leaderChipLabel = UIStyle.CreateText(leaderChip.transform, "LeaderLabel", "", 13,
+                TextAnchor.MiddleLeft, UIStyle.TextMain);
+            leaderChipLabel.resizeTextForBestFit = true;
+            leaderChipLabel.resizeTextMinSize = 9;
+            leaderChipLabel.resizeTextMaxSize = 13;
+            UIStyle.SetRect(leaderChipLabel.gameObject, new Vector2(0f, 0f), new Vector2(1f, 1f),
+                new Vector2(0f, 0.5f), new Vector2(20f, 0f), new Vector2(-20f, 0f));
+            // マップ上に直接乗るため影で可読性を確保(時代表示・ログ・操作ヒントと同じ流儀)
+            var shadow = leaderChipLabel.gameObject.AddComponent<Shadow>();
+            shadow.effectColor = new Color(0f, 0f, 0f, 0.9f);
+            shadow.effectDistance = new Vector2(1f, -1f);
+
+            nextLeaderChipAt = 0f;
+            UpdateLeaderChipPosition();
+            leaderChip.SetActive(false);   // 初回 RefreshLeaderChip が首位を求めてから表示する
+        }
+
+        /// <summary>首位チップの位置を現在モードへ合わせる(通常=x480/観戦=x104。UpdateEraIndicatorPosition と同じ流儀)。</summary>
+        void UpdateLeaderChipPosition()
+        {
+            if (leaderChip == null) return;
+            ((RectTransform)leaderChip.transform).anchoredPosition = new Vector2(
+                simulationModeActive ? LeaderChipSimulationX : LeaderChipNormalX, -38f);
+        }
+
+        /// <summary>首位文明チップを最大毎秒1回だけ再計算する(Update から。非スケール時間基準)。</summary>
+        void UpdateLeaderChip()
+        {
+            if (leaderChip == null || state == null) return;
+            if (Time.unscaledTime < nextLeaderChipAt) return;
+            nextLeaderChipAt = Time.unscaledTime + 1f;
+            RefreshLeaderChip();
+        }
+
+        /// <summary>
+        /// 首位文明(生存文明のうち GameOverScoreOf 最大、同点は Id 昇順)を求めてチップへ反映する。
+        /// ゲーム終了時・首位不在時は隠す。表示専用でシミュレーションには影響しない。
+        /// </summary>
+        void RefreshLeaderChip()
+        {
+            if (leaderChip == null || state == null) return;
+            if (state.IsGameOver)
+            {
+                if (leaderChip.activeSelf) leaderChip.SetActive(false);
+                return;
+            }
+
+            Player best = null;
+            int bestScore = 0;
+            var players = state.Players;
+            for (int i = 0; players != null && i < players.Count; i++)
+            {
+                var p = players[i];
+                if (p == null || p.IsEliminated) continue;
+                int s = GameOverScoreOf(p);
+                if (best == null || s > bestScore || (s == bestScore && p.Id < best.Id))
+                {
+                    best = p;
+                    bestScore = s;
+                }
+            }
+
+            if (best == null)
+            {
+                if (leaderChip.activeSelf) leaderChip.SetActive(false);
+                return;
+            }
+
+            if (!leaderChip.activeSelf) leaderChip.SetActive(true);
+            if (leaderChipSwatch != null) leaderChipSwatch.color = best.Color;
+            if (leaderChipLabel != null) leaderChipLabel.text = "首位: " + best.NameJa;
         }
 
         void BuildCivilizationPanel()
@@ -1514,6 +1650,7 @@ namespace HexCiv.UI
             if (scoreGraphButton != null) scoreGraphButton.gameObject.SetActive(!active);
             UpdateLogPosition();   // ログ先頭行が観戦バーの下に隠れないよう移動(2026-07-21 追加)
             UpdateEraIndicatorPosition();   // 時代表示も観戦バーを避けて移動(2026-07-22 追加)
+            UpdateLeaderChipPosition();     // 首位チップも観戦バーを避けて移動(2026-07-22 追加)
             if (active)
             {
                 CloseAllPanels();
@@ -2158,8 +2295,10 @@ namespace HexCiv.UI
 
         /// <summary>
         /// UIManager 管轄の全画面/モーダルパネルのいずれかが開いているか(バナー退避判定用)。
-        /// 中央系のパネル+終了画面+戦況グラフを対象とし、右側の都市パネルは
-        /// 中央上のバナーと重ならないため含めない(従来挙動の維持)。
+        /// 中央系のパネル+終了画面を対象とし、右側の都市パネルは中央上のバナーと重ならないため
+        /// 含めない(従来挙動の維持)。戦況グラフは 2026-07-22 に自己申告
+        /// (ScoreGraphPanel.SyncModalNotify → NotifyExternalPanel)へ一本化したためここには含めない
+        /// (二重計上の回避。実績・年表パネルと同じ退避経路に揃えた)。
         /// </summary>
         bool IsSelfModalPanelOpen =>
             (techPanel != null && techPanel.activeSelf) ||
@@ -2168,8 +2307,7 @@ namespace HexCiv.UI
             (slotPanel != null && slotPanel.activeSelf) ||
             (settingsPanel != null && settingsPanel.activeSelf) ||
             (tutorialPanel != null && tutorialPanel.activeSelf) ||
-            (gameOverOverlay != null && gameOverOverlay.activeSelf) ||
-            (scoreGraphPanel != null && scoreGraphPanel.IsVisible);
+            (gameOverOverlay != null && gameOverOverlay.activeSelf);
 
         /// <summary>
         /// 自分のモーダル開閉状態をまとめて1件として modalOpenCount へ反映する

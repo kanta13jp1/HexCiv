@@ -141,6 +141,13 @@ namespace HexCiv.UI
         /// <summary>表示内容の再構築が必要か(表示中のみ Update で消化する)。</summary>
         bool rowsDirty;
 
+        /// <summary>
+        /// 年表パネルの表示を UIManager のモーダル計数へ通知済みか(2026-07-22 Claude Code 追加)。
+        /// イベントバナーが年表パネルへ重なるのを防ぐため、開閉を必ず対で通知する
+        /// (Cキー・「年表」ボタン・×・Esc・歴史ツアー開始による非表示の全経路をポーリングで捕捉)。
+        /// </summary>
+        bool externalPanelNotified;
+
         // 購読解除のために保持するイベントハンドラ(Awakeで一度だけ生成)
         System.Action<Player, Player> warHandler;
         System.Action<Player, Player> peaceHandler;
@@ -195,6 +202,10 @@ namespace HexCiv.UI
                 Rebind(current);
             }
 
+            // 年表パネル表示中はイベントバナーを退避させる(ツアー中は Hide 済みで非表示=退避解除。
+            // 早期returnより前に評価して全経路で対称に通知する。2026-07-22 追加)
+            SyncModalNotify();
+
             if (panel == null) return;
 
             // 歴史ツアー中は巡回・フェード・中断(Esc/クリック)のみを処理する(2026-07-21 追加)
@@ -226,6 +237,25 @@ namespace HexCiv.UI
         void OnDestroy()
         {
             Unbind();
+            // 表示中に破棄された場合でも計数を必ず戻す(退避カウンタの取り残し防止。2026-07-22 追加)
+            if (externalPanelNotified)
+            {
+                externalPanelNotified = false;
+                UIManager.NotifyExternalPanel(false);
+            }
+        }
+
+        /// <summary>
+        /// 年表パネルの表示状態を UIManager のモーダル計数へ反映する(2026-07-22 Claude Code 追加)。
+        /// 開閉の全経路を毎フレームのポーリングで捕捉し、必ず true/false を対で通知する。
+        /// UIManager.NotifyExternalPanel は静的で、ヘッドレスや UIManager 不在でも null 安全。
+        /// </summary>
+        void SyncModalNotify()
+        {
+            bool visible = panel != null && panel.activeSelf;
+            if (visible == externalPanelNotified) return;
+            externalPanelNotified = visible;
+            UIManager.NotifyExternalPanel(visible);
         }
 
         // ==================================================================

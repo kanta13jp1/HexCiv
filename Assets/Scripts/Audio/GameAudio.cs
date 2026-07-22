@@ -63,6 +63,13 @@ namespace HexCiv.Audio
         // とは音域・構成で聞き分けられる。音量・ミュートは既存の Play() が一括処理する。
         AudioClip achievementClip;
 
+        // --- 2026-07-22 Claude Code 追加: 時代の鐘 ---
+        // 時代の変わり目(古代→中世→近代。UIManager が時代遷移時に PlayEraBell を呼ぶ)に鳴らす
+        // 深く長く響く二打の鐘。非整数倍音を異なる減衰で重ねた鐘特有の金属質な響きを低い基音で
+        // 鳴らし、既存のアルペジオ系チャイム(高音域の分散和音)や打撃系スティング(太鼓・金管)
+        // とは音域・倍音構成・余韻の長さで明確に聞き分けられる。音量・ミュートは Play() が一括処理。
+        AudioClip eraBellClip;
+
         // --- 2026-07-21 Claude Code 追加: 開幕ホルン ---
         // 新しいゲームの開始時(TurnManager.BeginGame の開幕ログ「文明の夜明け ―」)に一度だけ
         // 鳴らす、静かな二音のホルンコール(約1.2秒、C4→G4の上行五度)。祝祭的で長い勝利
@@ -428,6 +435,10 @@ namespace HexCiv.Audio
             // --- 2026-07-22 Claude Code 追加: 実績解除チャイム ---
             // 生成はこの初期化経路で一度だけ行い、RegisterClip 経由で破棄も既存と同じ扱い。
             achievementClip = CreateAchievementClip();
+
+            // --- 2026-07-22 Claude Code 追加: 時代の鐘 ---
+            // 生成はこの初期化経路で一度だけ行い、RegisterClip 経由で破棄も既存と同じ扱い。
+            eraBellClip = CreateEraBellClip();
         }
 
         public void PlayUiClick() => Play(uiClickClip);
@@ -505,6 +516,10 @@ namespace HexCiv.Audio
         // 2026-07-22 Claude Code 追加: 実績解除チャイム(UI/AchievementPanel.cs のトーストが呼ぶ。
         // 音量・ミュートは Play() が一括処理)
         public void PlayAchievement() => Play(achievementClip);
+
+        // 2026-07-22 Claude Code 追加: 時代の鐘(UIManager が時代遷移=古代→中世→近代で呼ぶ。
+        // 音量・ミュートは Play() が一括処理)
+        public void PlayEraBell() => Play(eraBellClip);
 
         // 2026-07-21 Claude Code 追加: イベントスティング(音量・ミュートは Play() が一括処理)
         public void PlayWarDeclared() => Play(warStingClip);
@@ -1612,6 +1627,55 @@ namespace HexCiv.Audio
 
                 return Mathf.Clamp(sample * 0.9f, -0.85f, 0.85f);
             });
+        }
+
+        /// <summary>
+        /// 時代の鐘(2026-07-22 Claude Code 追加)。約1.5秒。
+        /// 深く長く響く二打の大鐘。鐘は倍音が非整数(うなり0.5倍/基音/短三度約1.19倍/五度1.5倍/
+        /// オクターブ2倍/上部倍音)で、低い成分ほど長く残るのが特徴。低い基音(約156Hz)で荘重に
+        /// 鳴らし、2打目(0.62秒)は僅かに低く弱くして余韻が重なり「ゴーン…ゴーン…」と時代の
+        /// 変わり目を告げる。周波数変調ではなく固定倍音の加算合成のためチャープひずみは生じない。
+        /// 決定的生成(乱数不使用)でシミュレーションに一切干渉しない。既存アルペジオ系チャイムや
+        /// 打撃系スティングとは音域・倍音構成・余韻長で区別できる。
+        /// </summary>
+        AudioClip CreateEraBellClip()
+        {
+            const float duration = 1.5f;
+            int length = Mathf.CeilToInt(duration * SampleRate);
+            var data = new float[length];
+
+            for (int i = 0; i < length; i++)
+            {
+                float t = i / (float)SampleRate;
+                // 二打の鐘(t=0 と t=0.62秒)。2打目は少し低く弱く、余韻が重なる。
+                float sample = BellStrike(156f, t) * 0.95f
+                    + BellStrike(146.83f, t - 0.62f) * 0.85f;
+                // クリップ末尾は短くフェードして途切れ音を防ぐ
+                sample *= Mathf.Clamp01((duration - t) / 0.10f);
+                data[i] = Mathf.Clamp(sample * 0.5f, -0.9f, 0.9f);
+            }
+
+            return RegisterClip("Era Bell", data);
+        }
+
+        /// <summary>
+        /// 深い鐘の単打(時代の鐘用。2026-07-22 Claude Code 追加)。うなり・基音・短三度・五度・
+        /// オクターブ・上部倍音の非整数倍音を、低い成分ほど長い減衰で重ねる鐘特有の響き。
+        /// ごく短いアタックで打撃の瞬間を作る。localTime が負の間は無音。
+        /// </summary>
+        static float BellStrike(float baseFrequency, float localTime)
+        {
+            if (localTime < 0f) return 0f;
+            float sample =
+                  Sine(baseFrequency * 0.5f, localTime) * 0.35f * Mathf.Exp(-localTime * 1.4f)   // うなり(hum)
+                + Sine(baseFrequency, localTime) * 1.00f * Mathf.Exp(-localTime * 2.0f)          // 基音(prime)
+                + Sine(baseFrequency * 1.19f, localTime) * 0.55f * Mathf.Exp(-localTime * 3.0f)  // 短三度(tierce)
+                + Sine(baseFrequency * 1.50f, localTime) * 0.42f * Mathf.Exp(-localTime * 3.6f)  // 五度(quint)
+                + Sine(baseFrequency * 2.00f, localTime) * 0.60f * Mathf.Exp(-localTime * 3.2f)  // オクターブ(nominal)
+                + Sine(baseFrequency * 2.55f, localTime) * 0.24f * Mathf.Exp(-localTime * 5.0f)  // 上部倍音
+                + Sine(baseFrequency * 3.10f, localTime) * 0.16f * Mathf.Exp(-localTime * 6.5f); // 上部倍音
+            float attack = Mathf.Clamp01(localTime / 0.004f);
+            return sample * attack;
         }
 
         AudioClip CreateArpeggio(string name, float duration, float[] notes, float spacing, float gain)
