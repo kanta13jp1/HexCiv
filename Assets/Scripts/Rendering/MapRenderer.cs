@@ -8,12 +8,15 @@ namespace HexCiv.Render
     /// マップ描画。地形は起動時に1枚の結合メッシュ(頂点カラー)として構築し、
     /// 霧(戦場の霧)・領土国境・ハイライトは動的オーバーレイとして更新する。
     /// マウス下のタイル判定(XZ平面との数学的交差 + HexCoord.FromWorld)も担当する。
+    /// 2026-07-22 追加: 補給範囲オーバーレイ(Lキー / SetSupplyOverlay)。
+    /// Core/LogisticsSystem の補給網を薄く着色して表示するだけで、状態は一切書き換えない。
     /// </summary>
     public class MapRenderer : MonoBehaviour
     {
         // ---- レイヤー高さ(契約 §6) ----
         const float TerrainY = 0f;
         const float DecoY = 0.02f;
+        const float SupplyY = 0.03f;   // 補給オーバーレイ(装飾0.02の上・国境0.04の下)
         const float BorderY = 0.04f;
         const float HighlightY = 0.05f;
         const float FogY = 0.06f;
@@ -21,6 +24,7 @@ namespace HexCiv.Render
         // ---- 描画順(sortingOrder。Sprites/Default は ZWrite Off のため明示的に制御する) ----
         const int SortTerrain = 0;
         const int SortDeco = 1;
+        const int SortSupply = 2;      // 補給オーバーレイ(装飾1の上・国境3の下)
         const int SortBorder = 3;
         const int SortHighlight = 4;
         const int SortSelection = 5;   // 選択リング(他ハイライトの上・霧8の下)
@@ -88,6 +92,32 @@ namespace HexCiv.Render
         const float SelectionAlphaMin = 0.6f;
         const float SelectionAlphaMax = 1.0f;
 
+        // ---- 補給範囲オーバーレイ(2026-07-22 Claude Code 追加。表示のみ・シミュレーション非干渉) ----
+        // Codex の Core/LogisticsSystem が算出する都市起点の補給網を、盤面へ薄く着色して見せる。
+        // 対象は人間プレイヤー。観戦モード(HumanPlayer が null)では首位文明を対象にする
+        // (スコア = Σ人口*3 + 都市*8 + 技術*5。TurnManager のスコア勝利と同じ式。同点は Id 昇順)。
+        // 分類は必ず LogisticsSystem.LevelAt() を呼んで決めるため、しきい値をこちらで再定義せず
+        // シミュレーションと常に同一のルールになる(良好=薄い緑 a=0.12 / 逼迫=琥珀 a=0.14 /
+        // 圏外・孤立相当=無着色)。敵ユニット・敵都市に遮断されたタイルは補給網から外れて
+        // 自然に無着色となり、「補給線が切れた」ことがそのまま盤面で分かる。
+        // 霧のルール(未探索タイルは塗らない)は国境・領土面塗りと同一。丘陵の持ち上げにも追従する。
+        // 再計算は「state.Version が変わった」かつ「前回から0.5秒以上経過」の両方を満たす時だけで、
+        // 変化のないフレームは補給辞書もメッシュも作り直さない(定常状態でアロケーションなし)。
+        // 情報表示のため VisualQuality.LightMode でも抑制しない(演出ではないため)。
+        static readonly Color SupplySuppliedColor = new Color(0.28f, 0.85f, 0.42f, 0.12f);  // 良好=薄緑
+        static readonly Color SupplyStrainedColor = new Color(1f, 0.72f, 0.16f, 0.14f);     // 逼迫=琥珀
+        const float SupplyTickInterval = 0.5f;   // 再計算は最大2回/秒
+        const float SupplyHexRadius = 0.94f;     // タイル内に収める(国境リングと重ならない)
+
+        Mesh supplyMesh;
+        MeshRenderer supplyRenderer;
+        bool supplyOverlayOn;
+        /// <summary>直近に計算した補給コスト(座標→コスト)。再計算時のみ作り直す。</summary>
+        Dictionary<HexCoord, int> supplyCosts;
+        int supplyBuiltVersion = int.MinValue;   // supplyCosts を作った時の state.Version
+        int supplyBuiltPlayerId = int.MinValue;  // 同・対象プレイヤーId(-1 = 対象なし)
+        float supplyNextTick;
+
         readonly MeshBuilder builder = new MeshBuilder();
 
         /// <summary>静的な地形メッシュ群を構築する。再呼び出し(リスタート)にも対応。</summary>
@@ -118,6 +148,14 @@ namespace HexCiv.Render
             selectionMesh.MarkDynamic();
             selectionRenderer = RenderUtil.NewMeshChild(transform, "SelectionPulse", selectionMesh, mat, Vector3.zero, SortSelection);
             selectionVisible = false;
+
+            // 補給範囲オーバーレイ(子は上で全破棄済みのため毎回作り直す)。
+            // 表示のON/OFFはリスタートを跨いで維持し、内容は次の Tick で必ず作り直す。
+            supplyMesh = builderEmpty(supplyMesh);
+            supplyMesh.MarkDynamic();
+            supplyRenderer = RenderUtil.NewMeshChild(transform, "SupplyOverlay", supplyMesh, mat, Vector3.zero, SortSupply);
+            supplyRenderer.gameObject.SetActive(supplyOverlayOn);
+            InvalidateSupplyOverlay();
 
             RefreshDynamic();
         }
@@ -212,6 +250,128 @@ namespace HexCiv.Render
             if (highlightMesh != null) highlightMesh.Clear();
             if (selectionMesh != null) selectionMesh.Clear();
             selectionVisible = false;
+        }
+
+        // ------------------------------------------------------------------
+        // 補給範囲オーバーレイ(2026-07-22 Claude Code 追加。表示のみ)
+        // ------------------------------------------------------------------
+
+        /// <summary>補給範囲オーバーレイが表示中か。</summary>
+        public bool SupplyOverlayEnabled => supplyOverlayOn;
+
+        /// <summary>補給範囲オーバーレイの表示を切り替える。戻り値は切替後の状態(true = 表示)。</summary>
+        public bool ToggleSupplyOverlay()
+        {
+            SetSupplyOverlay(!supplyOverlayOn);
+            return supplyOverlayOn;
+        }
+
+        /// <summary>補給範囲オーバーレイの表示を設定する(表示のみ。シミュレーションには触れない)。</summary>
+        public void SetSupplyOverlay(bool on)
+        {
+            if (supplyOverlayOn == on) return;
+            supplyOverlayOn = on;
+            if (supplyRenderer != null) supplyRenderer.gameObject.SetActive(on);
+            if (on) InvalidateSupplyOverlay();   // 表示した瞬間に最新内容へ作り直す
+        }
+
+        /// <summary>次の Tick で補給オーバーレイを必ず作り直させる。</summary>
+        void InvalidateSupplyOverlay()
+        {
+            supplyBuiltVersion = int.MinValue;
+            supplyBuiltPlayerId = int.MinValue;
+            supplyNextTick = 0f;
+        }
+
+        /// <summary>
+        /// 補給オーバーレイの更新。非表示なら何もしない。表示中でも
+        /// 「前回から SupplyTickInterval 秒以上経過」かつ「state.Version が前回と違う
+        /// (または対象文明が変わった)」場合だけ補給網とメッシュを作り直す。
+        /// それ以外のフレームは早期 return のみでアロケーションは発生しない。
+        /// </summary>
+        void TickSupplyOverlay()
+        {
+            if (!supplyOverlayOn || state == null || supplyMesh == null) return;
+
+            float now = Time.unscaledTime;
+            if (now < supplyNextTick) return;
+            supplyNextTick = now + SupplyTickInterval;
+
+            var target = SupplyOverlayPlayer();
+            int pid = target != null ? target.Id : -1;
+            if (pid == supplyBuiltPlayerId && state.Version == supplyBuiltVersion) return;
+            supplyBuiltPlayerId = pid;
+            supplyBuiltVersion = state.Version;
+
+            if (target == null)
+            {
+                supplyCosts = null;
+                builder.Clear();
+                supplyMesh = builder.Build(supplyMesh);
+                return;
+            }
+
+            supplyCosts = LogisticsSystem.BuildSupplyCosts(state, target);
+            RebuildSupplyMesh(target);
+        }
+
+        /// <summary>
+        /// オーバーレイの対象文明。通常プレイでは人間プレイヤー、
+        /// 観戦モード(HumanPlayer が null)では首位文明(スコア = Σ人口*3 + 都市*8 + 技術*5、
+        /// 同点は Id 昇順)。滅亡文明は対象にしない。全滅していれば null。
+        /// </summary>
+        Player SupplyOverlayPlayer()
+        {
+            var human = state.HumanPlayer;
+            if (human != null) return human.IsEliminated ? null : human;
+
+            Player best = null;
+            int bestScore = int.MinValue;
+            for (int i = 0; i < state.Players.Count; i++)
+            {
+                var p = state.Players[i];
+                if (p == null || p.IsEliminated) continue;
+                int score = p.Cities.Count * 8 + p.KnownTechs.Count * 5;
+                for (int c = 0; c < p.Cities.Count; c++)
+                    if (p.Cities[c] != null) score += p.Cities[c].Population * 3;
+                if (best == null || score > bestScore)
+                {
+                    best = p;
+                    bestScore = score;
+                }
+            }
+            return best;
+        }
+
+        /// <summary>
+        /// 補給コスト辞書から着色メッシュを構築する。分類は LogisticsSystem.LevelAt に委ねる
+        /// (しきい値をこちらに複製しない)。孤立相当・補給網外のタイルは着色しないため、
+        /// 敵に遮断された補給線の切れ目がそのまま見える。
+        /// 未探索タイルは霧と同じルールで塗らない(通常プレイのみ。観戦モードは全タイル対象)。
+        /// </summary>
+        void RebuildSupplyMesh(Player target)
+        {
+            builder.Clear();
+            if (supplyCosts != null && supplyCosts.Count > 0 && tileOrder != null)
+            {
+                var human = state.HumanPlayer;
+                for (int i = 0; i < tileOrder.Length; i++)
+                {
+                    var t = tileOrder[i];
+                    if (human != null && !human.Explored.Contains(t.Coord)) continue;
+
+                    var level = LogisticsSystem.LevelAt(target, t.Coord, supplyCosts);
+                    Color col;
+                    if (level == SupplyLevel.Supplied) col = SupplySuppliedColor;
+                    else if (level == SupplyLevel.Strained) col = SupplyStrainedColor;
+                    else continue;   // 孤立相当・補給網外 = 無着色
+
+                    var c = t.Coord.ToWorld();
+                    c.y = SupplyY + RenderUtil.TileVisualHeight(t);
+                    builder.AddHex(c, SupplyHexRadius, col);
+                }
+            }
+            supplyMesh = builder.Build(supplyMesh);
         }
 
         /// <summary>
@@ -324,6 +484,7 @@ namespace HexCiv.Render
         {
             TickSelectionPulse();
             TickWater();
+            TickSupplyOverlay();
         }
 
         /// <summary>

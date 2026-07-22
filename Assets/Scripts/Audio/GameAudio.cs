@@ -70,6 +70,14 @@ namespace HexCiv.Audio
         // とは音域・倍音構成・余韻の長さで明確に聞き分けられる。音量・ミュートは Play() が一括処理。
         AudioClip eraBellClip;
 
+        // --- 2026-07-22 Claude Code 追加: 警告ブザー ---
+        // 国家運営・兵站の警告(国庫の赤字転落・安定度の低下・部隊の補給孤立。UIManager が
+        // 警告バナーと同時に PlayWarning を呼ぶ)に使う、低く短い二連ブザー。
+        // 同じ音程を2回鳴らす無旋律の矩形波質感で、旋律が下降する宣戦スティング(低音金管)や
+        // 高音域で分散和音を鳴らす実績チャイム、下降アルペジオの既存 PlayAlert とは
+        // 音色・進行のいずれでも聞き分けられる。音量・ミュートは既存の Play() が一括処理する。
+        AudioClip warningClip;
+
         // --- 2026-07-21 Claude Code 追加: 開幕ホルン ---
         // 新しいゲームの開始時(TurnManager.BeginGame の開幕ログ「文明の夜明け ―」)に一度だけ
         // 鳴らす、静かな二音のホルンコール(約1.2秒、C4→G4の上行五度)。祝祭的で長い勝利
@@ -439,6 +447,10 @@ namespace HexCiv.Audio
             // --- 2026-07-22 Claude Code 追加: 時代の鐘 ---
             // 生成はこの初期化経路で一度だけ行い、RegisterClip 経由で破棄も既存と同じ扱い。
             eraBellClip = CreateEraBellClip();
+
+            // --- 2026-07-22 Claude Code 追加: 警告ブザー ---
+            // 生成はこの初期化経路で一度だけ行い、RegisterClip 経由で破棄も既存と同じ扱い。
+            warningClip = CreateWarningClip();
         }
 
         public void PlayUiClick() => Play(uiClickClip);
@@ -520,6 +532,13 @@ namespace HexCiv.Audio
         // 2026-07-22 Claude Code 追加: 時代の鐘(UIManager が時代遷移=古代→中世→近代で呼ぶ。
         // 音量・ミュートは Play() が一括処理)
         public void PlayEraBell() => Play(eraBellClip);
+
+        /// <summary>
+        /// 警告ブザー(2026-07-22 Claude Code 追加)。UIManager の警告バナー
+        /// (国庫の赤字転落・安定度の低下・部隊の補給孤立)と同時に鳴らす低い二連ブザー。
+        /// 音量・ミュートは既存の Play() が一括処理し、クリップ未生成(ヘッドレス等)でも無害。
+        /// </summary>
+        public void PlayWarning() => Play(warningClip);
 
         // 2026-07-21 Claude Code 追加: イベントスティング(音量・ミュートは Play() が一括処理)
         public void PlayWarDeclared() => Play(warStingClip);
@@ -1676,6 +1695,49 @@ namespace HexCiv.Audio
                 + Sine(baseFrequency * 3.10f, localTime) * 0.16f * Mathf.Exp(-localTime * 6.5f); // 上部倍音
             float attack = Mathf.Clamp01(localTime / 0.004f);
             return sample * attack;
+        }
+
+        /// <summary>
+        /// 警告ブザー(2026-07-22 Claude Code 追加)。約0.48秒。
+        /// B♭3(233.08Hz)の短いブザーを0.26秒間隔で2回鳴らす低い二連音。奇数倍音(3/5/7倍)を
+        /// 加算した矩形波寄りの硬い音色に、速い立ち上がり・切れの良い減衰・弱い振幅トレモロを
+        /// 掛けて「警報」の質感にする。2打とも同じ音程で旋律を持たないため、下降二音の宣戦
+        /// スティング(低音金管、約0.9秒)、高音域の実績チャイム、下降アルペジオの既存 PlayAlert
+        /// のいずれとも聞き分けられる。倍音は7倍音(約1.6kHz)までに抑えて22.05kHzでの折り返しを
+        /// 避けている。決定的生成(乱数不使用)でシミュレーションに一切干渉しない。
+        /// </summary>
+        AudioClip CreateWarningClip()
+        {
+            const float duration = 0.48f;
+            int length = Mathf.CeilToInt(duration * SampleRate);
+            var data = new float[length];
+
+            for (int i = 0; i < length; i++)
+            {
+                float t = i / (float)SampleRate;
+                // 同一音程の二連ブザー(t=0 と t=0.26秒。各0.18秒なので末尾で丁度鳴り終わる)
+                float sample = WarningBeep(233.08f, t) + WarningBeep(233.08f, t - 0.26f);
+                // クリップ末尾は短くフェードして途切れ音を防ぐ
+                sample *= Mathf.Clamp01((duration - t) / 0.04f);
+                data[i] = Mathf.Clamp(sample * 0.34f, -0.9f, 0.9f);
+            }
+
+            return RegisterClip("Warning Buzz", data);
+        }
+
+        /// <summary>短い警告ブザーの単音(奇数倍音の加算で矩形波寄りにし、弱いトレモロを掛ける)。</summary>
+        static float WarningBeep(float frequency, float localTime)
+        {
+            const float noteLength = 0.18f;
+            if (localTime < 0f || localTime >= noteLength) return 0f;
+            float sample = Sine(frequency, localTime)
+                + 0.34f * Sine(frequency * 3f, localTime)
+                + 0.18f * Sine(frequency * 5f, localTime)
+                + 0.10f * Sine(frequency * 7f, localTime);
+            float env = Mathf.Clamp01(localTime / 0.008f) *
+                Mathf.Clamp01((noteLength - localTime) / 0.03f) *
+                (0.86f + 0.14f * Mathf.Sin(2f * Mathf.PI * 14f * localTime));
+            return sample * env;
         }
 
         AudioClip CreateArpeggio(string name, float duration, float[] notes, float spacing, float gain)

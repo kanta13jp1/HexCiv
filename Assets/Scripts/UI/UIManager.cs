@@ -247,6 +247,44 @@ namespace HexCiv.UI
         /// <summary>首位チップの幅(通常の空き x478〜614・観戦の空き x98〜340 の双方に収まる)。</summary>
         const float LeaderChipWidth = 132f;
 
+        // ---- 国家運営チップ+警告通知(2026-07-22 Claude Code 追加) ----
+        /// <summary>
+        /// トップバー二段目・左端の国家運営チップ列(「国庫 152 (+8)」「安定度 62」)。
+        /// 値は Core/AdministrationSystem の公開APIから読むだけの表示専用で(raycast無効)、
+        /// シミュレーションには一切影響しない。観戦モード(HumanPlayer==null)・ゲーム終了時は隠す。
+        /// 配置は二段目 y-38〜-64 の x12〜約364(首位チップ x480 の手前)。ログ先頭は
+        /// LogTopNormalY を -42→-68 へ下げて重なりを避けている。
+        /// </summary>
+        GameObject adminChips;
+        Text treasuryChipLabel;
+        Image stabilityChipSwatch;
+        Text stabilityChipLabel;
+        /// <summary>次に国家運営チップと警告判定を行う時刻(最大毎秒1回。Time.unscaledTime 基準)。</summary>
+        float nextAdminChipAt;
+
+        /// <summary>安定度の中位色(琥珀)。安定度チップの色スケールの中間点。</summary>
+        static readonly Color StabilityMidColor = new Color(0.95f, 0.78f, 0.35f, 1f);
+        /// <summary>安定度の高位色(緑)。色スケールの上端。</summary>
+        static readonly Color StabilityHighColor = new Color(0.52f, 0.85f, 0.48f, 1f);
+        /// <summary>収支が黒字のときの国庫チップ色(緑)。</summary>
+        static readonly Color BalancePositiveColor = new Color(0.52f, 0.85f, 0.48f, 1f);
+
+        /// <summary>
+        /// 「安定度が低い」とみなす閾値。独自に決めず、Core/AdministrationSystem.RecommendTaxPolicy が
+        /// 減税を勧告する条件(`player.Stability &lt;= 25`)と同じ値を参照して用いる(表示・警告専用)。
+        /// </summary>
+        const int LowStabilityThreshold = 25;
+        /// <summary>同種の警告を再通知するまでの最短ターン数(長期戦での連呼を防ぐ)。</summary>
+        const int WarningCooldownTurns = 12;
+        /// <summary>各警告の「発生中」ラッチ(条件が解消されるまで再発火しない=エッジ検出)。</summary>
+        bool warnDeficitLatched;
+        bool warnStabilityLatched;
+        bool warnIsolationLatched;
+        /// <summary>各警告を最後に通知したターン(WarningCooldownTurns の判定用。-999=未通知)。</summary>
+        int lastDeficitWarnTurn = -999;
+        int lastStabilityWarnTurn = -999;
+        int lastIsolationWarnTurn = -999;
+
         // ---- 独立Canvas UIの開閉検知(2026-07-21 Claude Code 追加。参照のみ・一切変更しない) ----
         /// <summary>Codex 実装の世界史図鑑(独立Canvas)。Esc のフルスクリーン解除判定のため開閉のみ読む。</summary>
         WorldHistoryPanel worldHistoryRef;
@@ -343,8 +381,10 @@ namespace HexCiv.UI
         Text logText;
         readonly List<string> logLines = new List<string>();
         const int MaxLogLines = 6;
-        /// <summary>通常時のログ先頭Y(トップバー高さ34の下に8px余白。従来と同じ位置)。</summary>
-        const float LogTopNormalY = -42f;
+        /// <summary>通常時のログ先頭Y(トップバー高さ34の下)。2026-07-22 Claude Code 変更:
+        /// 二段目左端(y-38〜-64)へ国家運営チップ列を追加したため、-42 から -68 へ下げて
+        /// ログ先頭行との重なりを避ける(表示位置のみの変更。行数・幅・書式は従来どおり)。</summary>
+        const float LogTopNormalY = -68f;
         /// <summary>観戦時のログ先頭Y(観戦バー y-38〜-72 の下に8px余白。2026-07-21 追加)。</summary>
         const float LogTopSimulationY = -80f;
 
@@ -444,6 +484,16 @@ namespace HexCiv.UI
             externalButtonIconsDone = false;
             nextExternalButtonIconTryAt = 0f;
 
+            // 国家運営の警告ラッチ(2026-07-22 追加): 新規ゲーム・リスタート・ロードでは
+            // 前ゲームの発生状態とクールダウンを一切持ち越さない
+            warnDeficitLatched = false;
+            warnStabilityLatched = false;
+            warnIsolationLatched = false;
+            lastDeficitWarnTurn = -999;
+            lastStabilityWarnTurn = -999;
+            lastIsolationWarnTurn = -999;
+            nextAdminChipAt = 0f;
+
             BuildCanvas();
             BuildTopBar();
             BuildAudioControls();
@@ -461,6 +511,7 @@ namespace HexCiv.UI
             BuildScoreGraph();
             BuildEraIndicator();
             BuildLeaderChip();
+            BuildAdministrationChips();
             BuildControlHint();
             BuildTutorial();
             BuildTooltip();
@@ -496,6 +547,7 @@ namespace HexCiv.UI
             UpdateConfetti();                 // 勝利画面の紙吹雪(非表示時は即return。2026-07-21 追加)
             DecorateExternalPanelButtons();   // 左下ボタンのアイコン付与(完了後は即return。2026-07-21 追加)
             UpdateLeaderChip();               // 首位文明チップ(最大毎秒1回。2026-07-22 追加)
+            UpdateAdministrationChips();      // 国庫・安定度チップ+警告(最大毎秒1回。2026-07-22 追加)
         }
 
         void BuildCanvas()
@@ -1334,6 +1386,189 @@ namespace HexCiv.UI
             if (leaderChipLabel != null) leaderChipLabel.text = "首位: " + best.NameJa;
         }
 
+        // ================= 国家運営チップ+警告通知(2026-07-22 Claude Code 追加) =================
+
+        /// <summary>
+        /// 国庫・安定度チップ列を構築する。トップバー二段目の左端(x12〜約364、y-38〜-64)に置き、
+        /// 首位チップ(x480〜)・時代表示(x614〜)・二段目のボタン列(x704〜888)・右上サウンド
+        /// (x944〜)のいずれとも重ならない。ログ先頭行は LogTopNormalY(-68)でこの列の下から
+        /// 始まる。表示専用(raycast無効)でクリックを一切遮らず、値は Core の公開APIを読むだけ。
+        /// </summary>
+        void BuildAdministrationChips()
+        {
+            adminChips = UIStyle.CreateContainer(canvas.transform, "AdministrationChips");
+            UIStyle.SetRect(adminChips, new Vector2(0f, 1f), new Vector2(0f, 1f),
+                new Vector2(0f, 1f), new Vector2(12f, -38f), new Vector2(380f, 26f));
+
+            treasuryChipLabel = UIStyle.CreateText(adminChips.transform, "TreasuryLabel", "", 13,
+                TextAnchor.MiddleLeft, UIStyle.TextMain);
+            UIStyle.SetRect(treasuryChipLabel.gameObject, new Vector2(0f, 0.5f), new Vector2(0f, 0.5f),
+                new Vector2(0f, 0.5f), new Vector2(0f, 0f), new Vector2(206f, 22f));
+            AddChipShadow(treasuryChipLabel);
+
+            var swatchGo = new GameObject("StabilitySwatch", typeof(RectTransform), typeof(Image));
+            swatchGo.transform.SetParent(adminChips.transform, false);
+            stabilityChipSwatch = swatchGo.GetComponent<Image>();
+            stabilityChipSwatch.raycastTarget = false;
+            UIStyle.SetRect(swatchGo, new Vector2(0f, 0.5f), new Vector2(0f, 0.5f),
+                new Vector2(0f, 0.5f), new Vector2(212f, 0f), new Vector2(14f, 14f));
+
+            stabilityChipLabel = UIStyle.CreateText(adminChips.transform, "StabilityLabel", "", 13,
+                TextAnchor.MiddleLeft, UIStyle.TextMain);
+            UIStyle.SetRect(stabilityChipLabel.gameObject, new Vector2(0f, 0.5f), new Vector2(0f, 0.5f),
+                new Vector2(0f, 0.5f), new Vector2(232f, 0f), new Vector2(130f, 22f));
+            AddChipShadow(stabilityChipLabel);
+
+            nextAdminChipAt = 0f;
+            adminChips.SetActive(false);   // 初回 RefreshAdministrationChips が可否を判定してから表示する
+        }
+
+        /// <summary>マップ上に直接乗るチップ文字の可読性確保(ログ・時代表示・首位チップと同じ流儀)。</summary>
+        static void AddChipShadow(Text text)
+        {
+            if (text == null) return;
+            var shadow = text.gameObject.AddComponent<Shadow>();
+            shadow.effectColor = new Color(0f, 0f, 0f, 0.9f);
+            shadow.effectDistance = new Vector2(1f, -1f);
+        }
+
+        /// <summary>
+        /// 国家運営チップと警告判定を最大毎秒1回だけ実行する(Update から。非スケール時間基準)。
+        /// 観戦モード・ゲーム終了時はチップを隠し、警告判定も行わない。
+        /// </summary>
+        void UpdateAdministrationChips()
+        {
+            if (adminChips == null || state == null) return;
+            if (Time.unscaledTime < nextAdminChipAt) return;
+            nextAdminChipAt = Time.unscaledTime + 1f;
+            RefreshAdministrationChips();
+        }
+
+        /// <summary>
+        /// 人間文明の国庫・収支・安定度をチップへ反映し、続けて警告条件を判定する。
+        /// 値は Core/AdministrationSystem(Balance = Revenue - Expenses)と Player の
+        /// 公開フィールドを読むだけで、いかなる状態も書き換えない。
+        /// </summary>
+        void RefreshAdministrationChips()
+        {
+            if (adminChips == null || state == null) return;
+
+            var p = state.HumanPlayer;
+            bool show = p != null && !p.IsEliminated && !state.IsGameOver && !simulationModeActive;
+            if (!show)
+            {
+                if (adminChips.activeSelf) adminChips.SetActive(false);
+                return;
+            }
+            if (!adminChips.activeSelf) adminChips.SetActive(true);
+
+            int balance = AdministrationSystem.Balance(p);
+            if (treasuryChipLabel != null)
+            {
+                treasuryChipLabel.text = $"国庫 {p.Treasury:N0} ({SignedAmount(balance)})";
+                treasuryChipLabel.color = balance > 0
+                    ? BalancePositiveColor
+                    : (balance < 0 ? UIStyle.Danger : UIStyle.TextMain);
+            }
+
+            int stability = Mathf.Clamp(p.Stability, 0, AdministrationSystem.MaximumStability);
+            var stabilityColor = StabilityChipColor(stability);
+            if (stabilityChipLabel != null)
+            {
+                stabilityChipLabel.text = $"安定度 {stability}";
+                stabilityChipLabel.color = stabilityColor;
+            }
+            if (stabilityChipSwatch != null) stabilityChipSwatch.color = stabilityColor;
+
+            CheckAdministrationWarnings(p);
+        }
+
+        /// <summary>収支の符号付き表記(黒字は明示的に +)。</summary>
+        static string SignedAmount(int value) => value >= 0 ? "+" + value.ToString("N0") : value.ToString("N0");
+
+        /// <summary>
+        /// 安定度の色スケール(0=赤 → 中間=琥珀 → AdministrationSystem.MaximumStability=緑)。
+        /// 段階的な独自閾値を設けず、シミュレーション側の上限値で正規化した連続的な補間にする。
+        /// </summary>
+        static Color StabilityChipColor(int stability)
+        {
+            float t = Mathf.Clamp01(stability / (float)AdministrationSystem.MaximumStability);
+            return t < 0.5f
+                ? Color.Lerp(UIStyle.Danger, StabilityMidColor, t * 2f)
+                : Color.Lerp(StabilityMidColor, StabilityHighColor, (t - 0.5f) * 2f);
+        }
+
+        /// <summary>
+        /// 人間文明の警告条件(赤字転落・安定度低下・補給孤立)をエッジ検出で判定し、
+        /// 該当時にコンパクトバナー+警告音を出す。各警告は「条件が解消されるまで再発火しない」
+        /// ラッチと「同種は WarningCooldownTurns ターン以内に再通知しない」制限の両方を持つ。
+        /// 読むのは Player の公開フィールドと Unit.Supply(LogisticsSystem がターン開始時に
+        /// 確定させた値)だけで、補給網の再計算も状態変更も行わない。
+        /// </summary>
+        void CheckAdministrationWarnings(Player p)
+        {
+            int turn = state.TurnNumber;
+
+            // (a) 国庫が赤字へ転落した
+            bool deficit = p.Treasury < 0;
+            if (!deficit) warnDeficitLatched = false;
+            else if (!warnDeficitLatched)
+            {
+                warnDeficitLatched = true;
+                if (turn - lastDeficitWarnTurn >= WarningCooldownTurns)
+                {
+                    lastDeficitWarnTurn = turn;
+                    ShowAdministrationWarning("⚠ 国庫が赤字になった");
+                }
+            }
+
+            // (b) 安定度がシミュレーション側の低安定閾値(RecommendTaxPolicy と同一)を下回った
+            bool unstable = p.Stability <= LowStabilityThreshold;
+            if (!unstable) warnStabilityLatched = false;
+            else if (!warnStabilityLatched)
+            {
+                warnStabilityLatched = true;
+                if (turn - lastStabilityWarnTurn >= WarningCooldownTurns)
+                {
+                    lastStabilityWarnTurn = turn;
+                    ShowAdministrationWarning("⚠ 国内が不安定になっている");
+                }
+            }
+
+            // (c) 自軍ユニットが補給から孤立した(SupplyLevel.Isolated が0→1件以上になった時)
+            bool isolated = HasIsolatedUnit(p);
+            if (!isolated) warnIsolationLatched = false;
+            else if (!warnIsolationLatched)
+            {
+                warnIsolationLatched = true;
+                if (turn - lastIsolationWarnTurn >= WarningCooldownTurns)
+                {
+                    lastIsolationWarnTurn = turn;
+                    ShowAdministrationWarning("⚠ 部隊が補給から孤立した");
+                }
+            }
+        }
+
+        /// <summary>孤立(SupplyLevel.Isolated)状態の生存ユニットが1体でもいるか(読み取りのみ)。</summary>
+        static bool HasIsolatedUnit(Player p)
+        {
+            if (p == null) return false;
+            for (int i = 0; i < p.Units.Count; i++)
+            {
+                var u = p.Units[i];
+                if (u == null || u.IsDead) continue;
+                if (u.Supply == SupplyLevel.Isolated) return true;
+            }
+            return false;
+        }
+
+        /// <summary>警告バナー(既存のコンパクトバナー機構)+警告音。GameAudio 不在でも null 安全。</summary>
+        void ShowAdministrationWarning(string messageJa)
+        {
+            ShowEventBannerCompact(messageJa, UIStyle.Danger);
+            GameAudio.Instance?.PlayWarning();
+        }
+
         void BuildCivilizationPanel()
         {
             civilizationPanel = UIStyle.CreatePanel(canvas.transform, "CivilizationPanel",
@@ -1651,6 +1886,10 @@ namespace HexCiv.UI
             UpdateLogPosition();   // ログ先頭行が観戦バーの下に隠れないよう移動(2026-07-21 追加)
             UpdateEraIndicatorPosition();   // 時代表示も観戦バーを避けて移動(2026-07-22 追加)
             UpdateLeaderChipPosition();     // 首位チップも観戦バーを避けて移動(2026-07-22 追加)
+            // 国家運営チップは観戦中(人間文明なし)は非表示。モード切替直後に判定し直す
+            // (観戦バー・観戦時の時代/首位チップ位置と二段目左端で重ならないようにする)
+            nextAdminChipAt = 0f;
+            RefreshAdministrationChips();
             if (active)
             {
                 CloseAllPanels();
@@ -1663,8 +1902,9 @@ namespace HexCiv.UI
         /// <summary>
         /// ログ表示位置を現在モードへ合わせる(2026-07-21 Claude Code 追加)。
         /// 観戦中は中央上の観戦バー(y-38〜-72、x340〜940)がログ(x12〜約478)の先頭行と
-        /// 重なって隠すため、ログをバーの下(y-80)から開始する。通常プレイでは従来どおり
-        /// トップバー(高さ34)直下の y-42 へ戻す。どちらのモードでもトップバーとは重ならない。
+        /// 重なって隠すため、ログをバーの下(y-80)から開始する。通常プレイは二段目左端の
+        /// 国家運営チップ列(y-38〜-64)の下 y-68(LogTopNormalY。2026-07-22 に -42 から変更)へ
+        /// 戻す。どちらのモードでもトップバー・二段目の要素とは重ならない。
         /// </summary>
         void UpdateLogPosition()
         {

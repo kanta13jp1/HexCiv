@@ -42,6 +42,10 @@ namespace HexCiv.Render
     /// ・生産完成スパークル(2026-07-21 追加): 成長パルスと同じキャッシュ+ポーリング方式で
     ///   Buildings.Count の増加を検知し、金色スパークル5個が都市ブロックから上昇(約0.5秒。
     ///   都市誕生バーストのパーティクルプールを再利用)。生成/ロード直後と8倍速以上ではスキップ
+    /// ・ユニット補給状態マーカー(2026-07-22 追加): Core/LogisticsSystem がターン開始時に確定した
+    ///   Unit.Supply を読み取り、逼迫=琥珀の弧・孤立=ゆっくり明滅する赤いひし形を円盤の西側へ表示する
+    ///   (補給良好はマーカーなし)。対象は人間プレイヤーのユニット、観戦モードでは全ユニット。
+    ///   ビューごとに1個だけ遅延生成して使い回し、8倍速以上では非表示・軽量演出モードでは明滅を停止する
     /// ・軽量演出モード対応(2026-07-22 追加): VisualQuality.LightMode(PlayerPrefs
     ///   "HexCiv.FxLight")が有効な間は待機ボブと新規ダメージ数字ポップを抑制する。
     ///   戦闘の突進・被弾フラッシュ・撃破フェードなど既存演出は軽量モードでも維持する
@@ -67,6 +71,9 @@ namespace HexCiv.Render
         const int SortUnitNameShadow = 10;  // ユニット名影(本体 SortUnitGlyph の直下。円盤の外側 z=-0.52 にあり重なりは無視できる)
         const int SortUnitHpBg = 12;
         const int SortUnitHpFill = 13;
+        // 補給状態マーカー(2026-07-22 追加)。円盤の西側 r=0.62〜0.76 に置くため、
+        // 北の HPバー(12/13)・南の名前ラベル(10/11)とは幾何的に重ならない。
+        const int SortUnitSupply = 12;
         // 演出用(既存の順序は変更しない。フラッシュと数字は既存要素の上に重ねる)
         const int SortCityFlash = 6;
         const int SortUnitFlash = 14;
@@ -121,6 +128,26 @@ namespace HexCiv.Render
         const float TweenSettleSq = 0.0004f;     // 移動トゥイーン収束判定((2cm)^2)。未収束中は揺れない
         static readonly Color FortifyGlowColor = new Color(1f, 0.85f, 0.45f, 1f);   // グローの金色
 
+        // ---- 補給状態マーカー(2026-07-22 Claude Code 追加。表示のみ・非スケール時間) ----
+        // Core/LogisticsSystem がターン開始時に確定した Unit.Supply をそのまま読むだけで、
+        // 判定も再計算も行わない(シミュレーションへは一切書き込まない)。
+        // 補給良好 = マーカーなし / 逼迫 = 琥珀の弧(点灯したまま) / 孤立 = 赤いひし形がゆっくり明滅。
+        // 対象は人間プレイヤーのユニット(観戦モード = HumanPlayer が null のときは全ユニット)。
+        // マーカーはユニットビューごとに1個だけ遅延生成して以後は使い回し、
+        // 補給良好へ戻ったら非表示にするだけ(ビュー破棄・再Initでは Root の子として一緒に片付く)。
+        // 8倍速以上(既存 SnapTimeScale 判定)では他のFXと同様に非表示。軽量演出モード
+        // (VisualQuality.LightMode)では明滅を止めて一定輝度で表示する(情報は残す)。
+        const float SupplyMarkInner = 0.62f;      // 弧の内半径(防御態勢リング0.58・グロー0.60の外側)
+        const float SupplyMarkOuter = 0.76f;      // 弧の外半径(タイル内接円0.866より内側)
+        const float SupplyMarkStartDeg = 108f;    // 弧の開始角(西側を中心にする)
+        const float SupplyMarkSweepDeg = 144f;    // 弧の開き
+        const float SupplyIsolatedRadius = 0.66f; // 孤立マーカー(ひし形)の中心距離(弧と同じ西側)
+        const float SupplyPulsePeriod = 1.6f;     // 孤立マーカーの明滅周期(秒。ゆっくり)
+        const float SupplyPulseAlphaMin = 0.35f;
+        const float SupplyPulseAlphaMax = 1.0f;
+        static readonly Color SupplyStrainedColor = new Color(1f, 0.72f, 0.16f, 0.92f);  // 逼迫=琥珀
+        static readonly Color SupplyIsolatedColor = new Color(1f, 0.24f, 0.18f, 1f);     // 孤立=赤
+
         // ラベル影のオフセット。親テキストは X+90° 回転済みのため、
         // ローカル(+0.02, -0.02, +0.005)はワールドの(+0.02, -0.005, -0.02)に相当する(画面上は右下)。
         static readonly Vector3 TextShadowOffset = new Vector3(0.02f, -0.02f, 0.005f);
@@ -166,6 +193,10 @@ namespace HexCiv.Render
             public float SpawnPopTime;    // 残り時間(>0 で出現ポップ中)
             public MeshRenderer FortifyGlow;   // 防御態勢の金色グローリング(待機アニメ。2026-07-21 追加)
             public float BobPhase;             // Id ハッシュ由来の揺れ位相(全ユニットが同期して見えないように)
+            // ---- 補給状態マーカー(2026-07-22 追加。必要になった時だけ生成し以後は使い回す) ----
+            public MeshRenderer SupplyMark;    // null = まだ一度も逼迫/孤立になっていない
+            public MeshFilter SupplyFilter;    // 逼迫(弧)/孤立(ひし形)のメッシュ差し替え用
+            public SupplyLevel SupplyShown = SupplyLevel.Supplied;   // 現在マーカーが表しているレベル
         }
 
         class CityView
@@ -274,6 +305,8 @@ namespace HexCiv.Render
         Mesh fortifyGlowMesh;     // 防御態勢グロー用の白リング(色はMaterialPropertyBlockで着色)
         Mesh burnPuffMesh;        // 炎上の煙クアッド(色・フェードはMaterialPropertyBlockで着色)
         Mesh burnEmberMesh;       // 炎上の残り火グロー(バナー下の横長クアッド)
+        Mesh supplyStrainedMesh;  // 補給逼迫の弧(頂点色は白。琥珀はMaterialPropertyBlockで着色)
+        Mesh supplyIsolatedMesh;  // 補給孤立のひし形(内側=白・外周=暗色の二重。同上)
 
         /// <summary>初期化。再呼び出し(リスタート)にも対応。</summary>
         public void Init(GameState state)
@@ -329,6 +362,10 @@ namespace HexCiv.Render
                 // 煙の暗灰色・残り火のオレンジは MaterialPropertyBlock で毎フレーム変える
                 burnPuffMesh = RenderUtil.BuildQuadXZ(0.20f, 0.20f, Color.white, false);
                 burnEmberMesh = RenderUtil.BuildQuadXZ(2.4f, 0.62f, Color.white, false);
+                // 補給状態マーカー(2026-07-22 追加)。共有メッシュを全ユニットで使い回す。
+                supplyStrainedMesh = BuildArcRing(SupplyMarkInner, SupplyMarkOuter,
+                    SupplyMarkStartDeg, SupplyMarkSweepDeg, 10, Color.white);
+                supplyIsolatedMesh = BuildSupplyIsolatedMark();
             }
 
             SubscribeEvents(state);
@@ -539,6 +576,36 @@ namespace HexCiv.Render
                 }
 
                 v.Root.transform.localPosition = pos;
+
+                // ---- 補給状態マーカー(2026-07-22 追加。表示のみ・アロケーションなし) ----
+                // 8倍速以上(snapAll)は他のFXと同じく非表示。逼迫は一定の琥珀、孤立は赤の
+                // ゆっくりした明滅(位相は待機ボブと同じ Id ハッシュ)。軽量演出モードでは
+                // 明滅を止めて最大輝度で固定し、情報表示としては残す。
+                if (v.SupplyMark != null)
+                {
+                    bool showMark = v.SupplyShown != SupplyLevel.Supplied && !snapAll;
+                    if (v.SupplyMark.gameObject.activeSelf != showMark)
+                        v.SupplyMark.gameObject.SetActive(showMark);
+                    if (showMark)
+                    {
+                        Color sc;
+                        if (v.SupplyShown == SupplyLevel.Isolated)
+                        {
+                            sc = SupplyIsolatedColor;
+                            sc.a = lightFx
+                                ? SupplyPulseAlphaMax
+                                : Mathf.Lerp(SupplyPulseAlphaMin, SupplyPulseAlphaMax,
+                                    0.5f + 0.5f * Mathf.Sin(Time.unscaledTime
+                                        * (Mathf.PI * 2f / SupplyPulsePeriod) + v.BobPhase));
+                        }
+                        else
+                        {
+                            sc = SupplyStrainedColor;
+                        }
+                        mpb.SetColor(ColorPropId, sc);
+                        v.SupplyMark.SetPropertyBlock(mpb);
+                    }
+                }
 
                 if (v.FlashTime > 0f)
                     TickFlash(v.Flash, ref v.FlashTime, v.FlashDuration, v.FlashWithRed, dt);
@@ -1042,6 +1109,8 @@ namespace HexCiv.Render
         {
             // グローリングは明滅途中の可能性があるため、消してからフェードへ渡す(2026-07-21 追加)
             if (v.FortifyGlow != null) v.FortifyGlow.gameObject.SetActive(false);
+            // 補給マーカーも同様に消してからフェードへ渡す(2026-07-22 追加)
+            if (v.SupplyMark != null) v.SupplyMark.gameObject.SetActive(false);
 
             var f = new FadingView();
             f.Root = v.Root;
@@ -1169,6 +1238,16 @@ namespace HexCiv.Render
                 float frac = Mathf.Clamp01(u.Hp / (float)GameRules.UnitMaxHp);
                 v.HpFill.localScale = new Vector3(0.86f * frac, 1f, 0.10f);
                 v.HpFillMat.color = Color.Lerp(HpLow, HpHigh, frac);
+            }
+
+            // 補給状態マーカー(2026-07-22 追加。表示のみ): Core がターン開始時に確定した
+            // Unit.Supply をそのまま読む。対象は人間プレイヤーのユニット(観戦モードは全ユニット)。
+            // 変化した時だけビューを作り替え、通常フレームは比較1回で終わる。
+            var shown = (human == null || u.PlayerId == human.Id) ? u.Supply : SupplyLevel.Supplied;
+            if (shown != v.SupplyShown)
+            {
+                v.SupplyShown = shown;
+                ApplySupplyMark(v);
             }
         }
 
@@ -1364,6 +1443,74 @@ namespace HexCiv.Render
                 mb.AddQuad(n1 + up, n0 + up, n0, n1, sideColor);            // 内側面
             }
             return mb.Build(null);
+        }
+
+        // ------------------------------------------------------------------
+        // 補給状態マーカー(2026-07-22 Claude Code 追加。表示のみ)
+        // ------------------------------------------------------------------
+
+        /// <summary>XZ平面のリングの一部(弧)。角度は度、0°が+X・90°が+Z。</summary>
+        static Mesh BuildArcRing(float rInner, float rOuter, float startDeg, float sweepDeg,
+            int segments, Color color)
+        {
+            var mb = new MeshBuilder();
+            for (int i = 0; i < segments; i++)
+            {
+                float a0 = (startDeg + sweepDeg * i / segments) * Mathf.Deg2Rad;
+                float a1 = (startDeg + sweepDeg * (i + 1) / segments) * Mathf.Deg2Rad;
+                Vector3 d0 = new Vector3(Mathf.Cos(a0), 0f, Mathf.Sin(a0));
+                Vector3 d1 = new Vector3(Mathf.Cos(a1), 0f, Mathf.Sin(a1));
+                mb.AddQuad(d0 * rOuter, d1 * rOuter, d1 * rInner, d0 * rInner, color);
+            }
+            return mb.Build(null);
+        }
+
+        /// <summary>
+        /// 孤立マーカー(円盤の西側に置くひし形)。外周の頂点色を暗くしておくことで、
+        /// MaterialPropertyBlock で赤く着色したときに暗い縁取り付きの赤マークになる
+        /// (Sprites/Default は 頂点色 × _Color。明滅アルファも両方へ同時に効く)。
+        /// メッシュ側にオフセットを持たせるため、ビューの子オブジェクトは原点のままで良い。
+        /// </summary>
+        static Mesh BuildSupplyIsolatedMark()
+        {
+            var mb = new MeshBuilder();
+            float ang = (SupplyMarkStartDeg + SupplyMarkSweepDeg * 0.5f) * Mathf.Deg2Rad;
+            var c = new Vector3(Mathf.Cos(ang), 0f, Mathf.Sin(ang)) * SupplyIsolatedRadius;
+            mb.AddDiamond(c, 0.19f, new Color(0.30f, 0.28f, 0.28f, 1f));   // 暗い縁取り(タイル内に収まる)
+            mb.AddDiamond(c + new Vector3(0f, 0.001f, 0f), 0.13f, Color.white);
+            return mb.Build(null);
+        }
+
+        /// <summary>
+        /// ビューの補給マーカーを現在の SupplyShown に合わせる(状態が変わった時だけ呼ぶ)。
+        /// 初回の逼迫/孤立で1個だけ生成し、以後はメッシュ差し替えと表示切替のみで使い回す。
+        /// 色と明滅は Update() が MaterialPropertyBlock で与える。
+        /// </summary>
+        void ApplySupplyMark(UnitView v)
+        {
+            if (v.SupplyShown == SupplyLevel.Supplied)
+            {
+                if (v.SupplyMark != null) v.SupplyMark.gameObject.SetActive(false);
+                return;
+            }
+            if (v.Root == null) return;
+
+            if (v.SupplyMark == null)
+            {
+                v.SupplyMark = RenderUtil.NewMeshChild(v.Root.transform, "SupplyMark",
+                    supplyStrainedMesh, baseMat, new Vector3(0f, UnitY + 0.006f, 0f), SortUnitSupply);
+                v.SupplyFilter = v.SupplyMark.GetComponent<MeshFilter>();
+                // 最初の Update までの1フレームで素の白マークが見えないよう透明で初期化する
+                if (mpb == null) mpb = new MaterialPropertyBlock();
+                mpb.SetColor(ColorPropId, new Color(1f, 1f, 1f, 0f));
+                v.SupplyMark.SetPropertyBlock(mpb);
+            }
+            if (v.SupplyFilter != null)
+            {
+                var mesh = v.SupplyShown == SupplyLevel.Isolated ? supplyIsolatedMesh : supplyStrainedMesh;
+                if (v.SupplyFilter.sharedMesh != mesh) v.SupplyFilter.sharedMesh = mesh;
+            }
+            v.SupplyMark.gameObject.SetActive(true);
         }
 
         // ------------------------------------------------------------------

@@ -11,7 +11,8 @@ namespace HexCiv.Control
     /// マウス/キーボード入力の処理。MonoBehaviour ではなく、GameBootstrap が毎フレーム
     /// Update() を呼ぶ。左クリックで自軍ユニット/都市の選択、右クリックで移動・攻撃命令、
     /// Enter でターン終了、Esc でパネルを閉じる/選択解除(どちらの仕事も無ければ
-    /// フルスクリーン解除。2026-07-21 追加)。ホバーでタイルツールチップ。
+    /// フルスクリーン解除。2026-07-21 追加)。L で補給範囲オーバーレイの表示切替
+    /// (2026-07-22 追加。観戦モードでも有効)。ホバーでタイルツールチップ。
     /// 左/右ボタンはマップ上で押下後、カーソルが閾値(6px)を超えて動くとカメラの
     /// ドラッグパンに切り替わる(中ボタンと同じ地面つかみ方式。パン後の離しでは
     /// 選択・命令を行わない。閾値未満の離しは従来どおりクリック扱い。2026-07-21 追加)。
@@ -218,6 +219,20 @@ namespace HexCiv.Control
             if (Input.GetKeyDown(KeyCode.Escape))
             {
                 HandleEscape();
+                return;
+            }
+
+            // L:補給範囲オーバーレイの表示切替(2026-07-22 Claude Code 追加)。
+            // Core/LogisticsSystem の補給網を盤面へ薄く着色するだけの表示機能のため、
+            // 観戦モード(人間プレイヤー不在。首位文明の補給網を表示する)でも有効にする。
+            // テキスト入力中は本メソッド冒頭のガード、ゲーム終了後は Update 冒頭で弾かれる。
+            if (Input.GetKeyDown(KeyCode.L))
+            {
+                if (map != null)
+                {
+                    bool on = map.ToggleSupplyOverlay();
+                    if (ui != null) ui.AddLog(on ? "補給表示: ON" : "補給表示: OFF");
+                }
                 return;
             }
 
