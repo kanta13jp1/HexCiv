@@ -4,7 +4,7 @@ using UnityEditor;
 using UnityEngine;
 using HexCiv.Core;
 
-/// <summary>文化史120件の政策化、進行、交流、勝利、セーブ往復を検証する。</summary>
+/// <summary>文化史132件の政策化、進行、交流、勝利、セーブ往復を検証する。</summary>
 public static class CultureSystemSmokeTest
 {
     static readonly string[] Regions =
@@ -32,7 +32,7 @@ public static class CultureSystemSmokeTest
 
     static void ValidateCatalog()
     {
-        if (CulturePolicyCatalog.All.Count != 120)
+        if (CulturePolicyCatalog.All.Count != 132)
             throw new Exception("文化政策件数が不正: " + CulturePolicyCatalog.All.Count);
 
         var ids = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -52,7 +52,7 @@ public static class CultureSystemSmokeTest
         for (int r = 0; r < Regions.Length; r++)
         {
             var branch = CulturePolicyCatalog.ForRegion(Regions[r]);
-            if (branch.Count != 20)
+            if (branch.Count != 22)
                 throw new Exception(Regions[r] + "の政策数が不正: " + branch.Count);
             for (int tier = 0; tier < branch.Count; tier++)
             {
@@ -66,7 +66,7 @@ public static class CultureSystemSmokeTest
                     throw new Exception("地域内前提が不正: " + branch[tier].Id);
             }
         }
-        Debug.Log("[Culture] 文化史120件・6地域×20政策・前提・コストOK");
+        Debug.Log("[Culture] 文化史132件・6地域×22政策・前提・コストOK");
     }
 
     static void ValidateProgressAndEffects()

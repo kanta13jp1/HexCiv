@@ -3,7 +3,7 @@ using UnityEditor;
 using UnityEngine;
 using HexCiv.Core;
 
-/// <summary>研究史・文化史第2・第3弾の後方追加、ゲーム接続、図鑑画像を検証する。</summary>
+/// <summary>研究史・文化史第2～第4弾の後方追加、ゲーム接続、図鑑画像を検証する。</summary>
 public static class ResearchCultureExpansionSmokeTest
 {
     static readonly string[] Regions =
@@ -38,6 +38,16 @@ public static class ResearchCultureExpansionSmokeTest
         { "rapa_nui_moai_quarry_engineering", "fijian_drua_navigation" },
     };
 
+    static readonly string[,] FourthBatchResearch =
+    {
+        { "kanem_bornu_trans_saharan_networks", "merina_highland_rice_irrigation" },
+        { "sasanian_gondeshapur_medical_exchange", "tughlaq_canal_irrigation" },
+        { "silla_cheomseongdae_observation", "malacca_maritime_law" },
+        { "kyivan_rus_legal_codification", "portuguese_atlantic_navigation" },
+        { "lakota_star_season_knowledge", "powhatan_seasonal_agroecology" },
+        { "tupaia_oceanic_cartography", "rarotonga_taro_irrigation" },
+    };
+
     static readonly string[] PreviousCultureTails =
     {
         "ubuntu_philosophy", "yoga_traditions", "thai_khon",
@@ -64,6 +74,16 @@ public static class ResearchCultureExpansionSmokeTest
         { "rapa_nui_kai_kai", "fijian_tabua_exchange" },
     };
 
+    static readonly string[,] FourthBatchCulture =
+    {
+        { "kanem_bornu_court_chronicle_culture", "malagasy_kabary_oratory" },
+        { "sasanian_silver_court_art", "delhi_indo_persian_court_culture" },
+        { "silla_hwarang_oath_culture", "malacca_jawi_manuscript_culture" },
+        { "kyivan_rus_mosaic_fresco_culture", "portuguese_azulejo_culture" },
+        { "lakota_quillwork", "powhatan_woven_mat_dwelling_culture" },
+        { "heiva_i_tahiti", "cook_islands_tivaevae" },
+    };
+
     public static void Run()
     {
         try
@@ -83,23 +103,25 @@ public static class ResearchCultureExpansionSmokeTest
 
     static void ValidateResearch()
     {
-        if (ResearchMilestoneCatalog.All.Count != 120 || TechnologyCatalog.All.Count != 132)
+        if (ResearchMilestoneCatalog.All.Count != 132 || TechnologyCatalog.All.Count != 144)
             throw new Exception("研究史または全技術件数が不正");
 
         for (int r = 0; r < Regions.Length; r++)
         {
             var milestones = ResearchMilestoneCatalog.ForRegion(Regions[r]);
             var technologies = TechnologyCatalog.HistoricalForRegion(Regions[r]);
-            if (milestones.Count != 20 || technologies.Count != 20)
+            if (milestones.Count != 22 || technologies.Count != 22)
                 throw new Exception("研究分岐件数が不正: " + Regions[r]);
             if (milestones[15].Id != PreviousResearchTails[r] ||
                 milestones[16].Id != PreviousExpansionResearch[r, 0] ||
                 milestones[17].Id != PreviousExpansionResearch[r, 1] ||
                 milestones[18].Id != AddedResearch[r, 0] ||
-                milestones[19].Id != AddedResearch[r, 1])
+                milestones[19].Id != AddedResearch[r, 1] ||
+                milestones[20].Id != FourthBatchResearch[r, 0] ||
+                milestones[21].Id != FourthBatchResearch[r, 1])
                 throw new Exception("研究史の後方追加順が不正: " + Regions[r]);
 
-            for (int tier = 18; tier < 20; tier++)
+            for (int tier = 20; tier < 22; tier++)
             {
                 var technology = technologies[tier];
                 int expectedCost = TechnologyCatalog.HistoricalBaseCost +
@@ -110,28 +132,30 @@ public static class ResearchCultureExpansionSmokeTest
                     throw new Exception("追加研究の接続が不正: " + technology.Id);
             }
         }
-        Debug.Log("[Expansion] 研究史120件・全132技術・6地域×第3弾追加2件 OK");
+        Debug.Log("[Expansion] 研究史132件・全144技術・6地域×第4弾追加2件 OK");
     }
 
     static void ValidateCulture()
     {
-        if (CulturalTraditionCatalog.All.Count != 120 || CulturePolicyCatalog.All.Count != 120)
+        if (CulturalTraditionCatalog.All.Count != 132 || CulturePolicyCatalog.All.Count != 132)
             throw new Exception("文化史または文化政策件数が不正");
 
         for (int r = 0; r < Regions.Length; r++)
         {
             var traditions = CulturalTraditionCatalog.ForRegion(Regions[r]);
             var policies = CulturePolicyCatalog.ForRegion(Regions[r]);
-            if (traditions.Count != 20 || policies.Count != 20)
+            if (traditions.Count != 22 || policies.Count != 22)
                 throw new Exception("文化分岐件数が不正: " + Regions[r]);
             if (traditions[15].Id != PreviousCultureTails[r] ||
                 traditions[16].Id != PreviousExpansionCulture[r, 0] ||
                 traditions[17].Id != PreviousExpansionCulture[r, 1] ||
                 traditions[18].Id != AddedCulture[r, 0] ||
-                traditions[19].Id != AddedCulture[r, 1])
+                traditions[19].Id != AddedCulture[r, 1] ||
+                traditions[20].Id != FourthBatchCulture[r, 0] ||
+                traditions[21].Id != FourthBatchCulture[r, 1])
                 throw new Exception("文化史の後方追加順が不正: " + Regions[r]);
 
-            for (int tier = 18; tier < 20; tier++)
+            for (int tier = 20; tier < 22; tier++)
             {
                 var policy = policies[tier];
                 int expectedCost = CulturePolicyCatalog.BaseCost +
@@ -142,7 +166,7 @@ public static class ResearchCultureExpansionSmokeTest
                     throw new Exception("追加文化政策の接続が不正: " + policy.Id);
             }
         }
-        Debug.Log("[Expansion] 文化史・文化政策120件・6地域×第3弾追加2件 OK");
+        Debug.Log("[Expansion] 文化史・文化政策132件・6地域×第4弾追加2件 OK");
     }
 
     static void ValidateVisualAsset()

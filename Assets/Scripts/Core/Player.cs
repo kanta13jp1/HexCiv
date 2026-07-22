@@ -28,7 +28,7 @@ namespace HexCiv.Core
         /// <summary>蓄積科学。研究未選択でも貯まり、技術完成時に消費される。</summary>
         public int ScienceStored;
 
-        /// <summary>採用済み文化政策。文化史120件の安定IDを保持する。</summary>
+        /// <summary>採用済み文化政策。文化史132件の安定IDを保持する。</summary>
         public HashSet<string> KnownCulturePolicies = new HashSet<string>();
         /// <summary>現在、文化ポイントを投入している政策Id。null = 未選択。</summary>
         public string CurrentCulturePolicyId;

@@ -40,7 +40,7 @@ namespace HexCiv.Core
     }
 
     /// <summary>
-    /// 文化史120件を6地域×20段階の政策ツリーとして提供する。
+    /// 文化史132件を6地域×22段階の政策ツリーとして提供する。
     /// 地域内の収録順を前提関係に使い、文化の優劣を示す順位付けには用いない。
     /// </summary>
     public static class CulturePolicyCatalog

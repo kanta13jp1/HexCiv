@@ -4,7 +4,7 @@ using System.Collections.Generic;
 namespace HexCiv.Core
 {
     /// <summary>
-    /// 既存の基礎12技術と、世界史図鑑の研究史120件を一つのプレイ可能な技術ツリーとして提供する。
+    /// 既存の基礎12技術と、世界史図鑑の研究史132件を一つのプレイ可能な技術ツリーとして提供する。
     /// GameRulesの既存テーブルとIDを変更せず、旧セーブ・ユニット・建物の解禁条件を維持する。
     /// </summary>
     public static class TechnologyCatalog
@@ -22,7 +22,7 @@ namespace HexCiv.Core
         static readonly IReadOnlyList<TechDef> ReadOnlyDefinitions = Definitions.AsReadOnly();
         static readonly Dictionary<string, TechDef> ById = BuildIndex();
 
-        /// <summary>基礎12技術に研究史120件を加えた全技術。</summary>
+        /// <summary>基礎12技術に研究史132件を加えた全技術。</summary>
         public static IReadOnlyList<TechDef> All => ReadOnlyDefinitions;
 
         /// <summary>研究史の各地域分岐を開くために必要な、既存ツリーの終端技術。</summary>

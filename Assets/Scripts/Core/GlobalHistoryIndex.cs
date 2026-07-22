@@ -64,7 +64,7 @@ namespace HexCiv.Core
                 Entry("film", "映画", CountKind(works, MasterpieceKind.Film),
                     "無声・劇映画・実験映画・記録映画・共同製作を含む"),
                 Entry("research", "学問・科学技術", research.Count,
-                    all ? "史実マイルストーン120件を基礎12技術の先へ接続（研究対象計132）"
+                    all ? "史実マイルストーン132件を基礎12技術の先へ接続（研究対象計144）"
                         : "地域別の学術・技術・知識体系の史実マイルストーン"),
                 Entry("culture", "文化", culture.Count,
                     "言語・信仰・芸能・工芸・生活・社会制度を含む文化史台帳"),

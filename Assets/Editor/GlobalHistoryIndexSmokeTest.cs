@@ -40,7 +40,7 @@ public static class GlobalHistoryIndexSmokeTest
             { "civilizations", 92 }, { "leaders", 179 }, { "heritage", 120 },
             { "great_people", 132 }, { "books", 48 }, { "paintings", 48 },
             { "sculptures", 48 }, { "architecture", 48 }, { "music", 48 },
-            { "theater", 48 }, { "film", 48 }, { "research", 120 }, { "culture", 120 },
+            { "theater", 48 }, { "film", 48 }, { "research", 132 }, { "culture", 132 },
         };
         int total = 0;
         for (int i = 0; i < entries.Count; i++)
@@ -52,8 +52,8 @@ public static class GlobalHistoryIndexSmokeTest
                 throw new Exception("総合索引説明が不足: " + entry.Id);
             total += entry.Count;
         }
-        if (total != 1099) throw new Exception("台帳レコード総数が不正: " + total);
-        Debug.Log("[GlobalHistory] 13分類・台帳1099件 OK");
+        if (total != 1123) throw new Exception("台帳レコード総数が不正: " + total);
+        Debug.Log("[GlobalHistory] 13分類・台帳1123件 OK");
     }
 
     static void ValidateRegionalPartition()

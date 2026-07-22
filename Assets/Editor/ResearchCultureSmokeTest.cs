@@ -31,7 +31,7 @@ public static class ResearchCultureSmokeTest
 
     static void ValidateResearch()
     {
-        if (ResearchMilestoneCatalog.All.Count != 120)
+        if (ResearchMilestoneCatalog.All.Count != 132)
             throw new Exception("研究史件数が不正: " + ResearchMilestoneCatalog.All.Count);
 
         var ids = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -51,12 +51,12 @@ public static class ResearchCultureSmokeTest
         if (ResearchMilestoneCatalog.ForRegion(null).Count != ResearchMilestoneCatalog.All.Count)
             throw new Exception("研究史の全地域フィルターが不正");
 
-        Debug.Log("[WorldHistory] 研究史台帳OK: 120件（6地域×20件）");
+        Debug.Log("[WorldHistory] 研究史台帳OK: 132件（6地域×22件）");
     }
 
     static void ValidateCulture()
     {
-        if (CulturalTraditionCatalog.All.Count != 120)
+        if (CulturalTraditionCatalog.All.Count != 132)
             throw new Exception("文化史件数が不正: " + CulturalTraditionCatalog.All.Count);
 
         var ids = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -76,13 +76,13 @@ public static class ResearchCultureSmokeTest
         if (CulturalTraditionCatalog.ForRegion(null).Count != CulturalTraditionCatalog.All.Count)
             throw new Exception("文化史の全地域フィルターが不正");
 
-        Debug.Log("[WorldHistory] 文化史台帳OK: 120件（6地域×20件）");
+        Debug.Log("[WorldHistory] 文化史台帳OK: 132件（6地域×22件）");
     }
 
     static void ValidateRegionCounts(string label, Func<string, int> countForRegion)
     {
         for (int i = 0; i < Regions.Length; i++)
-            if (countForRegion(Regions[i]) != 20)
+            if (countForRegion(Regions[i]) != 22)
                 throw new Exception(label + "の地域件数が不正: " + Regions[i] +
                     "=" + countForRegion(Regions[i]));
     }
