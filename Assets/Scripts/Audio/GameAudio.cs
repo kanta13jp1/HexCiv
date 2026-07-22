@@ -78,6 +78,35 @@ namespace HexCiv.Audio
         // 音色・進行のいずれでも聞き分けられる。音量・ミュートは既存の Play() が一括処理する。
         AudioClip warningClip;
 
+        // --- 2026-07-22 Claude Code 追加: 都市の不満(ざわめき)SE ---
+        // 人間文明の都市が低満足しきい値を割り込んだ最初の瞬間に、UIManager が警告バナーと同時に
+        // PlayUnrest を呼ぶ。ローパスしたノイズのざわめきに低い唸りを重ねた、こもった短い音。
+        // 明瞭な二連ブザー(PlayWarning)や高音チャイム類とは音色・明度で明確に聞き分けられる。
+        // 音量・ミュートは既存の Play() が一括処理する。
+        AudioClip unrestClip;
+
+        // --- 2026-07-22 Claude Code 追加: 戦時の緊張レイヤー(BGMの追加音源) ---
+        // 人間文明がどこかと交戦中(観戦モードではいずれかの文明が交戦中)の間だけ、
+        // 既存BGMの「下に」重ねる低い緊張レイヤー(遅い低音ドラムの脈+暗い持続音)。
+        // 既存の時代BGM(A/B/C)クロスフェード・地域フレーバー・環境音・タイトルイントロは
+        // 一切置き換えず、専用AudioSourceを追加して重ねるだけ。音量は「BGM音量×0.35」で、
+        // ミュート・BGM音量スライダー・勝利ファンファーレのダッキングにそのまま追従する
+        // (ApplyVolumes が normalBed から配分するため)。戦争状態の参照は最大毎秒1回。
+        // ヘッドレス/バッチ構成では GameAudio 自体が生成されないため従来どおり無音安全。
+        const float TensionVolumeScale = 0.35f;
+        const float TensionFadeInSeconds = 3f;
+        const float TensionFadeOutSeconds = 4f;
+        /// <summary>戦争状態を参照する間隔(秒)。表示・音のためだけの読み取りで状態は変えない。</summary>
+        const float WarPollIntervalSeconds = 1f;
+        AudioSource tensionSource;
+        AudioClip tensionClip;
+        /// <summary>緊張レイヤーの現在の音量比(0=無音、1=全開)。</summary>
+        float tensionWeight;
+        /// <summary>緊張レイヤーの目標音量比(交戦中=1 / 非交戦=0)。</summary>
+        float tensionTarget;
+        /// <summary>次に戦争状態を参照する時刻(Time.unscaledTime 基準)。</summary>
+        float nextWarPollAt;
+
         // --- 2026-07-21 Claude Code 追加: 開幕ホルン ---
         // 新しいゲームの開始時(TurnManager.BeginGame の開幕ログ「文明の夜明け ―」)に一度だけ
         // 鳴らす、静かな二音のホルンコール(約1.2秒、C4→G4の上行五度)。祝祭的で長い勝利
@@ -260,6 +289,18 @@ namespace HexCiv.Audio
             duckWeight = 1f;
             duckHoldUntil = -1f;
 
+            // 戦時の緊張レイヤー(2026-07-22 追加): 前ゲームの交戦状態を持ち越さず必ず無音から始める。
+            // 新しい状態が交戦中なら、この後の UpdateWarTension が改めてフェードインする。
+            tensionWeight = 0f;
+            tensionTarget = 0f;
+            nextWarPollAt = 0f;
+            if (tensionSource != null)
+            {
+                tensionSource.Stop();
+                tensionSource.clip = tensionClip;
+                tensionSource.loop = true;
+            }
+
             ApplyVolumes();
         }
 
@@ -273,6 +314,7 @@ namespace HexCiv.Audio
             UpdateFanfareDucking(); // 勝利ファンファーレ中のBGMダッキング進行(2026-07-21 追加)
             FlushPendingGenericAttack(); // 保留中の汎用ヒット音の後始末(2026-07-21 追加)
             UpdateTitleIntroFade(); // タイトルイントロのクロスフェード進行(2026-07-22 追加)
+            UpdateWarTension();     // 戦時の緊張レイヤー(戦争状態は最大毎秒1回参照。2026-07-22 追加)
         }
 
         void RefreshHumanCityNames()
@@ -361,6 +403,17 @@ namespace HexCiv.Audio
                 ambientSource.loop = true;
                 ambientSource.spatialBlend = 0f;
                 ambientSource.priority = 200;
+            }
+
+            // 戦時の緊張レイヤー用の音源(2026-07-22 追加)。既存BGMを置き換えず重ねるだけの
+            // 追加音源で、非交戦時は停止している(UpdateWarTension が開始・停止を管理する)。
+            if (tensionSource == null)
+            {
+                tensionSource = gameObject.AddComponent<AudioSource>();
+                tensionSource.playOnAwake = false;
+                tensionSource.loop = true;
+                tensionSource.spatialBlend = 0f;
+                tensionSource.priority = 160;
             }
         }
 
@@ -451,6 +504,12 @@ namespace HexCiv.Audio
             // --- 2026-07-22 Claude Code 追加: 警告ブザー ---
             // 生成はこの初期化経路で一度だけ行い、RegisterClip 経由で破棄も既存と同じ扱い。
             warningClip = CreateWarningClip();
+
+            // --- 2026-07-22 Claude Code 追加: 都市の不満(ざわめき)SE+戦時の緊張レイヤー ---
+            // どちらも他のクリップと同じくこの初期化経路で一度だけ生成し、RegisterClip 経由で
+            // 破棄も既存と同じ扱いになる。緊張レイヤーは8秒のループ素材(約0.7MB)。
+            unrestClip = CreateUnrestClip();
+            tensionClip = CreateWarTensionClip();
         }
 
         public void PlayUiClick() => Play(uiClickClip);
@@ -540,6 +599,15 @@ namespace HexCiv.Audio
         /// </summary>
         public void PlayWarning() => Play(warningClip);
 
+        /// <summary>
+        /// 都市の不満(ざわめき)SE(2026-07-22 Claude Code 追加)。UIManager が、人間文明の都市が
+        /// シミュレーション側の低満足しきい値を初めて割り込んだ時に、警告バナーと同時に呼ぶ。
+        /// こもった短いざわめきで、明瞭な二連ブザー(PlayWarning)や高音チャイム類とは
+        /// 音色・明度で聞き分けられる。音量・ミュートは既存の Play() が一括処理し、
+        /// クリップ未生成(ヘッドレス等)でも無害。
+        /// </summary>
+        public void PlayUnrest() => Play(unrestClip);
+
         // 2026-07-21 Claude Code 追加: イベントスティング(音量・ミュートは Play() が一括処理)
         public void PlayWarDeclared() => Play(warStingClip);
         public void PlayCityCaptured() => Play(captureStingClip);
@@ -570,6 +638,10 @@ namespace HexCiv.Audio
             if (musicSourceB != null) musicSourceB.Stop();   // 時代BGM側も停止(2026-07-21 追加)
             if (musicSourceC != null) musicSourceC.Stop();   // 終盤曲Cも停止(同日追加)
             if (ambientSource != null) ambientSource.Stop(); // 環境音も停止(同日追加。Initで再開する)
+            // 戦時の緊張レイヤーも他のBGM系と同時に停止する(2026-07-22 追加。Initで再開判定する)
+            if (tensionSource != null) tensionSource.Stop();
+            tensionWeight = 0f;
+            tensionTarget = 0f;
             Play(defeatClip);
         }
 
@@ -612,6 +684,10 @@ namespace HexCiv.Audio
             if (musicSourceC != null) musicSourceC.volume = normalBed * eraWeights[2];
             // 環境音(2026-07-21 追加): BGM音量×0.25。BGMのミュート/音量設定にそのまま追従する
             if (ambientSource != null) ambientSource.volume = normalBed * AmbientVolumeScale;
+            // 戦時の緊張レイヤー(2026-07-22 追加): BGM音量×0.35×フェード比。tensionWeight==0(既定・
+            // 非交戦時)なら音量0で、他の音源への配分は一切変わらない=従来と完全に同じ挙動。
+            if (tensionSource != null)
+                tensionSource.volume = normalBed * TensionVolumeScale * tensionWeight;
             if (titleIntroSource != null) titleIntroSource.volume = musicBase * titleIntroWeight;
             if (sfxSource != null) sfxSource.volume = muted ? 0f : sfxVolume;
         }
@@ -702,6 +778,73 @@ namespace HexCiv.Audio
             titleIntroWeight = Mathf.MoveTowards(titleIntroWeight, titleIntroTarget,
                 Time.unscaledDeltaTime / TitleIntroCrossfadeSeconds);
             ApplyVolumes();
+        }
+
+        /// <summary>
+        /// 戦時の緊張レイヤーの進行(2026-07-22 Claude Code 追加)。
+        /// 戦争状態の参照は最大毎秒1回(WarPollIntervalSeconds)で、通常プレイでは人間文明が
+        /// いずれかの存続文明と交戦中か、観戦モードではいずれかの文明同士が交戦中かを見る。
+        /// 目標が変わったら、フェードイン約3秒 / フェードアウト約4秒で音量比を寄せるだけで、
+        /// 既存の時代BGMクロスフェード(UpdateEraMusic)・環境音・タイトルイントロには一切触れない。
+        /// 観戦の倍速(Time.timeScale)に影響されないよう非スケール時間で進める。
+        /// Core の状態は読むだけで、いかなる書き換えも行わない。
+        /// </summary>
+        void UpdateWarTension()
+        {
+            if (tensionSource == null || tensionClip == null) return;
+
+            if (Time.unscaledTime >= nextWarPollAt)
+            {
+                nextWarPollAt = Time.unscaledTime + WarPollIntervalSeconds;
+                tensionTarget = AnyWarActive() ? 1f : 0f;
+            }
+
+            if (tensionWeight == tensionTarget)   // MoveTowardsは目標値へ正確に到達するため等値比較で良い
+            {
+                if (tensionTarget <= 0f && tensionSource.isPlaying) tensionSource.Stop();
+                return;
+            }
+
+            // フェードイン開始時に再生されていなければ、先頭から鳴らし始める
+            if (tensionTarget > tensionWeight && !tensionSource.isPlaying)
+            {
+                tensionSource.clip = tensionClip;
+                tensionSource.loop = true;
+                tensionSource.volume = 0f;
+                tensionSource.Play();
+            }
+
+            float seconds = tensionTarget > tensionWeight ? TensionFadeInSeconds : TensionFadeOutSeconds;
+            tensionWeight = Mathf.MoveTowards(tensionWeight, tensionTarget,
+                Time.unscaledDeltaTime / Mathf.Max(0.01f, seconds));
+            ApplyVolumes();
+        }
+
+        /// <summary>
+        /// 緊張レイヤーを鳴らすべき戦争が進行中か(2026-07-22 Claude Code 追加。読み取りのみ)。
+        /// 通常プレイ = 人間文明が存続中の相手と交戦中。観戦モード(人間なし) = いずれかの
+        /// 存続文明同士が交戦中。ゲーム終了後は常に false(音楽は終了処理側の扱いに従う)。
+        /// </summary>
+        bool AnyWarActive()
+        {
+            if (state == null || state.IsGameOver) return false;
+            var human = state.HumanPlayer;
+            if (human != null) return HasLivingEnemy(state, human);
+            for (int i = 0; i < state.Players.Count; i++)
+                if (HasLivingEnemy(state, state.Players[i])) return true;
+            return false;
+        }
+
+        /// <summary>その文明が「存続している相手」と交戦中か(滅亡済み相手との記録は数えない)。</summary>
+        static bool HasLivingEnemy(GameState s, Player p)
+        {
+            if (p == null || p.IsEliminated || p.AtWarWith.Count == 0) return false;
+            foreach (int id in p.AtWarWith)
+            {
+                var other = s.GetPlayer(id);
+                if (other != null && !other.IsEliminated) return true;
+            }
+            return false;
         }
 
         AudioSource EraSource(int era) => era == 0 ? musicSource : era == 1 ? musicSourceB : musicSourceC;
@@ -1738,6 +1881,98 @@ namespace HexCiv.Audio
                 Mathf.Clamp01((noteLength - localTime) / 0.03f) *
                 (0.86f + 0.14f * Mathf.Sin(2f * Mathf.PI * 14f * localTime));
             return sample * env;
+        }
+
+        /// <summary>
+        /// 都市の不満(ざわめき)SE(2026-07-22 Claude Code 追加)。約0.85秒。
+        /// 2段の一次ローパスで暗くしたノイズに約6.5Hzの振幅ゆらぎを掛けた「遠くのざわめき」に、
+        /// 低い唸り(A2+E3)をごく薄く重ね、ゆっくり立ち上がってゆっくり引く包絡でこもった質感に
+        /// する。高域をほとんど含まないため、明瞭な二連ブザー(PlayWarning)、高音域の実績・遺産
+        /// チャイム、下降アルペジオの PlayAlert のいずれとも明確に聞き分けられる。
+        /// ノイズは固定シードの System.Random(既存の移動・攻撃SEと同じ流儀)で、毎回同一波形。
+        /// state.Rng には一切触れないためシミュレーションの決定性に干渉しない。
+        /// </summary>
+        AudioClip CreateUnrestClip()
+        {
+            const float duration = 0.85f;
+            int length = Mathf.CeilToInt(duration * SampleRate);
+            var data = new float[length];
+            var random = new System.Random(20260722);
+            float lp1 = 0f, lp2 = 0f;
+
+            for (int i = 0; i < length; i++)
+            {
+                float t = i / (float)SampleRate;
+                float p = t / duration;
+                float noise = (float)(random.NextDouble() * 2.0 - 1.0);
+                lp1 += (noise - lp1) * 0.055f;   // 2段で高域を大きく削り「こもった」帯域にする
+                lp2 += (lp1 - lp2) * 0.055f;
+
+                float murmur = lp2 * (0.76f + 0.24f * Mathf.Sin(2f * Mathf.PI * 6.5f * t));
+                float lowTone = Sine(110f, t) * 0.5f + Sine(164.81f, t) * 0.28f;
+                float env = SoftEnvelope(p, 0.30f, 0.42f);
+                data[i] = Mathf.Clamp((murmur * 2.6f + lowTone * 0.16f) * env * 0.62f, -0.85f, 0.85f);
+            }
+
+            return RegisterClip("City Unrest Murmur", data);
+        }
+
+        /// <summary>
+        /// 戦時の緊張レイヤー(2026-07-22 Claude Code 追加)。8秒のループ素材(約0.7MB)。
+        /// 低い持続音(A1+わずかにずらした同音のうなり+五度+オクターブ)に、2秒ごとの低い太鼓の
+        /// 脈(70→44Hzへ落ちる打面)を重ねた暗い下地。旋律を持たないため、既存の時代BGM3曲・
+        /// 地域フレーバーのどれに重ねても和声進行を濁さず、BGMを置き換えずに緊張だけを足す。
+        /// すべての周波数・変調周期を8秒の整数分の一に取っているためループ継ぎ目は連続で、
+        /// 端のフェードを必要としない(フェードすると2秒ごとに音量が凹むため入れていない)。
+        /// 決定的生成(乱数不使用)でシミュレーションに一切干渉しない。
+        /// </summary>
+        AudioClip CreateWarTensionClip()
+        {
+            const float duration = 8f;
+            const float TwoPi = 2f * Mathf.PI;
+            int length = Mathf.CeilToInt(duration * SampleRate);
+            var data = new float[length];
+
+            for (int i = 0; i < length; i++)
+            {
+                float t = i / (float)SampleRate;
+
+                // 暗い持続音。55Hz と 55.25Hz の差(0.25Hz=ループ2周期)がゆっくりしたうなりを作る
+                float drone = Sine(55f, t) * 0.85f
+                    + Sine(55.25f, t) * 0.55f
+                    + Sine(82.5f, t) * 0.40f     // 五度
+                    + Sine(110f, t) * 0.18f;     // オクターブ(輪郭)
+                float swell = 0.72f + 0.28f * Mathf.Sin(TwoPi * t / duration - 1.2f);
+
+                // 遅い太鼓の脈(2秒ごと=ループ内4拍)
+                float pulse = TensionDrum(t) + TensionDrum(t - 2f)
+                    + TensionDrum(t - 4f) + TensionDrum(t - 6f);
+
+                data[i] = Mathf.Clamp(drone * 0.11f * swell + pulse * 0.30f, -0.85f, 0.85f);
+            }
+
+            return RegisterClip("War Tension Layer", data);
+        }
+
+        /// <summary>
+        /// 緊張レイヤーの低い太鼓の単打(2026-07-22 Claude Code 追加)。
+        /// 70Hz→44Hz へ指数的に落ちる打面を位相の直接積分で作る(周波数を毎サンプル差し替える
+        /// 方式と違い位相が飛ばないためチャープひずみが出ない)。末尾は短く絞って途切れ音を防ぐ。
+        /// localTime が負・音長超過の間は無音。
+        /// </summary>
+        static float TensionDrum(float localTime)
+        {
+            const float noteLength = 1.1f;
+            if (localTime < 0f || localTime >= noteLength) return 0f;
+            const float startFrequency = 70f;
+            const float endFrequency = 44f;
+            const float sweep = 9f;
+            float phase = 2f * Mathf.PI * (endFrequency * localTime +
+                (startFrequency - endFrequency) * (1f - Mathf.Exp(-sweep * localTime)) / sweep);
+            float env = Mathf.Clamp01(localTime / 0.006f) *
+                Mathf.Exp(-localTime * 3.2f) *
+                Mathf.Clamp01((noteLength - localTime) / 0.18f);
+            return Mathf.Sin(phase) * env;
         }
 
         AudioClip CreateArpeggio(string name, float duration, float[] notes, float spacing, float gain)

@@ -49,6 +49,17 @@ namespace HexCiv.Render
     /// ・軽量演出モード対応(2026-07-22 追加): VisualQuality.LightMode(PlayerPrefs
     ///   "HexCiv.FxLight")が有効な間は待機ボブと新規ダメージ数字ポップを抑制する。
     ///   戦闘の突進・被弾フラッシュ・撃破フェードなど既存演出は軽量モードでも維持する
+    /// ・人口階層ピップ(2026-07-22 追加): Core/PopulationSystem がターン毎に確定した
+    ///   City.Farmers / Artisans / Scholars をバナー直下に最大6個の色ドットで要約する
+    ///   (農民=緑・工人=琥珀・学者=菫)。暗いプレートの上に描くため文明色と混同しない。
+    ///   合計6以下は1:1、7以上は最大剰余法で6個へ比例配分する(既存の人口・建物ポーリングと
+    ///   同じく、3階層の値が変化した時だけ再構築する)
+    /// ・不満都市マーカー(2026-07-22 追加): City.Satisfaction がシミュレーション側の
+    ///   低満足しきい値を下回る間だけ、バナー左端に橙赤のひし形をゆっくり明滅させる
+    /// ・移住の光点(2026-07-22 追加): City.LastNetMigration を都市Idごとにキャッシュして
+    ///   ポーリングし、新しいターンで非ゼロになったら光点1〜3個を約0.8秒だけ飛ばす
+    ///   (流入=バナー外側から収束/流出=外へ拡散してフェード)。既存の誕生パーティクル
+    ///   プールを再利用し、8倍速以上と軽量演出モードではスキップする
     /// Init(state) 内でイベントを購読し、再Init/OnDestroy で必ず解除する。
     /// </summary>
     public class EntityRenderer : MonoBehaviour
@@ -81,6 +92,12 @@ namespace HexCiv.Render
         const int SortFoundParticle = 15;   // 都市誕生パーティクル(ダメージ数字と同層の一時演出)
         const int SortCityEmber = 4;        // 炎上の残り火グロー(バナー5の直下)
         const int SortCitySmoke = 7;        // 炎上の煙(霧8より下 = 視界外のゴースト都市では霧に霞む)
+        // 人口階層ピップ / 不満マーカー(2026-07-22 追加)。バナー(z 0.37〜0.87)・都市ラベル
+        // (z 0.62 中心の小さな文字)・HPバー(z 0.955〜1.085)とは幾何的に重ならない位置に置くため、
+        // 同じ描画順の既存要素と競合しない。
+        const int SortCityPipPlate = 5;     // ピップ行の暗い下敷き(バナーと同層。位置が離れている)
+        const int SortCityPip = 6;          // ピップ本体(下敷きより上)
+        const int SortCityMood = 6;         // 不満マーカー(バナー左端に少し重ねるため5より上)
 
         // ---- 演出パラメータ(すべて表示のみ・非スケール時間) ----
         const float TweenSharpness = 18f;      // 指数平滑の強さ。1タイル移動が約0.15〜0.2秒で収束
@@ -119,6 +136,51 @@ namespace HexCiv.Render
         const float SparkleLife = 0.5f;          // スパークルの寿命
         const int SparkleCount = 5;              // 建物1件完成ごとの金色スパークル数
         const float SparkleBaseScale = 0.7f;     // 誕生パーティクルより小さめの基準スケール
+
+        // ---- 人口階層ピップ(2026-07-22 Claude Code 追加。表示のみ) ----
+        // Core/PopulationSystem がターン毎に確定した City.Farmers / Artisans / Scholars を
+        // そのまま読むだけで、判定も再計算も行わない(シミュレーションへは一切書き込まない)。
+        // 配分規則: 3階層の合計 total = Farmers + Artisans + Scholars とし、
+        //   ・total <= PipMaxCount(6) … 1人=1ピップ(1:1)
+        //   ・total >  PipMaxCount    … 6個へ比例配分(最大剰余法。剰余同数は農民→工人→学者の
+        //                                固定順)。丸めで0個になった非ゼロ階層には、最大の階層
+        //                                (2個以上ある方)から1個だけ融通して必ず1個以上見せる
+        // 色は文明色と紛れないよう暗いプレートの上に描く(プレートが背景を切るため、
+        // どの文明色のバナーの下でも同じ見え方になる)。
+        const int PipMaxCount = 6;               // 1都市あたりの最大ピップ数
+        const float PipSpacing = 0.155f;         // ピップの間隔
+        const float PipRowY = 0.755f;            // ピップ行の高さ(バナー y=0.75 とほぼ同一面)
+        const float PipRowZ = 0.29f;             // ピップ行の奥行き(バナー南端 z=0.37 の手前)
+        const float PipPlateDepth = 0.15f;       // 下敷きの奥行き(z 0.215〜0.365)
+        const float PipPlatePadding = 0.09f;     // 下敷きの左右余白
+        static readonly Color PipFarmerColor = new Color(0.38f, 0.78f, 0.36f, 1f);   // 農民=緑
+        static readonly Color PipArtisanColor = new Color(0.98f, 0.70f, 0.20f, 1f);  // 工人=琥珀
+        static readonly Color PipScholarColor = new Color(0.70f, 0.52f, 0.98f, 1f);  // 学者=菫
+        static readonly Color PipPlateColor = new Color(0.07f, 0.07f, 0.09f, 0.78f); // 暗い下敷き
+
+        // ---- 不満都市マーカー(2026-07-22 Claude Code 追加。表示のみ) ----
+        // しきい値は当方で新設せず、Codex の F7 人口社会パネルが「危険色」に切り替える判定
+        // (UI/PopulationPanel.cs: `c.Satisfaction < 35 ? UIStyle.Danger : UIStyle.TextMain`)
+        // と同じ比較をそのまま使う。PopulationSystem 側に明示の定数は無いため、
+        // 参照元をここに記録する(Codex が定数化したら、その定数へ差し替えること)。
+        const int UnhappySatisfaction = 35;      // これ未満で不満マーカーを出す(F7パネルと同一比較)
+        const float MoodMarkX = -1.18f;          // バナー左端(x=-1.1)に少し重ねる
+        const float MoodMarkZ = 0.62f;           // バナーと同じ奥行き
+        const float MoodPulsePeriod = 2.2f;      // ゆっくりした明滅の周期(秒)
+        const float MoodPulseAlphaMin = 0.40f;
+        const float MoodPulseAlphaMax = 1.0f;
+        static readonly Color MoodUnhappyColor = new Color(1f, 0.42f, 0.16f, 1f);    // 橙赤
+
+        // ---- 移住の光点(2026-07-22 Claude Code 追加。表示のみ) ----
+        // Core/PopulationSystem が確定した City.LastNetMigration(-1 / 0 / +1)をポーリングする。
+        const float MigrationDotLife = 0.8f;     // 光点の寿命(約0.8秒)
+        const int MigrationDotMin = 1;           // 1回に飛ばす光点の最小数
+        const int MigrationDotMax = 3;           // 同・最大数
+        const float MigrationDotScale = 0.55f;   // 誕生パーティクルより小さい光点
+        const float MigrationBannerY = 0.70f;    // 光点の基準高さ(バナー付近)
+        const float MigrationBannerZ = 0.62f;    // 光点の基準奥行き(バナー中心)
+        static readonly Color MigrationInColor = new Color(0.74f, 0.95f, 1f, 1f);    // 流入=淡い青白
+        static readonly Color MigrationOutColor = new Color(1f, 0.90f, 0.72f, 1f);   // 流出=淡い暖白
 
         // ---- 待機アニメーション(2026-07-21 Claude Code 追加。表示のみ・非スケール時間) ----
         const float IdleBobAmplitude = 0.02f;    // 上下ゆれの振幅(ワールドY±0.02)
@@ -229,6 +291,19 @@ namespace HexCiv.Render
             public int BurnCaptureTurn = -1;   // 占領されたターン(-1 = 炎上していない)
             // ---- 生産完成スパークル(2026-07-21 追加) ----
             public int LastBuildings = -1;     // 建物数キャッシュ(-1 = 未観測。生成/ロード直後は発火しない)
+            // ---- 人口階層ピップ(2026-07-22 追加。3階層の値が変わった時だけ再構築) ----
+            public GameObject PipRoot;         // ピップ行のルート(null = まだ一度も作っていない)
+            public MeshRenderer PipPlate;      // 暗い下敷き(幅はピップ数に合わせてスケール)
+            public MeshRenderer[] Pips;        // 最大 PipMaxCount 個。表示数だけ有効化して使い回す
+            public int LastFarmers = -1;       // 3階層のキャッシュ(-1 = 未観測)
+            public int LastArtisans = -1;
+            public int LastScholars = -1;
+            // ---- 不満都市マーカー(2026-07-22 追加。初回に必要になった時だけ生成) ----
+            public MeshRenderer MoodMark;      // null = まだ一度も不満になっていない
+            public bool MoodShown;             // 現在マーカーを出しているか
+            // ---- 移住の光点(2026-07-22 追加。都市Idごとの前回値キャッシュ) ----
+            public int LastMigration;          // 直近に観測した LastNetMigration
+            public int LastMigrationTurn = -1; // 直近に観測したターン(-1 = 未観測。初回は発火しない)
         }
 
         /// <summary>撃破フェード中の旧ビュー(状態からは既に消えている)。</summary>
@@ -269,6 +344,10 @@ namespace HexCiv.Render
             public float Life;         // 寿命(誕生バースト=FoundParticleLife / スパークル=SparkleLife)
             public Color Tint;         // 色(フェードは毎フレーム Tint から計算)
             public float BaseScale;    // 基準スケール(スパークルは小さめ)
+            // 収束モード(2026-07-22 追加。移住流入の光点のみ true)。
+            // false = 従来どおり「勢いよく飛び出して減速しながらフェード」。
+            // true  = 「外側からバナーへ加速しながら収束し、到着間際に消える」。
+            public bool Converge;
         }
 
         GameState state;
@@ -307,6 +386,8 @@ namespace HexCiv.Render
         Mesh burnEmberMesh;       // 炎上の残り火グロー(バナー下の横長クアッド)
         Mesh supplyStrainedMesh;  // 補給逼迫の弧(頂点色は白。琥珀はMaterialPropertyBlockで着色)
         Mesh supplyIsolatedMesh;  // 補給孤立のひし形(内側=白・外周=暗色の二重。同上)
+        Mesh pipMesh;             // 人口階層ピップ(内側=白・外周=暗色。色は共有カラーマテリアルで与える)
+        Mesh moodMarkMesh;        // 不満マーカーのひし形(内側=白・外周=暗色。色はMaterialPropertyBlock)
 
         /// <summary>初期化。再呼び出し(リスタート)にも対応。</summary>
         public void Init(GameState state)
@@ -366,6 +447,9 @@ namespace HexCiv.Render
                 supplyStrainedMesh = BuildArcRing(SupplyMarkInner, SupplyMarkOuter,
                     SupplyMarkStartDeg, SupplyMarkSweepDeg, 10, Color.white);
                 supplyIsolatedMesh = BuildSupplyIsolatedMark();
+                // 人口階層ピップ / 不満マーカー(2026-07-22 追加)。共有メッシュを全都市で使い回す。
+                pipMesh = BuildPipMesh();
+                moodMarkMesh = BuildMoodMarkMesh();
             }
 
             SubscribeEvents(state);
@@ -639,6 +723,22 @@ namespace HexCiv.Render
                 if (v.FlashTime > 0f)
                     TickFlash(v.Flash, ref v.FlashTime, v.FlashDuration, v.FlashWithRed, dt);
 
+                // 不満都市マーカー(2026-07-22 追加。表示のみ・アロケーションなし):
+                // 橙赤をゆっくり明滅させる(位相は都市座標のハッシュでずらし、全都市が同期しない)。
+                // 軽量演出モードと8倍速以上では明滅を止めて最大輝度で固定し、情報表示としては残す。
+                if (v.MoodShown && v.MoodMark != null)
+                {
+                    var mc = MoodUnhappyColor;
+                    mc.a = (lightFx || snapAll)
+                        ? MoodPulseAlphaMax
+                        : Mathf.Lerp(MoodPulseAlphaMin, MoodPulseAlphaMax,
+                            0.5f + 0.5f * Mathf.Sin(Time.unscaledTime
+                                * (Mathf.PI * 2f / MoodPulsePeriod)
+                                + RenderUtil.Hash01(v.Coord) * (Mathf.PI * 2f)));
+                    mpb.SetColor(ColorPropId, mc);
+                    v.MoodMark.SetPropertyBlock(mpb);
+                }
+
                 // 人口増加パルス: バナーを sin 波で一瞬拡大し、終了時は必ず等倍へ戻す
                 // (誕生ポップ中はバナースケールの競合を避けるため待機し、ポップ完了後に再生する)
                 if (v.GrowthPulseTime > 0f && v.Banner != null && v.FoundPopTime <= 0f)
@@ -703,12 +803,14 @@ namespace HexCiv.Render
                         if (fp.Go != null) fp.Go.SetActive(false);
                         continue;
                     }
-                    float ease = 1f - (1f - t) * (1f - t);   // 勢いよく飛び出して減速
+                    // 通常(誕生バースト・完成スパークル・移住流出) = 勢いよく飛び出して減速。
+                    // 収束(移住流入。2026-07-22 追加) = 外側から加速しながらバナーへ吸い込まれる。
+                    float ease = fp.Converge ? t * t : 1f - (1f - t) * (1f - t);
                     fp.Tr.localPosition = fp.Origin + fp.Velocity * ease;
                     float sc = fp.BaseScale * (1f - 0.45f * t);
                     fp.Tr.localScale = new Vector3(sc, 1f, sc);
                     var c = fp.Tint;
-                    c.a = 1f - t * t;
+                    c.a = fp.Converge ? 1f - t * t * t : 1f - t * t;
                     mpb.SetColor(ColorPropId, c);
                     fp.Mr.SetPropertyBlock(mpb);
                 }
@@ -941,6 +1043,7 @@ namespace HexCiv.Render
                 fp.Life = FoundParticleLife;   // 誕生バーストは従来どおりの寿命・色・スケール
                 fp.Tint = FoundParticleColor;
                 fp.BaseScale = 1f;
+                fp.Converge = false;           // プール再利用のため必ず明示(従来の飛散挙動)
                 // 等間隔+わずかな角度ジッターで放射状に(表示のみなので UnityEngine.Random で可)
                 float ang = (360f / FoundParticleCount) * i + Random.Range(-14f, 14f);
                 float rad = ang * Mathf.Deg2Rad;
@@ -993,6 +1096,7 @@ namespace HexCiv.Render
                 fp.Life = SparkleLife;
                 fp.Tint = SparkleColor;
                 fp.BaseScale = SparkleBaseScale;
+                fp.Converge = false;           // プール再利用のため必ず明示(従来の上昇挙動)
                 // 都市ブロックのあたりから上昇(わずかな水平ジッター。表示のみなので UnityEngine.Random で可)
                 fp.Origin = worldPos + new Vector3(
                     Random.Range(-0.22f, 0.22f), 0.25f, Random.Range(-0.22f, 0.22f));
@@ -1333,6 +1437,47 @@ namespace HexCiv.Render
             }
             v.LastBuildings = builtCount;
 
+            // ---- 人口階層ピップ / 不満マーカー / 移住の光点(2026-07-22 追加。表示のみ) ----
+            // Core/PopulationSystem がターン毎に確定した値をそのまま読むだけで、
+            // 判定も再計算も行わない(シミュレーションへは一切書き込まない)。
+            // 旧セーブ・未初期化(3階層すべて0)でも安全に何も出さない。
+            int farmers = Mathf.Max(0, c.Farmers);
+            int artisans = Mathf.Max(0, c.Artisans);
+            int scholars = Mathf.Max(0, c.Scholars);
+            if (farmers != v.LastFarmers || artisans != v.LastArtisans || scholars != v.LastScholars)
+            {
+                v.LastFarmers = farmers;
+                v.LastArtisans = artisans;
+                v.LastScholars = scholars;
+                ApplyCityPips(v, farmers, artisans, scholars);   // 値が変わった時だけ再構築
+            }
+
+            // 人口社会シミュレーションのデータが入っている都市だけを不満判定の対象にする
+            // (3階層すべて0 = 旧セーブや未初期化。満足度0扱いで誤った警告を出さない)
+            bool hasPopData = farmers + artisans + scholars > 0;
+            bool unhappy = hasPopData && c.Satisfaction < UnhappySatisfaction;
+            if (unhappy != v.MoodShown)
+            {
+                v.MoodShown = unhappy;
+                ApplyMoodMark(v);
+            }
+
+            // 移住の光点: 都市Idごとに前回値と観測ターンをキャッシュし、新しいターンで
+            // LastNetMigration が非ゼロになった時だけ1回発火する(同一ターン中に Refresh が
+            // 複数回来ても二重に出さず、同一ターン内の 0→±1 変化も前回値比較で取りこぼさない)。
+            // 初回観測・再Init直後・8倍速以上・軽量演出モードではスキップする。
+            int migration = c.LastNetMigration;
+            bool firstMigrationObservation = v.LastMigrationTurn < 0;
+            bool newMigrationTurn = v.LastMigrationTurn != state.TurnNumber;
+            if (migration != 0 && !firstMigrationObservation
+                && (newMigrationTurn || migration != v.LastMigration)
+                && !suppressSpawnPop && Time.timeScale < SnapTimeScale && !VisualQuality.LightMode)
+            {
+                SpawnMigrationDots(p, migration > 0);   // p はタイル視覚高さ込みの都市ワールド位置
+            }
+            v.LastMigrationTurn = state.TurnNumber;
+            v.LastMigration = migration;
+
             bool damaged = c.Hp < c.MaxHp;
             if (v.HpRoot.activeSelf != damaged) v.HpRoot.SetActive(damaged);
             if (damaged)
@@ -1511,6 +1656,259 @@ namespace HexCiv.Render
                 if (v.SupplyFilter.sharedMesh != mesh) v.SupplyFilter.sharedMesh = mesh;
             }
             v.SupplyMark.gameObject.SetActive(true);
+        }
+
+        // ------------------------------------------------------------------
+        // 人口階層ピップ / 不満マーカー / 移住の光点
+        // (2026-07-22 Claude Code 追加。表示のみ。Core/PopulationSystem の確定値を読むだけ)
+        // ------------------------------------------------------------------
+
+        /// <summary>
+        /// 階層ピップ1個のメッシュ(内側=白・外周=暗色の二重ディスク)。
+        /// Sprites/Default は 頂点色 × マテリアル色 なので、緑/琥珀/菫のマテリアルを当てると
+        /// 「その色の丸 + 同系の暗い縁取り」になり、明るい地形の上でも輪郭が保たれる。
+        /// </summary>
+        static Mesh BuildPipMesh()
+        {
+            var mb = new MeshBuilder();
+            AddDiscTo(mb, Vector3.zero, 0.062f, 10, new Color(0.20f, 0.20f, 0.24f, 1f));
+            AddDiscTo(mb, new Vector3(0f, 0.001f, 0f), 0.044f, 10, Color.white);
+            return mb.Build(null);
+        }
+
+        /// <summary>
+        /// 不満マーカーのメッシュ(原点中心のひし形。内側=白・外周=暗色)。
+        /// 色と明滅は Update() が MaterialPropertyBlock で与える(補給マーカーと同方式)。
+        /// </summary>
+        static Mesh BuildMoodMarkMesh()
+        {
+            var mb = new MeshBuilder();
+            mb.AddDiamond(Vector3.zero, 0.17f, new Color(0.26f, 0.21f, 0.18f, 1f));
+            mb.AddDiamond(new Vector3(0f, 0.001f, 0f), 0.115f, Color.white);
+            return mb.Build(null);
+        }
+
+        /// <summary>MeshBuilder へ XZ平面の円盤(扇形ファン)を追記する。</summary>
+        static void AddDiscTo(MeshBuilder mb, Vector3 center, float radius, int segments, Color col)
+        {
+            for (int i = 0; i < segments; i++)
+            {
+                float a0 = Mathf.PI * 2f * i / segments;
+                float a1 = Mathf.PI * 2f * (i + 1) / segments;
+                mb.AddTriangle(
+                    center,
+                    center + new Vector3(Mathf.Cos(a1) * radius, 0f, Mathf.Sin(a1) * radius),
+                    center + new Vector3(Mathf.Cos(a0) * radius, 0f, Mathf.Sin(a0) * radius),
+                    col);
+            }
+        }
+
+        /// <summary>ピップ行(暗い下敷き + 最大 PipMaxCount 個のピップ)を(なければ)作る。</summary>
+        void EnsureCityPips(CityView v)
+        {
+            if (v.PipRoot != null || v.Root == null) return;
+
+            v.PipRoot = new GameObject("Pips");
+            v.PipRoot.transform.SetParent(v.Root.transform, false);
+            v.PipRoot.transform.localPosition = new Vector3(0f, PipRowY, PipRowZ);
+
+            // 下敷きは 1x1 の共有クアッドをスケールして使う(HPバー背景と同じ手法)
+            v.PipPlate = RenderUtil.NewMeshChild(v.PipRoot.transform, "Plate", quadMesh,
+                GetColorMat(PipPlateColor), Vector3.zero, SortCityPipPlate);
+
+            v.Pips = new MeshRenderer[PipMaxCount];
+            for (int i = 0; i < PipMaxCount; i++)
+            {
+                v.Pips[i] = RenderUtil.NewMeshChild(v.PipRoot.transform, "Pip" + i, pipMesh,
+                    GetColorMat(PipFarmerColor), new Vector3(0f, 0.004f, 0f), SortCityPip);
+                v.Pips[i].gameObject.SetActive(false);
+            }
+        }
+
+        /// <summary>
+        /// 3階層の値に合わせてピップ行を作り直す(値が変化した時だけ呼ばれる)。
+        /// 合計0(旧セーブ・未初期化)なら行ごと非表示にする。
+        /// </summary>
+        void ApplyCityPips(CityView v, int farmers, int artisans, int scholars)
+        {
+            int total = farmers + artisans + scholars;
+            if (total <= 0)
+            {
+                if (v.PipRoot != null) v.PipRoot.SetActive(false);
+                return;
+            }
+
+            int pf, pa, ps;
+            if (total <= PipMaxCount)
+            {
+                // 人口が少ないうちは 1人 = 1ピップ
+                pf = farmers; pa = artisans; ps = scholars;
+            }
+            else
+            {
+                AllocatePips(farmers, artisans, scholars, total, PipMaxCount, out pf, out pa, out ps);
+            }
+            int shown = pf + pa + ps;
+            if (shown <= 0)
+            {
+                if (v.PipRoot != null) v.PipRoot.SetActive(false);
+                return;
+            }
+
+            EnsureCityPips(v);
+            if (v.PipRoot == null || v.Pips == null) return;
+            if (!v.PipRoot.activeSelf) v.PipRoot.SetActive(true);
+
+            if (v.PipPlate != null)
+            {
+                v.PipPlate.transform.localScale = new Vector3(
+                    shown * PipSpacing + PipPlatePadding, 1f, PipPlateDepth);
+            }
+
+            float left = -(shown - 1) * 0.5f * PipSpacing;
+            for (int i = 0; i < PipMaxCount; i++)
+            {
+                var pip = v.Pips[i];
+                if (pip == null) continue;
+                bool on = i < shown;
+                if (pip.gameObject.activeSelf != on) pip.gameObject.SetActive(on);
+                if (!on) continue;
+                pip.transform.localPosition = new Vector3(left + i * PipSpacing, 0.004f, 0f);
+                // 左から 農民 → 工人 → 学者 の順に並べる
+                Color col = i < pf ? PipFarmerColor
+                    : (i < pf + pa ? PipArtisanColor : PipScholarColor);
+                pip.sharedMaterial = GetColorMat(col);
+            }
+        }
+
+        /// <summary>
+        /// 合計が slots を超える都市の比例配分(最大剰余法)。剰余が同数のときは
+        /// 農民 → 工人 → 学者 の固定順で決めるため、同じ入力からは常に同じ結果になる。
+        /// 丸めで0個になった非ゼロ階層には、2個以上ある最大の階層から1個だけ融通する。
+        /// </summary>
+        static void AllocatePips(int farmers, int artisans, int scholars, int total, int slots,
+            out int pf, out int pa, out int ps)
+        {
+            pf = farmers * slots / total;
+            pa = artisans * slots / total;
+            ps = scholars * slots / total;
+
+            // 余りを剰余(= n*slots - p*total)の大きい階層へ配る(残りは高々2個)
+            for (int rest = slots - pf - pa - ps; rest > 0; rest--)
+            {
+                int rf = farmers * slots - pf * total;
+                int ra = artisans * slots - pa * total;
+                int rs = scholars * slots - ps * total;
+                if (rf >= ra && rf >= rs) pf++;
+                else if (ra >= rs) pa++;
+                else ps++;
+            }
+
+            // 少数派の階層が完全に消えないよう、最大の階層から1個だけ融通する
+            if (farmers > 0 && pf == 0) BorrowPip(ref pf, ref pa, ref ps);
+            if (artisans > 0 && pa == 0) BorrowPip(ref pa, ref pf, ref ps);
+            if (scholars > 0 && ps == 0) BorrowPip(ref ps, ref pf, ref pa);
+        }
+
+        /// <summary>2個以上ある方の階層から1個だけ target へ移す(足りなければ何もしない)。</summary>
+        static void BorrowPip(ref int target, ref int donorA, ref int donorB)
+        {
+            if (donorA >= donorB)
+            {
+                if (donorA >= 2) { donorA--; target++; }
+                else if (donorB >= 2) { donorB--; target++; }
+            }
+            else
+            {
+                if (donorB >= 2) { donorB--; target++; }
+                else if (donorA >= 2) { donorA--; target++; }
+            }
+        }
+
+        /// <summary>
+        /// 不満マーカーを現在の MoodShown に合わせる(状態が変わった時だけ呼ぶ)。
+        /// 初回の不満で1個だけ生成し、以後は表示切替のみで使い回す
+        /// (満足度が回復すれば非表示になる)。色と明滅は Update() が与える。
+        /// </summary>
+        void ApplyMoodMark(CityView v)
+        {
+            if (!v.MoodShown)
+            {
+                if (v.MoodMark != null) v.MoodMark.gameObject.SetActive(false);
+                return;
+            }
+            if (v.Root == null) return;
+
+            if (v.MoodMark == null)
+            {
+                // バナー(y=0.75 / z=0.62)の左端に少し重ねて置く
+                v.MoodMark = RenderUtil.NewMeshChild(v.Root.transform, "Unhappy", moodMarkMesh,
+                    baseMat, new Vector3(MoodMarkX, PipRowY + 0.006f, MoodMarkZ), SortCityMood);
+                // 最初の Update までの1フレームで素の白マークが見えないよう透明で初期化する
+                if (mpb == null) mpb = new MaterialPropertyBlock();
+                mpb.SetColor(ColorPropId, new Color(1f, 1f, 1f, 0f));
+                v.MoodMark.SetPropertyBlock(mpb);
+            }
+            v.MoodMark.gameObject.SetActive(true);
+        }
+
+        /// <summary>
+        /// 移住の光点を1〜3個飛ばす(約0.8秒。誕生パーティクルのプールを再利用するため
+        /// ウォームアップ後はアロケーションなし)。
+        /// 流入(inflow=true) = バナーの少し外側から現れてバナーへ収束する。
+        /// 流出(inflow=false) = バナー付近から外側へ立ち上りながら拡散してフェードする。
+        /// </summary>
+        void SpawnMigrationDots(Vector3 cityWorldPos, bool inflow)
+        {
+            if (foundPool == null)
+            {
+                foundPool = new FoundParticle[FoundParticlePoolSize];
+                for (int i = 0; i < FoundParticlePoolSize; i++) foundPool[i] = CreateFoundParticle();
+            }
+            if (mpb == null) mpb = new MaterialPropertyBlock();
+
+            var bannerPos = cityWorldPos + new Vector3(0f, MigrationBannerY, MigrationBannerZ);
+            var tint = inflow ? MigrationInColor : MigrationOutColor;
+            int count = Random.Range(MigrationDotMin, MigrationDotMax + 1);
+
+            for (int i = 0; i < count; i++)
+            {
+                var fp = foundPool[foundPoolCursor];                  // ラウンドロビン = 最古を再利用
+                foundPoolCursor = (foundPoolCursor + 1) % FoundParticlePoolSize;
+                if (fp.Go == null) continue;
+                fp.Active = true;
+                fp.Age = 0f;
+                fp.Life = MigrationDotLife;
+                fp.Tint = tint;
+                fp.BaseScale = MigrationDotScale;
+                fp.Converge = inflow;
+
+                // バナーは横長なので、外側方向も横に広い楕円で取る(表示のみなので UnityEngine.Random で可)
+                float rad = Random.Range(0f, 360f) * Mathf.Deg2Rad;
+                var outward = new Vector3(
+                    Mathf.Cos(rad) * Random.Range(0.80f, 1.10f), 0f,
+                    Mathf.Sin(rad) * Random.Range(0.40f, 0.62f));
+
+                if (inflow)
+                {
+                    // 外側から現れてバナーへ吸い込まれる(わずかに上昇しながら収束)
+                    fp.Origin = bannerPos + outward + new Vector3(0f, Random.Range(-0.06f, 0.14f), 0f);
+                    fp.Velocity = -outward + new Vector3(0f, 0.06f, 0f);
+                }
+                else
+                {
+                    // 都市から立ち上って外側へ散る
+                    fp.Origin = bannerPos + new Vector3(
+                        Random.Range(-0.24f, 0.24f), 0f, Random.Range(-0.10f, 0.10f));
+                    fp.Velocity = outward * 1.15f + new Vector3(0f, Random.Range(0.42f, 0.62f), 0f);
+                }
+
+                fp.Tr.localPosition = fp.Origin;
+                fp.Tr.localScale = new Vector3(MigrationDotScale, 1f, MigrationDotScale);
+                mpb.SetColor(ColorPropId, tint);
+                fp.Mr.SetPropertyBlock(mpb);
+                fp.Go.SetActive(true);
+            }
         }
 
         // ------------------------------------------------------------------

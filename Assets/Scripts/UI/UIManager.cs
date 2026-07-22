@@ -280,10 +280,13 @@ namespace HexCiv.UI
         bool warnDeficitLatched;
         bool warnStabilityLatched;
         bool warnIsolationLatched;
+        /// <summary>都市の不満(低満足しきい値割れ)警告のラッチ(2026-07-22 Claude Code 追加)。</summary>
+        bool warnUnrestLatched;
         /// <summary>各警告を最後に通知したターン(WarningCooldownTurns の判定用。-999=未通知)。</summary>
         int lastDeficitWarnTurn = -999;
         int lastStabilityWarnTurn = -999;
         int lastIsolationWarnTurn = -999;
+        int lastUnrestWarnTurn = -999;
 
         // ---- 独立Canvas UIの開閉検知(2026-07-21 Claude Code 追加。参照のみ・一切変更しない) ----
         /// <summary>Codex 実装の世界史図鑑(独立Canvas)。Esc のフルスクリーン解除判定のため開閉のみ読む。</summary>
@@ -367,9 +370,28 @@ namespace HexCiv.UI
         GameObject cityPanel;
         Text cityNameText;
         Text cityStatsText;
+        /// <summary>
+        /// 都市パネルの「社会」ブロック(2026-07-22 Claude Code 追加)。
+        /// Codex の人口社会シミュレーション(Core/PopulationSystem.cs)が都市へ書き込む
+        /// 農民・工人・学者・教育・満足度・直近移住を、都市パネルの既存更新経路
+        /// (RefreshCityPanel)でそのまま読み出して表示するだけの表示専用テキスト。
+        /// </summary>
+        Text citySocietyText;
         RectTransform productionListRoot;
         City shownCity;
         int cityListVersion = -1;
+
+        // ---- 人口社会の表示しきい値(2026-07-22 Claude Code 追加) ----
+        // いずれも独自に決めた数値ではなく、シミュレーション側(Codex実装)で既に使われている
+        // 値をそのまま参照して色分け・警告に用いる(表示専用):
+        //   低満足 35 = UI/PopulationPanel.cs の都市行が満足度を危険色にする条件(Satisfaction < 35)
+        //   高満足 75 = Core/PopulationSystem.CultureBonus が文化+1を与える条件(Satisfaction >= 75)
+        //   高教育 70 = Core/PopulationSystem.ScienceBonus が科学+1を与える条件(Education >= 70)
+        const int LowSatisfactionThreshold = 35;
+        const int HighSatisfactionThreshold = 75;
+        const int HighEducationThreshold = 70;
+        /// <summary>満足度が高い(=文化ボーナス圏)ことを示す緑。安定度チップの高位色と同色。</summary>
+        static readonly Color SatisfactionHighColor = new Color(0.52f, 0.85f, 0.48f, 1f);
 
         // ---- 技術パネル ----
         GameObject techPanel;
@@ -489,9 +511,11 @@ namespace HexCiv.UI
             warnDeficitLatched = false;
             warnStabilityLatched = false;
             warnIsolationLatched = false;
+            warnUnrestLatched = false;       // 都市の不満警告(2026-07-22 追加)も持ち越さない
             lastDeficitWarnTurn = -999;
             lastStabilityWarnTurn = -999;
             lastIsolationWarnTurn = -999;
+            lastUnrestWarnTurn = -999;
             nextAdminChipAt = 0f;
 
             BuildCanvas();
@@ -693,17 +717,30 @@ namespace HexCiv.UI
             UIStyle.SetRect(closeBtn.gameObject, new Vector2(1f, 1f), new Vector2(1f, 1f),
                 new Vector2(1f, 1f), new Vector2(-4f, -4f), new Vector2(26f, 26f));
 
+            // 統計テキストの領域(-40〜-160、最大6行)は従来のまま変更しない。
             cityStatsText = UIStyle.CreateText(cityPanel.transform, "CityStatsText", "", 14, TextAnchor.UpperLeft, UIStyle.TextMain);
             UIStyle.SetRect(cityStatsText.gameObject, new Vector2(0f, 1f), new Vector2(1f, 1f),
                 new Vector2(0.5f, 1f), new Vector2(0f, -40f), new Vector2(-24f, 120f));
 
+            // 「社会」ブロック(2026-07-22 Claude Code 追加): 人口社会(Codex の PopulationSystem
+            // が都市へ書き込む値)の要約2行を、統計テキストと生産項目見出しの間に挟む。
+            // 値は RefreshCityPanel(既存の更新経路)が書き換えるだけで独自のポーリングは持たない。
+            citySocietyText = UIStyle.CreateText(cityPanel.transform, "CitySocietyText", "", 13,
+                TextAnchor.UpperLeft, UIStyle.TextMain);
+            UIStyle.SetRect(citySocietyText.gameObject, new Vector2(0f, 1f), new Vector2(1f, 1f),
+                new Vector2(0.5f, 1f), new Vector2(0f, -162f), new Vector2(-24f, 40f));
+
+            // 2026-07-22 Claude Code 変更: 上の社会ブロック(-162〜-202)ぶん、見出しを -166→-204、
+            // リスト開始を -190→-226 へ下げた。パネルの大きさ(300×560)は変更せず、生産リストの
+            // 行間を 30→27(ボタン高 28→25)に詰めることで、従来と同じ最大12項目が従来と同じ
+            // 下端(約-550)までに収まる(ボタンの機能・ラベル・アイコン・操作は一切変更なし)。
             var header = UIStyle.CreateText(cityPanel.transform, "ProdHeader", "生産項目", 14, TextAnchor.MiddleLeft, UIStyle.TextDim);
             UIStyle.SetRect(header.gameObject, new Vector2(0f, 1f), new Vector2(1f, 1f),
-                new Vector2(0.5f, 1f), new Vector2(0f, -166f), new Vector2(-24f, 20f));
+                new Vector2(0.5f, 1f), new Vector2(0f, -204f), new Vector2(-24f, 20f));
 
             var listGo = UIStyle.CreateContainer(cityPanel.transform, "ProductionList");
             productionListRoot = UIStyle.SetRect(listGo, new Vector2(0f, 1f), new Vector2(1f, 1f),
-                new Vector2(0.5f, 1f), new Vector2(0f, -190f), new Vector2(-20f, 360f));
+                new Vector2(0.5f, 1f), new Vector2(0f, -226f), new Vector2(-20f, 322f));
 
             cityPanel.SetActive(false);
         }
@@ -1547,6 +1584,45 @@ namespace HexCiv.UI
                     ShowAdministrationWarning("⚠ 部隊が補給から孤立した");
                 }
             }
+
+            // (d) 都市の満足度がシミュレーション側の低満足しきい値を割り込んだ(2026-07-22 追加)。
+            // 判定条件は Codex の UI/PopulationPanel.cs が都市行を危険色にする条件と同一
+            // (Satisfaction < 35)で、独自のしきい値は導入していない。エッジ検出+ターン単位の
+            // レート制限は他の警告と同じで、観戦モード・ゲーム終了時はここへ到達しない
+            // (RefreshAdministrationChips が事前に return する)。
+            bool unrest = HasUnhappyCity(p);
+            if (!unrest) warnUnrestLatched = false;
+            else if (!warnUnrestLatched)
+            {
+                warnUnrestLatched = true;
+                if (turn - lastUnrestWarnTurn >= WarningCooldownTurns)
+                {
+                    lastUnrestWarnTurn = turn;
+                    ShowUnrestWarning();
+                }
+            }
+        }
+
+        /// <summary>
+        /// 低満足しきい値を割り込んだ都市が1つでもあるか(2026-07-22 Claude Code 追加。読み取りのみ)。
+        /// 満足度は Core/PopulationSystem がターンごとに各都市へ書き込んだ値をそのまま読む。
+        /// </summary>
+        static bool HasUnhappyCity(Player p)
+        {
+            if (p == null) return false;
+            for (int i = 0; i < p.Cities.Count; i++)
+            {
+                var city = p.Cities[i];
+                if (city != null && city.Satisfaction < LowSatisfactionThreshold) return true;
+            }
+            return false;
+        }
+
+        /// <summary>都市の不満バナー(既存のコンパクトバナー機構)+ざわめきSE。GameAudio 不在でも null 安全。</summary>
+        void ShowUnrestWarning()
+        {
+            ShowEventBannerCompact("⚠ 都市で不満が高まっている", UIStyle.Danger);
+            GameAudio.Instance?.PlayUnrest();
         }
 
         /// <summary>孤立(SupplyLevel.Isolated)状態の生存ユニットが1体でもいるか(読み取りのみ)。</summary>
@@ -3463,6 +3539,8 @@ namespace HexCiv.UI
 
             cityNameText.text = shownCity.NameJa;
             cityStatsText.text = BuildCityStats(shownCity);
+            if (citySocietyText != null)
+                citySocietyText.text = BuildCitySociety(shownCity);   // 社会ブロック(2026-07-22 追加)
 
             if (cityListVersion != state.Version)
             {
@@ -3506,6 +3584,49 @@ namespace HexCiv.UI
             return string.Join("\n", lines);
         }
 
+        /// <summary>
+        /// 都市パネルの「社会」ブロック(2026-07-22 Claude Code 追加)を2行で組み立てる。
+        /// 1行目: 人口内訳(農民 / 工人 / 学者 — 合計は常に人口と一致する)。
+        /// 2行目: 教育・満足度(+前ターンの移住が0でない時だけ「移住 ±n」)。
+        /// 値は Codex の Core/PopulationSystem がターンごとに都市へ書き込んだ公開フィールドを
+        /// 読むだけで、いかなる再計算・書き換えも行わない(表示専用=シミュレーション不変)。
+        /// 色分けのしきい値も独自には決めず、シミュレーション側で既に使われている値
+        /// (低満足35 / 高満足75 / 高教育70。定義箇所は各定数のコメント参照)を流用する。
+        /// </summary>
+        string BuildCitySociety(City c)
+        {
+            if (c == null) return "";
+
+            string first = $"社会  農民 {c.Farmers} / 工人 {c.Artisans} / 学者 {c.Scholars}";
+
+            string education = c.Education >= HighEducationThreshold
+                ? Colorize(c.Education.ToString(), UIStyle.Accent)
+                : c.Education.ToString();
+
+            string satisfaction;
+            if (c.Satisfaction < LowSatisfactionThreshold)
+                satisfaction = Colorize(c.Satisfaction.ToString(), UIStyle.Danger);
+            else if (c.Satisfaction >= HighSatisfactionThreshold)
+                satisfaction = Colorize(c.Satisfaction.ToString(), SatisfactionHighColor);
+            else
+                satisfaction = c.Satisfaction.ToString();
+
+            string second = $"教育 {education}　満足 {satisfaction}";
+            if (c.LastNetMigration != 0)
+            {
+                // 直近ターンに人口が流入(+)/流出(-)した都市だけに表示する
+                string sign = c.LastNetMigration > 0 ? "+" : "-";
+                second += $"　前ターンの移住 {sign}{Mathf.Abs(c.LastNetMigration)}";
+            }
+            return first + "\n" + second;
+        }
+
+        /// <summary>uGUI のリッチテキストで部分着色する(既存のガイド「✓ できました！」と同じ方式)。</summary>
+        static string Colorize(string text, Color color)
+        {
+            return $"<color=#{ColorUtility.ToHtmlStringRGB(color)}>{text}</color>";
+        }
+
         void RebuildProductionList()
         {
             ClearChildren(productionListRoot);
@@ -3536,8 +3657,11 @@ namespace HexCiv.UI
                     cityListVersion = -1;   // 次回更新で再構築(▶ 位置の反映)
                     RefreshCityPanel();
                 });
+                // 行間 30→27・高さ 28→25(2026-07-22 Claude Code 変更): 「社会」ブロックぶん
+                // リスト開始位置が下がったため行間を詰め、最大12項目が従来と同じ下端(約-550)
+                // までに収まるようにした(行間の余白2pxとボタンの機能・ラベル・アイコンは従来どおり)。
                 UIStyle.SetRect(b.gameObject, new Vector2(0f, 1f), new Vector2(1f, 1f),
-                    new Vector2(0.5f, 1f), new Vector2(0f, -i * 30f), new Vector2(0f, 28f));
+                    new Vector2(0.5f, 1f), new Vector2(0f, -i * 27f), new Vector2(0f, 25f));
                 AddProductionChip(b, item, chipOwnerColor);   // 種類別アイコン(2026-07-21 追加)
             }
         }
