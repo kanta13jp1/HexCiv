@@ -42,6 +42,9 @@ namespace HexCiv.Render
     /// ・生産完成スパークル(2026-07-21 追加): 成長パルスと同じキャッシュ+ポーリング方式で
     ///   Buildings.Count の増加を検知し、金色スパークル5個が都市ブロックから上昇(約0.5秒。
     ///   都市誕生バーストのパーティクルプールを再利用)。生成/ロード直後と8倍速以上ではスキップ
+    /// ・軽量演出モード対応(2026-07-22 追加): VisualQuality.LightMode(PlayerPrefs
+    ///   "HexCiv.FxLight")が有効な間は待機ボブと新規ダメージ数字ポップを抑制する。
+    ///   戦闘の突進・被弾フラッシュ・撃破フェードなど既存演出は軽量モードでも維持する
     /// Init(state) 内でイベントを購読し、再Init/OnDestroy で必ず解除する。
     /// </summary>
     public class EntityRenderer : MonoBehaviour
@@ -461,6 +464,9 @@ namespace HexCiv.Render
 
             bool snapAll = Time.timeScale >= SnapTimeScale;
             float k = 1f - Mathf.Exp(-TweenSharpness * dt);
+            // 軽量演出モード(2026-07-22 追加): 待機ボブのみ抑制する(戦闘の突進・フラッシュ、
+            // 撃破フェード、防御態勢グローなどの既存演出はそのまま)。フレームに1回だけ読む。
+            bool lightFx = VisualQuality.LightMode;
 
             // ---- ユニット: 出現ポップ + 位置トゥイーン + 突進 + 被弾フラッシュ ----
             foreach (var kv in unitViews)
@@ -509,9 +515,10 @@ namespace HexCiv.Render
                 bool idle = !snapAll && !lunging && v.SpawnPopTime <= 0f
                     && (v.TargetPos - v.SmoothPos).sqrMagnitude <= TweenSettleSq;
                 bool fortified = v.FortifyRing != null && v.FortifyRing.activeSelf;
-                if (idle && !fortified)
+                if (idle && !fortified && !lightFx)
                 {
-                    // 非防御の生存ユニット: ゆっくり上下(周期約2.5秒・位相はIdハッシュ)
+                    // 非防御の生存ユニット: ゆっくり上下(周期約2.5秒・位相はIdハッシュ)。
+                    // 軽量演出モード中はスキップ(位置は毎フレーム基準値から計算するため自然に静止する)
                     pos.y += IdleBobAmplitude * Mathf.Sin(
                         Time.unscaledTime * (Mathf.PI * 2f / IdleBobPeriod) + v.BobPhase);
                 }
@@ -809,6 +816,9 @@ namespace HexCiv.Render
         void SpawnDamageText(Vector3 worldPos, int dmg)
         {
             if (dmg <= 0) return;
+            // 軽量演出モード(2026-07-22 追加): 新規のダメージ数字ポップを出さない
+            // (表示中の数字は既存の寿命処理で自然に消える)
+            if (VisualQuality.LightMode) return;
             if (damagePool == null)
             {
                 damagePool = new DamageText[DamagePoolSize];

@@ -106,6 +106,14 @@ namespace HexCiv.Render
                 return;
             }
 
+            // 軽量演出モード(2026-07-22 追加): 雲影と時間帯トーンをまとめて非表示にする。
+            // 標準へ戻せば下の SetActive(true) で再表示される(dt は既存の clamp で跳ばない)。
+            if (VisualQuality.LightMode)
+            {
+                if (container != null && container.activeSelf) container.SetActive(false);
+                return;
+            }
+
             // 新規開始・リスタート・ロードによる状態差し替え、またはマップ寸法変更で再構築
             if (state != shownState || state.Map.Width != shownMapW || state.Map.Height != shownMapH)
                 Rebuild(state);

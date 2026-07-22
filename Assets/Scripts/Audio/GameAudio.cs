@@ -117,6 +117,21 @@ namespace HexCiv.Audio
         AudioSource ambientSource;
         AudioClip ambientClip;
 
+        // --- 2026-07-22 Claude Code 追加: タイトルBGMイントロ ---
+        // タイトル画面(UI/TitleScreen.cs)の表示中に流す、曲A(Dawn)より疎で柔らかい専用ループ。
+        // PlayTitleIntro() / EndTitleIntro() で通常の時代BGMと約1.5秒でクロスフェードする。
+        // 通常BGM側は音量を絞るだけで再生・時代クロスフェード・地域フレーバーは従来どおり
+        // 進み続けるため、EndTitleIntro 完了後(titleIntroWeight==0)は ApplyVolumes の配分が
+        // 従来と完全に一致し、時代/地域BGM系はそのまま復帰する。
+        // ヘッドレス/バッチ構成では GameAudio 自体が生成されない(呼び出し側は null 許容)。
+        const float TitleIntroCrossfadeSeconds = 1.5f;
+        AudioSource titleIntroSource;
+        AudioClip titleIntroClip;
+        /// <summary>タイトルイントロの現在の音量比(0=通常BGMのみ、1=イントロのみ)。</summary>
+        float titleIntroWeight;
+        /// <summary>タイトルイントロの目標音量比(PlayTitleIntro=1 / EndTitleIntro=0)。</summary>
+        float titleIntroTarget;
+
         // --- 2026-07-21 Claude Code 追加: 時代BGM(同日、終盤の曲Cへ拡張) ---
         // ターン数に応じて3曲をクロスフェードする:
         //   曲A(Dawn) ターン100以下 / 曲B(Golden Age) 101〜180 / 曲C(Twilight) 181〜。
@@ -242,6 +257,7 @@ namespace HexCiv.Audio
             UpdateEraMusic();       // 時代BGMのクロスフェード進行(2026-07-21 追加)
             UpdateFanfareDucking(); // 勝利ファンファーレ中のBGMダッキング進行(2026-07-21 追加)
             FlushPendingGenericAttack(); // 保留中の汎用ヒット音の後始末(2026-07-21 追加)
+            UpdateTitleIntroFade(); // タイトルイントロのクロスフェード進行(2026-07-22 追加)
         }
 
         void RefreshHumanCityNames()
@@ -440,6 +456,46 @@ namespace HexCiv.Audio
         // 2026-07-21 Claude Code 追加: 開幕ホルン(音量・ミュートは Play() が一括処理)
         public void PlayOpeningHorn() => Play(openingHornClip);
 
+        /// <summary>
+        /// タイトルBGMイントロの開始(2026-07-22 Claude Code 追加)。タイトル画面(UI/TitleScreen.cs)
+        /// が表示された時に呼ぶ。曲A(Dawn)より疎で柔らかい専用ループを専用音源で再生し、
+        /// 約1.5秒(TitleIntroCrossfadeSeconds)で通常BGMからクロスフェードする。
+        /// 通常BGM側は音量のみ下げて再生を続けるため、EndTitleIntro 後は時代/地域BGM・環境音とも
+        /// 従来どおりの状態へそのまま戻る。音量スライダー・ミュートは ApplyVolumes が一括処理する。
+        /// 多重呼び出しは無害(クリップ生成と再生開始は初回のみ)。
+        /// </summary>
+        public void PlayTitleIntro()
+        {
+            EnsureSources();
+            if (titleIntroSource == null)
+            {
+                titleIntroSource = gameObject.AddComponent<AudioSource>();
+                titleIntroSource.playOnAwake = false;
+                titleIntroSource.loop = true;
+                titleIntroSource.spatialBlend = 0f;
+                titleIntroSource.priority = 128;
+            }
+            if (titleIntroClip == null) titleIntroClip = CreateTitleIntroClip();
+            titleIntroTarget = 1f;
+            if (!titleIntroSource.isPlaying)
+            {
+                titleIntroSource.clip = titleIntroClip;
+                titleIntroSource.Play();
+            }
+            ApplyVolumes();
+        }
+
+        /// <summary>
+        /// タイトルBGMイントロの終了(2026-07-22 Claude Code 追加)。タイトル画面が閉じる時
+        /// (どの選択肢でも/Escでも)に呼ぶ。約1.5秒でイントロを減衰させ、通常の時代/地域BGMの
+        /// 音量を従来値へ戻す。フェード完了後は UpdateTitleIntroFade がイントロ音源を停止する。
+        /// 多重呼び出し・未開始状態での呼び出しは無害。
+        /// </summary>
+        public void EndTitleIntro()
+        {
+            titleIntroTarget = 0f;
+        }
+
         // 2026-07-21 Claude Code 追加: パネル開閉音+ミニマップジャンプ音
         // (年表・ミニマップの「開く」と歴史ツアー開始/ミニマップのマップジャンプが呼ぶ。
         //  音量・ミュートは Play() が一括処理)
@@ -514,11 +570,15 @@ namespace HexCiv.Audio
             // 勝利ファンファーレ中は duckWeight(通常1=無影響)で音楽系のみ一括ダッキングする
             // (2026-07-21 追加。SEは減衰しない)。
             float musicBase = (muted ? 0f : musicVolume) * duckWeight;
-            if (musicSource != null) musicSource.volume = musicBase * eraWeights[0];
-            if (musicSourceB != null) musicSourceB.volume = musicBase * eraWeights[1];
-            if (musicSourceC != null) musicSourceC.volume = musicBase * eraWeights[2];
+            // タイトルイントロ(2026-07-22 追加): クロスフェード比で通常BGM側とイントロ側へ配分する。
+            // titleIntroWeight==0(既定)のとき normalBed==musicBase となり従来と完全に同じ値になる。
+            float normalBed = musicBase * (1f - titleIntroWeight);
+            if (musicSource != null) musicSource.volume = normalBed * eraWeights[0];
+            if (musicSourceB != null) musicSourceB.volume = normalBed * eraWeights[1];
+            if (musicSourceC != null) musicSourceC.volume = normalBed * eraWeights[2];
             // 環境音(2026-07-21 追加): BGM音量×0.25。BGMのミュート/音量設定にそのまま追従する
-            if (ambientSource != null) ambientSource.volume = musicBase * AmbientVolumeScale;
+            if (ambientSource != null) ambientSource.volume = normalBed * AmbientVolumeScale;
+            if (titleIntroSource != null) titleIntroSource.volume = musicBase * titleIntroWeight;
             if (sfxSource != null) sfxSource.volume = muted ? 0f : sfxVolume;
         }
 
@@ -588,6 +648,25 @@ namespace HexCiv.Audio
                 ? range / FanfareDuckAttackSeconds     // ダッキング開始は素早く
                 : range / FanfareDuckReleaseSeconds;   // 復帰は約2秒のランプ
             duckWeight = Mathf.MoveTowards(duckWeight, target, Time.unscaledDeltaTime * speed);
+            ApplyVolumes();
+        }
+
+        /// <summary>
+        /// タイトルイントロのクロスフェード進行(2026-07-22 Claude Code 追加)。
+        /// 非スケール時間で titleIntroWeight を目標値へ寄せ、変化したフレームだけ ApplyVolumes を
+        /// 呼ぶ。完全に消えたらイントロ音源を停止してミキサー負荷を戻す。通常時(重み0のまま)は
+        /// 何もしないため、既存の音量挙動と完全に一致する。アロケーションなし。
+        /// </summary>
+        void UpdateTitleIntroFade()
+        {
+            if (titleIntroWeight == titleIntroTarget)   // MoveTowardsは目標値へ正確に到達するため等値比較で良い
+            {
+                if (titleIntroTarget <= 0f && titleIntroSource != null && titleIntroSource.isPlaying)
+                    titleIntroSource.Stop();
+                return;
+            }
+            titleIntroWeight = Mathf.MoveTowards(titleIntroWeight, titleIntroTarget,
+                Time.unscaledDeltaTime / TitleIntroCrossfadeSeconds);
             ApplyVolumes();
         }
 
@@ -934,6 +1013,53 @@ namespace HexCiv.Audio
                 data[i] = Mathf.Clamp(raw[i], -0.4f, 0.4f);
 
             return RegisterClip("Hex Empires - Wind Ambience", data);
+        }
+
+        /// <summary>
+        /// タイトルBGMイントロ(2026-07-22 Claude Code 追加)。24秒の静かな専用ループ(約2.1MB)。
+        /// 曲A(Dawn)と同じ和音進行(Am-F-C-G)・同じ生成手法(パッド+低音+鐘)を再利用しつつ、
+        /// パッドと低音をわずかに柔らかく絞り、鐘を3秒間隔(曲Aの半分の密度)・長い余韻の
+        /// 疎な8音旋律に置き換えた「夜明け前」の変奏。音量バランスは曲Aよりわずかに低く揃え、
+        /// クロスフェード時の段差を避ける。地域別フレーバーは適用しない(タイトルは文明確定前の
+        /// ため中立の既定音階)。生成は初回の PlayTitleIntro で一度だけ行い、RegisterClip 経由で
+        /// 破棄も既存クリップと同じ扱いになる。決定的生成(乱数不使用)でシミュレーション無干渉。
+        /// </summary>
+        AudioClip CreateTitleIntroClip()
+        {
+            const float duration = 24f;
+            int length = Mathf.CeilToInt(duration * SampleRate);
+            var data = new float[length];
+
+            float[] roots = { 220f, 174.61f, 130.81f, 196f };   // 曲Aと同じ Am - F - C - G
+            bool[] minor = { true, false, false, false };
+            int[] melody = { 0, 7, 3, 12, 10, 7, 5, 3 };        // 3秒間隔×8音=24秒でループ周期と一致
+
+            for (int i = 0; i < length; i++)
+            {
+                float t = i / (float)SampleRate;
+                int chordIndex = Mathf.Min(3, Mathf.FloorToInt(t / 6f));
+                float chordTime = t - chordIndex * 6f;
+                float root = roots[chordIndex];
+                float third = root * (minor[chordIndex] ? 1.189207f : 1.259921f);
+                float fifth = root * 1.498307f;
+
+                float breathe = 0.70f + 0.30f * Mathf.Sin((chordTime / 6f) * Mathf.PI);
+                float pad = Sine(root, t) + 0.58f * Sine(third, t) + 0.46f * Sine(fifth, t);
+                float bass = Sine(root * 0.5f, t) * 0.40f;
+
+                float beatLength = 3f;   // 曲A(1.5秒間隔)の半分の密度=疎らな鐘
+                int beat = Mathf.FloorToInt(t / beatLength);
+                float beatTime = t - beat * beatLength;
+                float melodyFrequency = 440f * Mathf.Pow(2f, melody[beat % melody.Length] / 12f);
+                float bell = (Sine(melodyFrequency, t) + 0.22f * Sine(melodyFrequency * 2f, t)) *
+                    Mathf.Exp(-beatTime * 1.6f);
+
+                float loopFade = Mathf.Clamp01(t / 0.55f) * Mathf.Clamp01((duration - t) / 0.55f);
+                data[i] = Mathf.Clamp((pad * 0.060f * breathe + bass * 0.065f + bell * 0.045f) * loopFade,
+                    -0.75f, 0.75f);
+            }
+
+            return RegisterClip("Hex Empires - Title Prelude", data);
         }
 
         AudioClip CreateMoveClip()

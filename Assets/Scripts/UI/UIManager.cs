@@ -160,6 +160,14 @@ namespace HexCiv.UI
         readonly Button[] difficultyButtons = new Button[3];
         readonly Button[] numPlayersButtons = new Button[5];
         InputField seedInput;
+
+        // ---- 演出モード(2026-07-22 Claude Code 追加) ----
+        /// <summary>演出モードの PlayerPrefs キー(0=標準,1=軽量)。読み側は Rendering/VisualQuality.cs。
+        /// キー規約を同一に保つこと。軽量では雲影・水面ゆらぎ・待機ボブ・ダメージ数字を省略する。</summary>
+        const string FxLightKey = "HexCiv.FxLight";
+        Button fxQualityButton;
+        Text fxQualityLabel;
+
         int settingsMapSizeIndex = 1;
         int settingsMapType = 0;
         int settingsDifficulty = 1;
@@ -201,6 +209,29 @@ namespace HexCiv.UI
         ScoreGraphPanel scoreGraphPanel;
         /// <summary>通常プレイ用の「戦況」開閉ボタン(二段目)。観戦中は観戦バー内のボタンを使うため隠す。</summary>
         Button scoreGraphButton;
+
+        // ---- 時代表示(2026-07-22 Claude Code 追加) ----
+        /// <summary>トップバー二段目の時代インジケーター(小アイコン+ラベル)。表示専用・raycast無効。</summary>
+        GameObject eraIndicator;
+        Image eraIconImage;
+        Text eraLabelText;
+        /// <summary>表示中の時代index(-1=未設定。変化した時だけスプライト・文言を更新)。</summary>
+        int eraShownIndex = -1;
+        /// <summary>時代名(閾値は GameAudio のBGM3楽章と同じ: ターン1〜100/101〜180/181〜)。</summary>
+        static readonly string[] EraNamesJa = { "古代", "中世", "近代" };
+        /// <summary>時代色(古代=ブロンズ/中世=シルバー/近代=ゴールド)。</summary>
+        static readonly Color[] EraTints =
+        {
+            new Color(0.78f, 0.52f, 0.28f, 1f),
+            new Color(0.78f, 0.80f, 0.86f, 1f),
+            new Color(0.95f, 0.80f, 0.34f, 1f),
+        };
+        /// <summary>時代アイコンSprite(白マスク生成・Image.color で着色。実行中キャッシュ)。</summary>
+        static readonly Sprite[] eraIconSprites = new Sprite[3];
+        /// <summary>通常時のX(二段目: ログ約38%幅の右、「戦況」ボタン x704 の左の空き)。</summary>
+        const float EraIndicatorNormalX = 614f;
+        /// <summary>観戦時のX(観戦バー x340〜940 を避けた二段目左端。ログは y-80 へ移動済み)。</summary>
+        const float EraIndicatorSimulationX = 12f;
 
         // ---- 独立Canvas UIの開閉検知(2026-07-21 Claude Code 追加。参照のみ・一切変更しない) ----
         /// <summary>Codex 実装の世界史図鑑(独立Canvas)。Esc のフルスクリーン解除判定のため開閉のみ読む。</summary>
@@ -251,6 +282,25 @@ namespace HexCiv.UI
         const float CompactEventBannerLifetime = 2.0f;
         /// <summary>通常プレイ用コンパクトバナーのフェードアウト開始時刻。</summary>
         const float CompactEventBannerFadeStart = 1.2f;
+        /// <summary>モーダル表示中のバナー退避位置(画面最上端。2026-07-22 Claude Code 追加)。</summary>
+        const float EventBannerStackTopModal = 0f;
+        /// <summary>モーダル表示中のバナー不透明率(約65%。2026-07-22 Claude Code 追加)。</summary>
+        const float EventBannerModalAlpha = 0.65f;
+        /// <summary>現在の縦積みがモーダル退避配置か(状態変化時のみ再レイアウトする)。</summary>
+        bool bannersInModalLayout;
+
+        // ---- モーダル開閉カウンタ(2026-07-22 Claude Code 追加) ----
+        /// <summary>
+        /// 全画面/モーダルパネルの開放数。UIManager 自身のパネル(技術/文明/指導者/スロット/設定/
+        /// ガイド/終了画面/戦況グラフ)は SyncSelfModalContribution がまとめて1件として増減し、
+        /// 独立Canvasのパネル(実績一覧・図鑑など)は NotifyExternalPanel で加算・減算できる。
+        /// 0より大きい間、イベントバナーは画面最上端へ退避し約65%不透明で表示される
+        /// (実写スクショで確認された「バナーがパネルのタイトルを覆う」重なりの修正)。
+        /// </summary>
+        public static int ModalOpenCount => modalOpenCount;
+        static int modalOpenCount;
+        /// <summary>自分のモーダル開放を modalOpenCount へ計上済みか(重複計上の防止)。</summary>
+        bool selfModalCounted;
 
         // ---- ユニットパネル ----
         GameObject unitPanel;
@@ -372,6 +422,9 @@ namespace HexCiv.UI
             eventBanners.Clear();   // バナーのGOは旧Canvasと共に破棄済み
             confettiPieces.Clear(); // 紙吹雪プールも旧Canvasと共に破棄済み(2026-07-21 追加)
             confettiActive = false;
+            bannersInModalLayout = false;
+            // 旧Canvasのパネルは破棄済みのため、自分の計上分を静的カウンタから外す(2026-07-22 追加)
+            ReleaseSelfModalContribution();
             // 独立Canvasボタンのアイコンは付与済みでも再確認する(AddButtonIcon が冪等なので安全。
             // 2026-07-21 Claude Code 追加)
             externalButtonIconsDone = false;
@@ -392,6 +445,7 @@ namespace HexCiv.UI
             BuildGameSettingsPanel();
             BuildSimulationBar();
             BuildScoreGraph();
+            BuildEraIndicator();
             BuildControlHint();
             BuildTutorial();
             BuildTooltip();
@@ -409,6 +463,7 @@ namespace HexCiv.UI
         void OnDestroy()
         {
             if (state != null) state.OnLog -= AddLog;
+            ReleaseSelfModalContribution();   // 静的カウンタへ計上済み分を戻す(2026-07-22 追加)
             // サムネイルテクスチャは HideAndDontSave のため明示的に破棄する(2026-07-21 追加)
             for (int i = 0; i < slotThumbTextures.Length; i++)
             {
@@ -421,6 +476,7 @@ namespace HexCiv.UI
         {
             if (tooltipVisible) PositionTooltip();
             UpdateTutorialAutoAdvance();
+            SyncSelfModalContribution();      // モーダル開閉→バナー退避判定(2026-07-22 追加)
             UpdateEventBanners();
             UpdateConfetti();                 // 勝利画面の紙吹雪(非表示時は即return。2026-07-21 追加)
             DecorateExternalPanelButtons();   // 左下ボタンのアイコン付与(完了後は即return。2026-07-21 追加)
@@ -736,11 +792,12 @@ namespace HexCiv.UI
 
             // 高さは「シミュレーション観戦で開始」ボタン追加分(+40)と
             // 「マップ種別」行(+76)・「難易度」行(+76)の追加分を含む(2026-07-20 Claude Code 変更)。
-            // さらに「画面表示(フルスクリーン)」行の追加分(+60)を含む(2026-07-21 Claude Code 変更)
+            // さらに「画面表示(フルスクリーン)」行の追加分(+60)を含む(2026-07-21 Claude Code 変更)。
+            // 「演出」行の追加で 664→700(基準解像度720の上下に10px余白。2026-07-22 Claude Code 変更)
             settingsPanel = UIStyle.CreatePanel(canvas.transform, "GameSettingsPanel",
                 new Color(0.07f, 0.09f, 0.13f, 0.98f));
             UIStyle.SetRect(settingsPanel, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
-                new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(560f, 664f));
+                new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(560f, 700f));
 
             var title = UIStyle.CreateText(settingsPanel.transform, "Title", "ゲーム設定", 22,
                 TextAnchor.MiddleCenter, UIStyle.Accent);
@@ -854,6 +911,21 @@ namespace HexCiv.UI
                 new Vector2(0f, 1f), new Vector2(256f, -494f), new Vector2(280f, 22f));
 
             SetFullscreenState(fullscreenOn);   // 再Init(リスタート等)後もラベルを現在状態へ復元
+
+            // 演出モード(標準/軽量)行(2026-07-22 Claude Code 追加)。値は PlayerPrefs "HexCiv.FxLight" に
+            // 保存し、各レンダラーが Rendering/VisualQuality 経由で参照する(表示のみ・シミュレーション不変)
+            fxQualityButton = UIStyle.CreateButton(settingsPanel.transform, "FxQualityToggle",
+                "演出: 標準", 14, OnFxQualityClicked);
+            UIStyle.SetRect(fxQualityButton.gameObject, new Vector2(0f, 1f), new Vector2(0f, 1f),
+                new Vector2(0f, 1f), new Vector2(24f, -530f), new Vector2(220f, 34f));
+            fxQualityLabel = UIStyle.ButtonLabel(fxQualityButton);
+
+            var fxNote = UIStyle.CreateText(settingsPanel.transform, "FxQualityNote",
+                "軽量: 雲影・水面・待機揺れ・ダメージ数字を省略", 13, TextAnchor.MiddleLeft, UIStyle.TextDim);
+            UIStyle.SetRect(fxNote.gameObject, new Vector2(0f, 1f), new Vector2(0f, 1f),
+                new Vector2(0f, 1f), new Vector2(256f, -536f), new Vector2(296f, 22f));
+
+            RefreshFxQualityLabel();   // 再Init後もラベルを保存値へ復元
 
             var start = UIStyle.CreateButton(settingsPanel.transform, "StartButton",
                 "この設定で新しいゲームを開始(現在のゲームは破棄)", 15, OnStartWithSettingsClicked);
@@ -971,6 +1043,159 @@ namespace HexCiv.UI
         void ToggleScoreGraph()
         {
             if (scoreGraphPanel != null) scoreGraphPanel.Toggle();
+        }
+
+        // ================= 時代表示(2026-07-22 Claude Code 追加) =================
+
+        /// <summary>
+        /// 時代インジケーター。トップバー二段目の空き(通常: ログ約38%幅の右 x614〜700、
+        /// 観戦: 観戦バー x340〜940 を避けた左端 x12〜98)に、現在の時代
+        /// (ターン1〜100=古代/101〜180=中世/181〜=近代 — GameAudio のBGM3楽章と同じ閾値)を
+        /// 小アイコン+ラベルで表示する。表示専用(raycast無効)でクリックを一切遮らず、
+        /// シミュレーションには影響しない。更新はターン変化時(RefreshTopBar 経由)のみ。
+        /// </summary>
+        void BuildEraIndicator()
+        {
+            eraIndicator = UIStyle.CreateContainer(canvas.transform, "EraIndicator");
+            UIStyle.SetRect(eraIndicator, new Vector2(0f, 1f), new Vector2(0f, 1f),
+                new Vector2(0f, 1f), new Vector2(EraIndicatorNormalX, -38f), new Vector2(86f, 26f));
+
+            var igo = new GameObject("EraIcon", typeof(RectTransform), typeof(Image));
+            igo.transform.SetParent(eraIndicator.transform, false);
+            eraIconImage = igo.GetComponent<Image>();
+            eraIconImage.raycastTarget = false;
+            eraIconImage.preserveAspect = true;
+            UIStyle.SetRect(igo, new Vector2(0f, 0.5f), new Vector2(0f, 0.5f),
+                new Vector2(0f, 0.5f), new Vector2(0f, 0f), new Vector2(18f, 18f));
+
+            eraLabelText = UIStyle.CreateText(eraIndicator.transform, "EraLabel", "", 13,
+                TextAnchor.MiddleLeft, UIStyle.TextMain);
+            UIStyle.SetRect(eraLabelText.gameObject, new Vector2(0f, 0f), new Vector2(1f, 1f),
+                new Vector2(0f, 0.5f), new Vector2(22f, 0f), new Vector2(-22f, 0f));
+            // マップ上に直接乗るため影で可読性を確保(ログ・操作ヒントと同じ流儀)
+            var shadow = eraLabelText.gameObject.AddComponent<Shadow>();
+            shadow.effectColor = new Color(0f, 0f, 0f, 0.9f);
+            shadow.effectDistance = new Vector2(1f, -1f);
+
+            eraShownIndex = -1;
+            UpdateEraIndicatorPosition();
+            RefreshEraIndicator();
+        }
+
+        /// <summary>現在ターンから時代(0=古代/1=中世/2=近代)を求め、変化した時だけ表示を更新する。</summary>
+        void RefreshEraIndicator()
+        {
+            if (eraLabelText == null || eraIconImage == null || state == null) return;
+            int era = state.TurnNumber <= 100 ? 0 : (state.TurnNumber <= 180 ? 1 : 2);
+            if (era == eraShownIndex) return;
+            eraShownIndex = era;
+            eraLabelText.text = EraNamesJa[era];
+            eraLabelText.color = EraTints[era];
+            eraIconImage.sprite = EraIconSprite(era);
+            eraIconImage.color = EraTints[era];
+        }
+
+        /// <summary>時代表示の位置を現在モードへ合わせる(通常=x614/観戦=x12。UpdateLogPosition と同じ流儀)。</summary>
+        void UpdateEraIndicatorPosition()
+        {
+            if (eraIndicator == null) return;
+            ((RectTransform)eraIndicator.transform).anchoredPosition = new Vector2(
+                simulationModeActive ? EraIndicatorSimulationX : EraIndicatorNormalX, -38f);
+        }
+
+        /// <summary>時代アイコン(0=神殿の柱/1=城壁/2=歯車)を白Spriteで取得する(実行中キャッシュ)。</summary>
+        static Sprite EraIconSprite(int era)
+        {
+            era = Mathf.Clamp(era, 0, eraIconSprites.Length - 1);
+            if (eraIconSprites[era] == null) eraIconSprites[era] = BuildEraIconSprite(era);
+            return eraIconSprites[era];
+        }
+
+        /// <summary>
+        /// 時代アイコンSpriteを白色で手続き生成する(24px。内部96pxマスクを4x4アルファ平均縮小=
+        /// アンチエイリアス。BuildChipSprite と同じ方式)。白生成のため実際の色は
+        /// Image.color の乗算で時代色(ブロンズ/シルバー/ゴールド)へ着色する。
+        /// </summary>
+        static Sprite BuildEraIconSprite(int era)
+        {
+            const int size = 24;
+            const int ss = 4;
+            const int big = size * ss;
+            var buf = new float[big * big];   // アルファのみ(形状マスク)
+            for (int y = 0; y < big; y++)
+            {
+                float v = (y + 0.5f) / big;   // y上向き(SetPixels の行0=下端)
+                for (int x = 0; x < big; x++)
+                {
+                    float u = (x + 0.5f) / big;
+                    if (EraIconMask(era, u, v)) buf[y * big + x] = 1f;
+                }
+            }
+
+            var outPx = new Color[size * size];
+            for (int y = 0; y < size; y++)
+            {
+                for (int x = 0; x < size; x++)
+                {
+                    float a = 0f;
+                    for (int sy = 0; sy < ss; sy++)
+                    {
+                        int row = (y * ss + sy) * big + x * ss;
+                        for (int sx = 0; sx < ss; sx++) a += buf[row + sx];
+                    }
+                    outPx[y * size + x] = new Color(1f, 1f, 1f, a / (ss * ss));
+                }
+            }
+
+            var tex = new Texture2D(size, size, TextureFormat.RGBA32, false);
+            tex.name = "ui_era_icon_" + era;
+            tex.hideFlags = HideFlags.HideAndDontSave;
+            tex.wrapMode = TextureWrapMode.Clamp;
+            tex.filterMode = FilterMode.Bilinear;
+            tex.SetPixels(outPx);
+            tex.Apply(false, false);
+            return Sprite.Create(tex, new Rect(0f, 0f, size, size), new Vector2(0.5f, 0.5f), 100f);
+        }
+
+        /// <summary>時代アイコンの形状マスク(u,v∈0..1、y上向き)。0=神殿の柱/1=城壁/2=歯車。</summary>
+        static bool EraIconMask(int era, float u, float v)
+        {
+            switch (era)
+            {
+                case 0:   // 古代: 神殿の柱(基壇+3本の柱身+笠石)
+                    if (v >= 0.08f && v <= 0.20f && u >= 0.14f && u <= 0.86f) return true;
+                    if (v >= 0.76f && v <= 0.88f && u >= 0.14f && u <= 0.86f) return true;
+                    if (v > 0.20f && v < 0.76f)
+                    {
+                        if (u >= 0.20f && u <= 0.32f) return true;
+                        if (u >= 0.44f && u <= 0.56f) return true;
+                        if (u >= 0.68f && u <= 0.80f) return true;
+                    }
+                    return false;
+                case 1:   // 中世: 城壁(胸壁3つ+城体から門をくり抜き)
+                    if (v >= 0.10f && v <= 0.58f && u >= 0.16f && u <= 0.84f)
+                        return !(u >= 0.42f && u <= 0.58f && v <= 0.36f);   // 門
+                    if (v > 0.58f && v <= 0.82f)
+                    {
+                        if (u >= 0.16f && u <= 0.30f) return true;
+                        if (u >= 0.43f && u <= 0.57f) return true;
+                        if (u >= 0.70f && u <= 0.84f) return true;
+                    }
+                    return false;
+                default:  // 近代: 歯車(リング+8枚歯。設定アイコンと同型の白マスク版)
+                {
+                    float dx = u - 0.5f, dy = v - 0.5f;
+                    float d = Mathf.Sqrt(dx * dx + dy * dy);
+                    if (d >= 0.14f && d <= 0.30f) return true;
+                    if (d > 0.26f && d <= 0.44f)
+                    {
+                        float ang = Mathf.Atan2(dy, dx) * Mathf.Rad2Deg;
+                        float near = Mathf.Abs(Mathf.DeltaAngle(ang, Mathf.Round(ang / 45f) * 45f));
+                        if (near <= 11f) return true;
+                    }
+                    return false;
+                }
+            }
         }
 
         void BuildCivilizationPanel()
@@ -1288,6 +1513,7 @@ namespace HexCiv.UI
             // 観戦中の戦況グラフ開閉は観戦バー内のボタンで行う(二段目ボタンは隠す)
             if (scoreGraphButton != null) scoreGraphButton.gameObject.SetActive(!active);
             UpdateLogPosition();   // ログ先頭行が観戦バーの下に隠れないよう移動(2026-07-21 追加)
+            UpdateEraIndicatorPosition();   // 時代表示も観戦バーを避けて移動(2026-07-22 追加)
             if (active)
             {
                 CloseAllPanels();
@@ -1842,7 +2068,8 @@ namespace HexCiv.UI
             shadow.effectDistance = new Vector2(1f, -1f);
 
             var group = root.AddComponent<CanvasGroup>();
-            group.alpha = 1f;
+            // モーダル表示中は生成時から減光する(2026-07-22 追加。位置は LayoutEventBanners が決める)
+            group.alpha = modalOpenCount > 0 ? EventBannerModalAlpha : 1f;
             group.blocksRaycasts = false;
             group.interactable = false;
 
@@ -1863,6 +2090,10 @@ namespace HexCiv.UI
         void UpdateEventBanners()
         {
             if (eventBanners.Count == 0) return;
+            // モーダル開閉が変わったら退避配置⇔通常配置を切り替える(2026-07-22 追加)
+            bool modal = modalOpenCount > 0;
+            if (modal != bannersInModalLayout) LayoutEventBanners();
+            float dim = modal ? EventBannerModalAlpha : 1f;   // モーダル中は約65%不透明
             bool removed = false;
             for (int i = eventBanners.Count - 1; i >= 0; i--)
             {
@@ -1882,9 +2113,9 @@ namespace HexCiv.UI
                     continue;
                 }
                 if (e.Group != null)
-                    e.Group.alpha = age <= e.FadeStart
+                    e.Group.alpha = dim * (age <= e.FadeStart
                         ? 1f
-                        : 1f - (age - e.FadeStart) / (e.Lifetime - e.FadeStart);
+                        : 1f - (age - e.FadeStart) / (e.Lifetime - e.FadeStart));
             }
             if (removed) LayoutEventBanners();
         }
@@ -1897,7 +2128,10 @@ namespace HexCiv.UI
         /// </summary>
         void LayoutEventBanners()
         {
-            float y = EventBannerStackTop;
+            // モーダル表示中は最上段を画面最上端へ退避する(2026-07-22 追加。
+            // パネルのタイトル帯とバナーが重ならないようにする)
+            bannersInModalLayout = modalOpenCount > 0;
+            float y = bannersInModalLayout ? EventBannerStackTopModal : EventBannerStackTop;
             for (int i = 0; i < eventBanners.Count; i++)
             {
                 var e = eventBanners[i];
@@ -1907,6 +2141,54 @@ namespace HexCiv.UI
                 float h = e.Height > 0f ? e.Height : (e.Compact ? 34f : 52f);
                 y -= h + EventBannerStackGap;
             }
+        }
+
+        // ================= モーダル開閉カウンタ(2026-07-22 Claude Code 追加) =================
+
+        /// <summary>
+        /// 独立Canvasのパネル(実績一覧・図鑑など)が自分の開閉を通知するための公開静的API。
+        /// 開いた時に true、閉じた時に false で必ず対にして呼ぶこと(UIManager 側からは呼ばない)。
+        /// カウンタが0より大きい間、イベントバナーは画面最上端へ退避し約65%不透明になる。
+        /// 負値へは決して下がらない(閉じ通知の過多は0で吸収)。
+        /// </summary>
+        public static void NotifyExternalPanel(bool open)
+        {
+            modalOpenCount = Mathf.Max(0, modalOpenCount + (open ? 1 : -1));
+        }
+
+        /// <summary>
+        /// UIManager 管轄の全画面/モーダルパネルのいずれかが開いているか(バナー退避判定用)。
+        /// 中央系のパネル+終了画面+戦況グラフを対象とし、右側の都市パネルは
+        /// 中央上のバナーと重ならないため含めない(従来挙動の維持)。
+        /// </summary>
+        bool IsSelfModalPanelOpen =>
+            (techPanel != null && techPanel.activeSelf) ||
+            (civilizationPanel != null && civilizationPanel.activeSelf) ||
+            (leaderPanel != null && leaderPanel.activeSelf) ||
+            (slotPanel != null && slotPanel.activeSelf) ||
+            (settingsPanel != null && settingsPanel.activeSelf) ||
+            (tutorialPanel != null && tutorialPanel.activeSelf) ||
+            (gameOverOverlay != null && gameOverOverlay.activeSelf) ||
+            (scoreGraphPanel != null && scoreGraphPanel.IsVisible);
+
+        /// <summary>
+        /// 自分のモーダル開閉状態をまとめて1件として modalOpenCount へ反映する
+        /// (Update から毎フレーム。bool比較のみで軽量。開閉箇所への個別配線を不要にする)。
+        /// </summary>
+        void SyncSelfModalContribution()
+        {
+            bool open = canvas != null && IsSelfModalPanelOpen;
+            if (open == selfModalCounted) return;
+            selfModalCounted = open;
+            modalOpenCount = Mathf.Max(0, modalOpenCount + (open ? 1 : -1));
+        }
+
+        /// <summary>自分の計上分を取り消す(再Init・破棄時。外部パネルの計上分は保持される)。</summary>
+        void ReleaseSelfModalContribution()
+        {
+            if (!selfModalCounted) return;
+            selfModalCounted = false;
+            modalOpenCount = Mathf.Max(0, modalOpenCount - 1);
         }
 
         public void ShowTutorial(int page = 0)
@@ -2362,6 +2644,7 @@ namespace HexCiv.UI
             if (slotPanel != null) slotPanel.SetActive(false);
             HideTutorial();
             LoadGameSettingsFromPrefs();
+            RefreshFxQualityLabel();   // 演出トグルのラベルも保存値へ合わせる(2026-07-22 追加)
             if (seedInput != null) seedInput.text = "";   // 前回シードは保存しない(空欄=ランダム)
             settingsPanel.SetActive(true);
             settingsPanel.transform.SetAsLastSibling();
@@ -2412,6 +2695,29 @@ namespace HexCiv.UI
             PlayerPrefs.SetInt(DifficultyKey, settingsDifficulty);
             PlayerPrefs.Save();
             RefreshGameSettingsPanel();
+        }
+
+        /// <summary>
+        /// 演出モードのトグル(2026-07-22 Claude Code 追加)。標準⇔軽量を切り替えて
+        /// PlayerPrefs "HexCiv.FxLight" へ保存し、Rendering/VisualQuality のキャッシュを即時更新する
+        /// (雲影・水面ゆらぎ・待機ボブ・ダメージ数字の表示側が次フレームから追従する)。
+        /// 表示のみの設定で、シミュレーション結果には一切影響しない。
+        /// </summary>
+        void OnFxQualityClicked()
+        {
+            bool light = PlayerPrefs.GetInt(FxLightKey, 0) != 0;
+            PlayerPrefs.SetInt(FxLightKey, light ? 0 : 1);
+            PlayerPrefs.Save();
+            HexCiv.Render.VisualQuality.Refresh();
+            RefreshFxQualityLabel();
+        }
+
+        /// <summary>演出トグルのラベルを保存値に合わせる(構築時・パネルを開いた時・切替直後に呼ぶ)。</summary>
+        void RefreshFxQualityLabel()
+        {
+            if (fxQualityLabel == null) return;
+            fxQualityLabel.text = "演出: " +
+                (PlayerPrefs.GetInt(FxLightKey, 0) != 0 ? "軽量" : "標準");
         }
 
         /// <summary>文明数選択(選択と同時に PlayerPrefs へ保存し、以後の新規ゲームに適用)。</summary>
@@ -2715,6 +3021,8 @@ namespace HexCiv.UI
             if (civilizationButton != null) civilizationButton.interactable = !state.IsGameOver && p != null;
             if (leaderButton != null) leaderButton.interactable = !state.IsGameOver && p != null;
             if (settingsButton != null) settingsButton.interactable = !state.IsGameOver;
+
+            RefreshEraIndicator();   // 時代表示(ターン変化時のみ実更新。2026-07-22 追加)
         }
 
         void RefreshUnitPanel()

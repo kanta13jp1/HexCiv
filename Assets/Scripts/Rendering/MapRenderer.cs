@@ -70,6 +70,7 @@ namespace HexCiv.Render
         Color32[] terrainColors;     // 地形メッシュ頂点色のキャッシュ(水面ゆらぎ・領土面塗りが更新)
         float waterClock;
         float nextWaterTick;
+        bool waterLightRestored;     // 軽量演出モード(VisualQuality)移行時に基準色へ戻し済みか(2026-07-22 追加)
         const float WaterPeriod = 5f;           // 約5秒周期(ゆっくり)
         const float WaterAmp = 0.012f;          // 明度±1.2%
         const float WaterTickInterval = 0.1f;   // 更新は最大10回/秒
@@ -348,6 +349,25 @@ namespace HexCiv.Render
         {
             if (terrainMesh == null || waterEntries == null || waterEntries.Length == 0) return;
             if (terrainColors == null || terrainMesh.vertexCount != terrainColors.Length) return;
+
+            // 軽量演出モード(2026-07-22 追加): ゆらぎを停止し、基準色(面塗り込み)へ一度だけ
+            // 戻して以後は何もしない。標準へ戻せば次の tick から通常のゆらぎを再開する。
+            if (VisualQuality.LightMode)
+            {
+                if (!waterLightRestored)
+                {
+                    waterLightRestored = true;
+                    for (int i = 0; i < waterEntries.Length; i++)
+                    {
+                        int vb = waterEntries[i].VertBase;
+                        var bc = waterEntries[i].BaseCol;
+                        for (int k = 0; k < 7; k++) terrainColors[vb + k] = bc;
+                    }
+                    terrainMesh.colors32 = terrainColors;
+                }
+                return;
+            }
+            waterLightRestored = false;
 
             waterClock += Time.unscaledDeltaTime;
             if (waterClock < nextWaterTick) return;
