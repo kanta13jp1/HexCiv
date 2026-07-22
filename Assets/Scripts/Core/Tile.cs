@@ -9,6 +9,8 @@ namespace HexCiv.Core
         public TerrainType Terrain = TerrainType.Ocean;
         public bool HasHill;
         public bool HasForest;
+        /// <summary>手続き生成された河道。川は陸上タイルだけに置かれる。</summary>
+        public bool HasRiver;
         public ResourceType Resource = ResourceType.None;
 
         /// <summary>領有プレイヤーId(-1 = 無所属)</summary>
@@ -34,6 +36,7 @@ namespace HexCiv.Core
             var y = Def.BaseYields;
             if (HasHill) y += new Yields(0, 1);
             if (HasForest) y += new Yields(0, 1);
+            if (HasRiver && IsPassable) y += new Yields(1, 0);
             if (Resource != ResourceType.None) y += GameRules.Resources[Resource].Bonus;
             if (City != null)
             {

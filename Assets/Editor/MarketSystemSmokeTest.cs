@@ -4,7 +4,7 @@ using HexCiv.Core;
 using UnityEditor;
 using UnityEngine;
 
-/// <summary>市場の生産・需要・交易・遮断・地域産業・AI・セーブv14を検証する。</summary>
+/// <summary>市場の生産・需要・交易・遮断・地域産業・AI・セーブv15を検証する。</summary>
 public static class MarketSystemSmokeTest
 {
     public static void Run()
@@ -14,7 +14,7 @@ public static class MarketSystemSmokeTest
             ValidateProductionPoliciesAndEffects();
             ValidateTradeAndWarBlockade();
             ValidateRegionalIndustryAndAI();
-            ValidateSaveVersion14AndMigration();
+            ValidateSaveVersion15AndMigration();
             Debug.Log("MARKET SYSTEM SMOKE OK");
             EditorApplication.Exit(0);
         }
@@ -101,7 +101,7 @@ public static class MarketSystemSmokeTest
         Debug.Log("[Market] 地域産業発展・AI市場方針 OK");
     }
 
-    static void ValidateSaveVersion14AndMigration()
+    static void ValidateSaveVersion15AndMigration()
     {
         GameState state = BuildState();
         Player player = state.Players[0];
@@ -123,7 +123,7 @@ public static class MarketSystemSmokeTest
         player.DevelopedMaterialCultures.Add("couscous");
 
         string json1 = SaveLoad.Serialize(state);
-        if (!json1.Contains("\"version\":14")) throw new Exception("セーブversion 14ではない");
+        if (!json1.Contains("\"version\":15")) throw new Exception("セーブversion 15ではない");
         GameState restored = SaveLoad.Deserialize(json1);
         string json2 = SaveLoad.Serialize(restored);
         string json3 = SaveLoad.Serialize(SaveLoad.Deserialize(json2));
@@ -141,7 +141,7 @@ public static class MarketSystemSmokeTest
                 $"trade={rp.LastImports}/{rp.LastExports}/{rp.LastTradeBalance}/{rp.LastTradePartnerId} " +
                 $"feature={rp.FeaturedIndustryId} developed={rp.DevelopedMaterialCultures.Count}");
 
-        string old = json1.Replace("\"version\":14", "\"version\":13");
+        string old = json1.Replace("\"version\":15", "\"version\":13");
         Player migrated = SaveLoad.Deserialize(old).GetPlayer(player.Id);
         if (migrated.EconomicPolicy != EconomicPolicy.BalancedMarkets ||
             migrated.FoodGoods != MarketSystem.StartingStock ||
@@ -149,7 +149,7 @@ public static class MarketSystemSmokeTest
             migrated.DemandFulfillment != MarketSystem.StartingDemandFulfillment ||
             migrated.LastTradePartnerId != -1 || migrated.DevelopedMaterialCultures.Count != 0)
             throw new Exception("version 13セーブの市場既定値移行に失敗");
-        Debug.Log("[Market] セーブv14決定往復・v13既定値移行 OK");
+        Debug.Log("[Market] セーブv15決定往復・v13既定値移行 OK");
     }
 
     static GameState BuildState()

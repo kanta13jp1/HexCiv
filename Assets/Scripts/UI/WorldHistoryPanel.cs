@@ -8,7 +8,7 @@ using HexCiv.Core;
 namespace HexCiv.UI
 {
     /// <summary>
-    /// 文明・指導者・遺跡・偉人・研究史・文化史・作品史・生活技術史を横断する独立図鑑UI。
+    /// 文明・指導者・遺跡・偉人・研究史・文化史・作品史・生活技術史・自然地理を横断する独立図鑑UI。
     /// UIManagerとは別Canvasに置き、共同開発中のゲーム設定・セーブUIへ依存しない。
     /// </summary>
     public sealed class WorldHistoryPanel : MonoBehaviour
@@ -25,7 +25,8 @@ namespace HexCiv.UI
             Research,
             Culture,
             Works,
-            MaterialCulture
+            MaterialCulture,
+            NaturalGeography
         }
 
         enum RowIconKind
@@ -44,7 +45,8 @@ namespace HexCiv.UI
             Music,
             Theater,
             Film,
-            MaterialCulture
+            MaterialCulture,
+            NaturalGeography
         }
 
         static readonly string[] Regions =
@@ -69,6 +71,7 @@ namespace HexCiv.UI
         Button cultureTab;
         Button worksTab;
         Button materialCultureTab;
+        Button naturalGeographyTab;
         Button prevButton;
         Button nextButton;
 
@@ -83,6 +86,7 @@ namespace HexCiv.UI
         Texture2D masterpieceEmblems;
         Texture2D theaterFilmEmblems;
         Texture2D materialCultureIcon;
+        Texture2D naturalGeographyIcon;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         static void AutoSpawn()
@@ -157,6 +161,7 @@ namespace HexCiv.UI
             masterpieceEmblems = Resources.Load<Texture2D>("History/masterpiece_emblems");
             theaterFilmEmblems = Resources.Load<Texture2D>("History/theater_film_emblems");
             materialCultureIcon = CreateMaterialCultureIcon();
+            naturalGeographyIcon = CreateNaturalGeographyIcon();
             var bannerTexture = Resources.Load<Texture2D>("History/world_history_banner");
             if (bannerTexture != null)
             {
@@ -225,9 +230,14 @@ namespace HexCiv.UI
             UIStyle.SetRect(materialCultureTab.gameObject, new Vector2(0f, 1f), new Vector2(0f, 1f),
                 new Vector2(0f, 1f), new Vector2(516f, -55f), new Vector2(58f, 38f));
 
+            naturalGeographyTab = UIStyle.CreateButton(panel.transform, "NaturalGeographyTab", "自然地理", 11,
+                () => SwitchMode(CatalogMode.NaturalGeography));
+            UIStyle.SetRect(naturalGeographyTab.gameObject, new Vector2(0f, 1f), new Vector2(0f, 1f),
+                new Vector2(0f, 1f), new Vector2(577f, -55f), new Vector2(58f, 38f));
+
             var regionButton = UIStyle.CreateButton(panel.transform, "Region", "", 15, CycleRegion);
             UIStyle.SetRect(regionButton.gameObject, new Vector2(1f, 1f), new Vector2(1f, 1f),
-                new Vector2(1f, 1f), new Vector2(-28f, -55f), new Vector2(270f, 38f));
+                new Vector2(1f, 1f), new Vector2(-28f, -55f), new Vector2(210f, 38f));
             regionButtonText = UIStyle.ButtonLabel(regionButton);
 
             countText = UIStyle.CreateText(panel.transform, "Count", "", 14,
@@ -310,6 +320,7 @@ namespace HexCiv.UI
             SetTabColor(cultureTab, mode == CatalogMode.Culture);
             SetTabColor(worksTab, mode == CatalogMode.Works);
             SetTabColor(materialCultureTab, mode == CatalogMode.MaterialCulture);
+            SetTabColor(naturalGeographyTab, mode == CatalogMode.NaturalGeography);
 
             if (mode == CatalogMode.Overview)
             {
@@ -367,12 +378,19 @@ namespace HexCiv.UI
                 UpdateFooter(items.Count, "作品");
                 titleText.text = "世界史図鑑　―　作品史";
             }
-            else
+            else if (mode == CatalogMode.MaterialCulture)
             {
                 var items = FilteredMaterialCulture();
                 BuildMaterialCultureRows(items);
                 UpdateFooter(items.Count, "生活・技術史");
                 titleText.text = "世界史図鑑　―　生活・技術史";
+            }
+            else
+            {
+                var items = FilteredNaturalGeography();
+                BuildNaturalGeographyRows(items);
+                UpdateFooter(items.Count, "自然地理");
+                titleText.text = "世界史図鑑　―　自然地理";
             }
         }
 
@@ -388,7 +406,8 @@ namespace HexCiv.UI
                 case CatalogMode.Research: return FilteredResearch().Count;
                 case CatalogMode.Culture: return FilteredCulture().Count;
                 case CatalogMode.Works: return FilteredWorks().Count;
-                default: return FilteredMaterialCulture().Count;
+                case CatalogMode.MaterialCulture: return FilteredMaterialCulture().Count;
+                default: return FilteredNaturalGeography().Count;
             }
         }
 
@@ -437,6 +456,11 @@ namespace HexCiv.UI
             return MaterialCultureCatalog.ForRegion(regionIndex == 0 ? null : Regions[regionIndex]);
         }
 
+        List<NaturalFeatureDef> FilteredNaturalGeography()
+        {
+            return NaturalFeatureCatalog.ForRegion(regionIndex == 0 ? null : Regions[regionIndex]);
+        }
+
         void BuildOverviewRows(List<GlobalHistoryIndexEntry> items)
         {
             int start = page * ItemsPerPage;
@@ -454,7 +478,8 @@ namespace HexCiv.UI
                     item.Id == "culture" ? RowIconKind.Culture :
                     item.Id == "theater" ? RowIconKind.Theater :
                     item.Id == "film" ? RowIconKind.Film :
-                    IsMaterialIndexId(item.Id) ? RowIconKind.MaterialCulture : RowIconKind.None;
+                    IsMaterialIndexId(item.Id) ? RowIconKind.MaterialCulture :
+                    IsNaturalIndexId(item.Id) ? RowIconKind.NaturalGeography : RowIconKind.None;
                 CreateEntryRow(i - start, "Index_" + item.Id, text, iconKind);
             }
         }
@@ -588,6 +613,20 @@ namespace HexCiv.UI
             }
         }
 
+        void BuildNaturalGeographyRows(List<NaturalFeatureDef> items)
+        {
+            int start = page * ItemsPerPage;
+            int end = Mathf.Min(items.Count, start + ItemsPerPage);
+            for (int i = start; i < end; i++)
+            {
+                var item = items[i];
+                string text = item.NameJa + "　［" + item.KindNameJa + "］　" + item.LocationJa +
+                    " / " + item.FormJa + "\n" + item.SummaryJa;
+                CreateEntryRow(i - start, "NaturalGeography_" + item.Id, text,
+                    RowIconKind.NaturalGeography);
+            }
+        }
+
         static bool IsMaterialIndexId(string id)
         {
             return id == "specialty_products" || id == "regional_products" ||
@@ -595,6 +634,12 @@ namespace HexCiv.UI
                 id == "vehicles" || id == "aircraft" || id == "rockets" ||
                 id == "weapons" || id == "dances" || id == "songs" ||
                 id == "martial_arts";
+        }
+
+        static bool IsNaturalIndexId(string id)
+        {
+            return id == "mountains" || id == "rivers" || id == "seas" ||
+                id == "lakes" || id == "forests" || id == "deserts";
         }
 
         static RowIconKind IconForMasterpiece(MasterpieceKind kind)
@@ -671,6 +716,10 @@ namespace HexCiv.UI
             else if (iconKind == RowIconKind.MaterialCulture)
             {
                 iconTexture = materialCultureIcon;
+            }
+            else if (iconKind == RowIconKind.NaturalGeography)
+            {
+                iconTexture = naturalGeographyIcon;
             }
 
             if (iconTexture != null)
@@ -808,6 +857,41 @@ namespace HexCiv.UI
             return texture;
         }
 
+        static Texture2D CreateNaturalGeographyIcon()
+        {
+            const int size = 48;
+            var texture = new Texture2D(size, size, TextureFormat.RGBA32, false)
+            {
+                name = "NaturalGeographyIcon",
+                filterMode = FilterMode.Point,
+                wrapMode = TextureWrapMode.Clamp
+            };
+            var pixels = new Color32[size * size];
+            var clear = new Color32(0, 0, 0, 0);
+            var mountain = new Color32(166, 158, 145, 255);
+            var snow = new Color32(235, 240, 241, 255);
+            var forest = new Color32(54, 132, 70, 255);
+            var river = new Color32(61, 174, 224, 255);
+            for (int i = 0; i < pixels.Length; i++) pixels[i] = clear;
+
+            // 山・森林・蛇行河川を組み合わせた外部素材不要の自然地理アイコン。
+            for (int y = 12; y <= 36; y++)
+                for (int x = 5; x <= 31; x++)
+                    if (y <= 36 && y >= 12 + Mathf.Abs(x - 18)) pixels[y * size + x] = mountain;
+            for (int y = 12; y <= 22; y++)
+                for (int x = 12; x <= 24; x++)
+                    if (y >= 12 + Mathf.Abs(x - 18)) pixels[y * size + x] = snow;
+            Fill(pixels, size, 3, 35, 25, 40, forest);
+            for (int y = 8; y <= 43; y++)
+            {
+                int x = 34 + Mathf.RoundToInt(Mathf.Sin(y * 0.38f) * 5f);
+                Fill(pixels, size, x - 2, y, x + 2, y + 1, river);
+            }
+            texture.SetPixels32(pixels);
+            texture.Apply(false, true);
+            return texture;
+        }
+
         static void Fill(Color32[] pixels, int size, int x0, int y0, int x1, int y1, Color32 color)
         {
             for (int y = Mathf.Max(0, y0); y <= Mathf.Min(size - 1, y1); y++)
@@ -818,6 +902,7 @@ namespace HexCiv.UI
         void OnDestroy()
         {
             if (materialCultureIcon != null) Destroy(materialCultureIcon);
+            if (naturalGeographyIcon != null) Destroy(naturalGeographyIcon);
         }
     }
 }

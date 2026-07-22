@@ -46,6 +46,7 @@ namespace HexCiv.Core
             total += PopulationSystem.CultureBonus(player);
             total += PoliticalSystem.CultureBonus(player);
             total += MarketSystem.CultureBonus(player);
+            total += NaturalGeographySystem.CultureBonus(state, player);
             return AdministrationSystem.ScaleOutput(player, Math.Max(0, total));
         }
 

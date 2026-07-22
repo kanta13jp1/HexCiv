@@ -1,6 +1,6 @@
 # シミュレーションゲーム要素・生成技術台帳
 
-最終更新: 2026-07-22 / 第5版
+最終更新: 2026-07-23 / 第6版
 
 ## この台帳の役割
 
@@ -11,7 +11,7 @@
 3. 台帳へ候補を追加し、Coreの決定論とセーブ互換を守って一群ずつ実装する。
 4. 他作品の画像・音・文章・固有UI・数値表を複製せず、仕組みはHexCiv用に再設計する。
 
-文明・指導者・遺跡・偉人・研究・文化・作品・生活技術の収録状況は、既存の `GLOBAL_HISTORY_CATALOG.md`、`WORLD_HISTORY_CATALOG.md`、`RESEARCH_CULTURE_CATALOG.md`、`MASTERPIECE_CATALOG.md`、`MATERIAL_CULTURE_CATALOG.md` が正本です。この文書は、ゲーム機構とメディア生成技術の正本です。
+文明・指導者・遺跡・偉人・研究・文化・作品・生活技術・自然地理の収録状況は、既存の `GLOBAL_HISTORY_CATALOG.md`、`WORLD_HISTORY_CATALOG.md`、`RESEARCH_CULTURE_CATALOG.md`、`MASTERPIECE_CATALOG.md`、`MATERIAL_CULTURE_CATALOG.md`、`NATURAL_GEOGRAPHY_CATALOG.md` が正本です。この文書は、ゲーム機構とメディア生成技術の正本です。
 
 ## シミュレーションゲーム設計参照索引（第1群）
 
@@ -123,6 +123,29 @@
 | 経営 | Industry Giant | 産業立地、加工、物流、小売、需要 | **地域産業・在庫を第5実装**、施設立地候補 |
 | 経営 | Offworld Trading Company | 動的価格、資源競争、市場操作、企業戦略 | **不足・余剰価格を第5実装**、市場操作は候補 |
 
+## シミュレーションゲーム設計参照索引（第5群）
+
+第5群では地形、水系、生態、気候と人間活動の関係を中心に16系統を追加し、累計98系統とした。自然を単なる背景や無限資源にせず、移動・産出・市場・科学・文化へ小さく接続する比較軸を抽出する。
+
+| 系統 | 代表的な参照作品 | 抽出する設計要素 | HexCivでの状態 |
+|---|---|---|---|
+| 歴史 | Civilization VI | 河川、沿岸、地形隣接、自然景観 | **河川食料・水辺市場・自然多様性を第6実装** |
+| 歴史 | Endless Legend | 高低差、地域地形、季節、探索 | 山岳・地域地形済み、季節候補 |
+| 歴史 | Ara: History Untold | 地域資源、生態帯、都市圏、物流 | 地域産業・自然多様性済み、生態帯候補 |
+| 歴史 | At the Gates | 季節、河川、資源枯渇、移住 | 河川・移住済み、季節・枯渇候補 |
+| 軍事 | Panzer Corps 2 | ヘクス地形、河川、天候、補給 | 補給・河川表示済み、渡河・天候候補 |
+| 軍事 | Unity of Command II | 河川、道路、補給網、地形隘路 | 補給済み、渡河・橋梁候補 |
+| 軍事 | Hex of Steel | 地形、天候、橋梁、海陸移動 | 地形済み、橋梁・天候候補 |
+| 軍事 | Command: Modern Operations | 海域、地形、距離、探知環境 | 海域台帳済み、海上・探知環境候補 |
+| 政治 | Fate of the World | 気候政策、地域影響、資源、長期指標 | 政策・地域集計済み、気候指標候補 |
+| 政治 | Democracy 4 | 環境政策、世論、予算、政策連鎖 | 法律・支持・国庫済み、環境政策候補 |
+| 政治 | Suzerain | 地域開発、インフラ、資源、政治選択 | 地域産業・法律済み、事件選択候補 |
+| 政治 | Eco | 生態系、資源利用、法律、共同統治 | 法律済み、生態循環・共同統治候補 |
+| 経営 | SimEarth | 気候、地形、生態系、人間活動 | 自然地理集計済み、長期環境循環候補 |
+| 経営 | Timberborn | 河川流量、干ばつ、貯水、都市生産 | 湖・河川済み、流量・治水候補 |
+| 経営 | Against the Storm | 生態帯、資源、住民需要、周期災害 | 需要・地域産業済み、周期災害候補 |
+| 経営 | Terra Nil | 水系、植生回復、生態多様性、土地再生 | 自然多様性済み、回復・保全候補 |
+
 ### 機構実装ロードマップ
 
 | 段階 | 機構 | 内容 | 状態 |
@@ -132,7 +155,8 @@
 | 3 | 人口社会 | 人口階層、職業、需要、教育、満足度、移住、AI社会重点 | **実装済み** |
 | 4 | 政治 | 派閥、支持、法令、評議会、事件選択 | **派閥・支持・法律・正統性を実装済み**（事件・選挙は次拡張） |
 | 5 | 市場 | 資源在庫、交易路、価格、生産連鎖 | **5財・需要・在庫・価格・自動交易・地域産業を実装済み**（明示路線・港・多段加工は次拡張） |
-| 6 | 人物史 | 特性、任命、関係、継承、家系 | 設計候補 |
+| 6 | 自然地理 | 山・川・海・湖・森・砂漠、河川、自然多様性、立地効果 | **72件台帳・内陸湖・河川・食料・科学・文化・市場接続を実装済み**（流向・氾濫・気候は次拡張） |
+| 7 | 人物史 | 特性、任命、関係、継承、家系 | 設計候補 |
 
 ## 第1実装: 国家運営
 
@@ -187,11 +211,11 @@
 - **地域産業**: 生活技術72件を各地域12件の発展候補へ接続する。歌・踊り・武術を交換可能な物品とみなさず、知識・文化への継承効果として扱う。
 - **他システム**: 需要充足は満足、製品は生産、知識と交通技術は科学、料理・踊り・歌は文化、輸送在庫は補給、交易収支は国庫へ接続する。
 - **UI・演出**: 右側「市場」またはF4。5財、需給、価格、交易、地域産業、4方針を表示し、実行時生成の木箱・双方向矢印アイコンと0.18秒スライドフェードを使う。
-- **セーブ**: version 14。version 13以前は均衡市場、各在庫3、市場アクセス50、需要充足75、地域産業なしへ移行する。
+- **セーブ**: 市場値はversion 14から保存。現行version 15でも互換を維持し、version 13以前は均衡市場、各在庫3、市場アクセス50、需要充足75、地域産業なしへ移行する。
 
 ## 画像・動画・音楽・音声生成技術の分類台帳
 
-「生成」は手続き生成、シミュレーション、制作支援、機械学習による合成を含みます。製品名の網羅ではなく、技術系譜を追跡します。第5版は8系統を増補し、累計57技術系譜です。
+「生成」は手続き生成、シミュレーション、制作支援、機械学習による合成を含みます。製品名の網羅ではなく、技術系譜を追跡します。第6版は8系統を増補し、累計65技術系譜です。
 
 | 媒体 | 技術系譜 | 代表的な方式 | HexCiv方針・状態 |
 |---|---|---|---|
@@ -252,6 +276,14 @@
 | 音楽 | 手続き打楽器パターン | Euclidean rhythm、accent grammar、tempo subdivision | 戦時BGMレイヤーで一部実装済み |
 | 音声 | 音素単位の固有名合成 | multilingual phoneme inventory、prosody rule、unit concatenation | 文明・人物・地名の権利安全な読み上げ候補 |
 | 音声 | 空間音響シーン生成 | source placement、distance attenuation、procedural ambience | 都市・市場・戦場の抽象環境音候補 |
+| 画像 | 水文地形合成 | flow accumulation、watershed、cost path、drainage graph | **局所低地の湖と山麓からの決定河川を第6実装** |
+| 画像 | 侵食地形生成 | hydraulic erosion、thermal erosion、sediment transport | 河谷・三角州・海岸線の将来候補 |
+| 画像 | 生態帯合成 | latitude、moisture、temperature、ecological constraint | 緯度・湿度・森林を一部実装、遷移帯は候補 |
+| 画像 | 地理ベクタ・ラスタ融合 | DEM、hydrography vector、rasterization、resampling | Natural Earth・HydroSHEDS・GEBCOを実世界モードの調査入口に登録 |
+| 画像 | 地図総描・ラベル配置 | simplification、conflict removal、scale-dependent labeling | 大縮尺名称と小縮尺図鑑の分離候補 |
+| 動画 | 流線・ベクトル場アニメーション | spline flow、vector field、particle advection | 河川・風・海流の軽量演出候補 |
+| 音楽 | 環境音景の規則合成 | layered ambience、stochastic event、biome parameter | 外部録音に依存しない森林・河川・沿岸音景の候補 |
+| 画像 | 地理空間基盤モデル | multimodal embedding、segmentation、remote-sensing synthesis | 事前調査支援のみ。出典不明の地理画像をゲームへ自動投入しない |
 
 ### 導入規則
 
@@ -279,5 +311,10 @@
 - [Unity of Command — Developer Diary 5: The Supply Network](https://unityofcommand.net/blog/2016/04/06/development-diary-5-the-supply-network/)
 - [Unity of Command — The Power of Supply](https://unityofcommand.net/blog/2011/11/03/the-power-of-supply/)
 - [Shadow Empire — Official Game Manual (Matrix Games)](https://www.matrixgames.com/amazon/PDF/SE/Shadow_Empire_manual_EBOOK.pdf)
+- [Natural Earth — 50m Physical Vectors](https://www.naturalearthdata.com/downloads/50m-physical-vectors/)
+- [HydroRIVERS — Technical Documentation](https://data.hydrosheds.org/file/technical-documentation/HydroRIVERS_TechDoc_v10.pdf)
+- [FAO — Global Forest Resources Assessment 2025](https://www.fao.org/forest-resources-assessment/past-assessments/fra-2025/en)
+- [JRC — World Atlas of Desertification](https://wad.jrc.ec.europa.eu/)
+- [GEBCO — Gridded Bathymetry Data](https://www.gebco.net/data-products-gridded-bathymetry-data)
 - [Unity 6 `Texture2D.SetPixels32`](https://docs.unity3d.com/6000.0/Documentation/ScriptReference/Texture2D.SetPixels32.html)
 - [Unity 6 `AudioClip.Create`](https://docs.unity3d.com/6000.0/Documentation/ScriptReference/AudioClip.Create.html)

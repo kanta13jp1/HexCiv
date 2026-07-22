@@ -99,8 +99,8 @@ public static class AdministrationSystemSmokeTest
         state.LastSavedAtIso = "2026-07-22T12:00:00";
 
         string json1 = SaveLoad.Serialize(state);
-        if (!json1.Contains("\"version\":14"))
-            throw new Exception("セーブversion 14ではない");
+        if (!json1.Contains("\"version\":15"))
+            throw new Exception("セーブversion 15ではない");
         var restored = SaveLoad.Deserialize(json1);
         string json2 = SaveLoad.Serialize(restored);
         string json3 = SaveLoad.Serialize(SaveLoad.Deserialize(json2));
@@ -112,7 +112,7 @@ public static class AdministrationSystemSmokeTest
             throw new Exception("国家運営値の復元に失敗");
 
         // バージョン9相当（追加6フィールドなし）は初期値で安全に移行する。
-        string old = json1.Replace("\"version\":14", "\"version\":9");
+        string old = json1.Replace("\"version\":15", "\"version\":9");
         string[] fields = { "treasury", "taxPolicy", "stability", "warWeariness", "lastRevenue", "lastExpenses" };
         for (int i = 0; i < fields.Length; i++)
             old = Regex.Replace(old, ",\"" + fields[i] + "\":-?[0-9]+", "");

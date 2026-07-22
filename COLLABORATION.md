@@ -26,6 +26,16 @@ CodexとClaude Codeは、以後この `HexCiv` プロジェクトだけを更新
 
 ## 最新状況
 
+### 2026-07-23 Codex: 自然地理72件・河川と内陸湖 第6段階
+
+- `Core/NaturalFeatureCatalog.cs`: 山・川・海・湖・森林・砂漠／乾燥地を各12件、6地域を各12件の計72件で安定ID台帳化した。実在地名は図鑑だけに置き、生成マップへ無作為に割り当てない。全一覧とNatural Earth・HydroSHEDS・FAO・JRC・GEBCOの調査入口は `NATURAL_GEOGRAPHY_CATALOG.md`。
+- `Core/NaturalGeographySystem.cs` / `MapGenerator.cs`: 標高の局所低地から内陸湖、山麓から最寄り水域へ河川を決定論的に生成する。同じseedなら地形・湖・河川・開始位置が一致し、追加RNGを消費しない。河川は食料+1、水辺都市は市場アクセス、6種の自然多様性は科学・文化へ最大+2。
+- `MapRenderer.cs` / `WorldHistoryPanel.cs` / `GlobalHistoryIndex.cs`: 河川を水色の流路として描画し、図鑑第10タブ「自然地理」と山・森林・水流の実行時生成アイコンを追加。総合台帳は **31分類・1267件**。SaveLoadはversion 15で河川配列を保存し、version 14以前は地形から補完する。
+- `SIMULATION_AND_GENERATION_CATALOG.md` 第6版はシミュレーション参照を**98系統**、画像・動画・音楽・音声生成技術を**65系統**へ増補した。自然地理の仕組みを第6段階として実装済みに更新。
+- 専用テスト `NATURAL GEOGRAPHY SYSTEM SMOKE OK`: 72件、6分類・6地域均衡、同seed一致、河川・湖生成、河川食料+1、自然多様性6で科学+2・文化+2、水辺市場+4、セーブv15往復、v14移行を検証。`GLOBAL HISTORY INDEX SMOKE OK`、市場・国家運営・兵站・人口・政治・文化・作品・生活技術の回帰テストも全合格。
+- 150ターン総合テストを2回実行し、ともに `SMOKE OK` かつ全トレース一致。新しい決定論的基準値は **turn150 units=104 cities=18 techs=168 wars=3**、累計戦争4、バビロン文化勝利。Windowsビルドは `BUILD OK: 97827645 bytes, 36.7s`。25秒起動でUnity `6000.3.20f1`、例外・クラッシュ0。
+- Claude Code第17弾の `GameBootstrap` / `UIManager` / `GameAudio` / `TimelapsePanel` は編集・ステージせず、共有ワークツリーの統合検証にだけ含めた。次候補は河川の流向・渡河・氾濫原・港・海上補給、または人物史（特性・任命・関係・継承）。
+
 ### 2026-07-22 Codex: 市場・交易・地域産業 第5段階
 
 - `Core/MarketSystem.cs`: 食料・素材・製造品・知識・輸送力の5市場を、在庫・生産・需要・価格・充足率・市場アクセス付きで決定論的に実装した。平和な文明間は余剰と不足、首都間距離、輸送力、商業特許状から交易量を求め、交戦中の相手とは交易しない。交易収支は国庫へ接続した。

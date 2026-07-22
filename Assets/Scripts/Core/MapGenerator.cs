@@ -138,6 +138,10 @@ namespace HexCiv.Core
                 }
             }
 
+            // ---- 4.5) 内陸湖: 周囲を陸に囲まれた局所低地を水面化 ----
+            // 乱数を追加消費せず、同一seedの決定論を維持する。外洋とは別連結成分になる。
+            NaturalGeographySystem.GenerateInlandLakes(map, elevation);
+
             var land = map.AllTiles.Where(t => t.IsLand).ToList();
             int landCount = land.Count;
 
@@ -158,6 +162,9 @@ namespace HexCiv.Core
             int forestTarget = Mathf.Min(forestCands.Count, Mathf.RoundToInt(landCount * ForestRatio));
             foreach (var t in TopByNoise(forestCands, forestNoise, 5.5f, rng).Take(forestTarget))
                 t.HasForest = true;
+
+            // ---- 7.5) 河川: 山麓から最寄り水域へ決定論的な河道を生成 ----
+            NaturalGeographySystem.GenerateRivers(map);
 
             // ---- 8) 資源(適地の約8%) ----
             PlaceResources(map, land, rng);
@@ -396,6 +403,7 @@ namespace HexCiv.Core
                     t.Terrain = TerrainType.Grassland;
                     t.HasHill = false;
                     t.HasForest = false;
+                    t.HasRiver = false;
                     t.Resource = ResourceType.None;
                     result.Add(t);
                 }

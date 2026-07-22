@@ -169,7 +169,7 @@ namespace HexCiv.Core
             player.LastTradePartnerId = -1;
 
             TryDevelopRegionalIndustry(state, player);
-            player.MarketAccess = ComputeMarketAccess(player);
+            player.MarketAccess = ComputeMarketAccess(state, player);
 
             for (int i = 0; i < GoodCount; i++)
             {
@@ -328,6 +328,11 @@ namespace HexCiv.Core
 
         public static int ComputeMarketAccess(Player player)
         {
+            return ComputeMarketAccess(null, player);
+        }
+
+        public static int ComputeMarketAccess(GameState state, Player player)
+        {
             if (player == null || player.Cities.Count == 0) return 0;
             int access = 32 + player.Cities.Count * 5 + Math.Min(20, player.KnownTechs.Count / 5);
             if (player.HasTech("wheel")) access += 10;
@@ -341,6 +346,7 @@ namespace HexCiv.Core
                 EconomicPolicy.WarMobilization => -15,
                 _ => 0,
             };
+            access += NaturalGeographySystem.MarketAccessBonus(state, player);
             return Math.Clamp(access, 5, 100);
         }
 

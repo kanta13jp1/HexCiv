@@ -9,6 +9,7 @@ namespace HexCiv.Render
     /// 霧(戦場の霧)・領土国境・ハイライトは動的オーバーレイとして更新する。
     /// マウス下のタイル判定(XZ平面との数学的交差 + HexCoord.FromWorld)も担当する。
     /// 2026-07-22 追加: 補給範囲オーバーレイ(Lキー / SetSupplyOverlay)。
+    /// 2026-07-23 追加: Coreの河川タイルを細い連結水路として装飾層へ描画。
     /// Core/LogisticsSystem の補給網を薄く着色して表示するだけで、状態は一切書き換えない。
     /// </summary>
     public class MapRenderer : MonoBehaviour
@@ -569,11 +570,40 @@ namespace HexCiv.Render
                     if (t.HasForest) AddForest(c, t.Coord);
                 }
 
+                if (t.HasRiver) AddRiver(t, c);
+
                 if (t.Resource != ResourceType.None)
                     AddResource(c, t.Resource);
             }
             decoMesh = builder.Build(decoMesh);
             RenderUtil.NewMeshChild(transform, "Decorations", decoMesh, mat, Vector3.zero, SortDeco);
+        }
+
+        void AddRiver(Tile tile, Vector3 center)
+        {
+            var blue = new Color(0.18f, 0.64f, 0.88f, 0.96f);
+            center.y += 0.004f; // 森林・丘陵の面と同一深度にならないよう少し持ち上げる
+            builder.AddHex(center, 0.13f, blue);
+
+            foreach (var neighbor in state.Map.NeighborsOf(tile.Coord))
+            {
+                bool joinsRiver = neighbor.HasRiver && CompareCoord(tile.Coord, neighbor.Coord) < 0;
+                bool reachesWater = neighbor.IsWater;
+                if (!joinsRiver && !reachesWater) continue;
+
+                Vector3 end = neighbor.Coord.ToWorld();
+                end.y = DecoY + RenderUtil.TileVisualHeight(neighbor) + 0.004f;
+                if (reachesWater) end = Vector3.Lerp(center, end, 0.68f);
+                Vector3 direction = end - center;
+                Vector3 side = new Vector3(-direction.z, 0f, direction.x).normalized * 0.065f;
+                builder.AddQuad(center + side, end + side, end - side, center - side, blue);
+            }
+        }
+
+        static int CompareCoord(HexCoord a, HexCoord b)
+        {
+            int cmp = a.r.CompareTo(b.r);
+            return cmp != 0 ? cmp : a.q.CompareTo(b.q);
         }
 
         void AddHill(Vector3 c, Tile t)

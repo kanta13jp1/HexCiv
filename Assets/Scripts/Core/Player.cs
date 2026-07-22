@@ -161,6 +161,7 @@ namespace HexCiv.Core
             if (capitalAlive && CapitalCityId >= 0) total += GameRules.BaseSciencePerCiv;
             total += MasterpieceSystem.SciencePerTurnBonus(this);
             total += MarketSystem.ScienceBonus(this);
+            total += NaturalGeographySystem.ScienceBonus(s, this);
             total = CultureSystem.ScaleScience(this, total);
             total = AdministrationSystem.ScaleOutput(this, total);
             // AI文明は難易度に応じて科学産出を補正(普通=100%で無変換。2026-07-20 追加)

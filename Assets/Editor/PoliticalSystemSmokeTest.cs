@@ -90,7 +90,7 @@ public static class PoliticalSystemSmokeTest
         player.MilitarySupport = 58;
 
         string json1 = SaveLoad.Serialize(state);
-        if (!json1.Contains("\"version\":14")) throw new Exception("セーブversion 14ではない");
+        if (!json1.Contains("\"version\":15")) throw new Exception("セーブversion 15ではない");
         GameState restored = SaveLoad.Deserialize(json1);
         string json2 = SaveLoad.Serialize(restored);
         string json3 = SaveLoad.Serialize(SaveLoad.Deserialize(json2));
@@ -101,7 +101,7 @@ public static class PoliticalSystemSmokeTest
             rp.MerchantSupport != 74 || rp.TraditionalSupport != 41 || rp.MilitarySupport != 58)
             throw new Exception("政治制度値の復元に失敗");
 
-        string old = json1.Replace("\"version\":14", "\"version\":12");
+        string old = json1.Replace("\"version\":15", "\"version\":12");
         string[] fields = { "politicalCapital", "legitimacy", "activeLaw", "scholarSupport",
             "merchantSupport", "traditionalSupport", "militarySupport" };
         for (int i = 0; i < fields.Length; i++)

@@ -38,6 +38,7 @@ namespace HexCiv.Core
             var research = ResearchMilestoneCatalog.ForRegion(Filter(regionJa));
             var culture = CulturalTraditionCatalog.ForRegion(Filter(regionJa));
             var material = MaterialCultureCatalog.ForRegion(Filter(regionJa));
+            var natural = NaturalFeatureCatalog.ForRegion(Filter(regionJa));
             bool all = IsAll(regionJa);
 
             return new List<GlobalHistoryIndexEntry>
@@ -93,6 +94,18 @@ namespace HexCiv.Core
                     "歌唱伝統と作品名を、歌詞を複製せず記録"),
                 MaterialEntry("martial_arts", MaterialCultureKind.MartialArt, material,
                     "武道・武術・格闘文化の身体技法と社会的背景"),
+                NaturalEntry("mountains", NaturalFeatureKind.Mountain, natural,
+                    "山地を水源・生態系・移動路・文化的景観として記録"),
+                NaturalEntry("rivers", NaturalFeatureKind.River, natural,
+                    "越境する流域、氾濫、航行、灌漑と共同管理"),
+                NaturalEntry("seas", NaturalFeatureKind.Sea, natural,
+                    "海・湾・海峡を、航海、生態系、呼称の多様性とともに記録"),
+                NaturalEntry("lakes", NaturalFeatureKind.Lake, natural,
+                    "淡水湖・塩湖・季節湖と、その流域社会・生態系"),
+                NaturalEntry("forests", NaturalFeatureKind.Forest, natural,
+                    "森林を単なる資源でなく、生態系・暮らし・管理の景観として記録"),
+                NaturalEntry("deserts", NaturalFeatureKind.Desert, natural,
+                    "砂丘以外も含む乾燥地と、移動・牧畜・水利用の歴史"),
             };
         }
 
@@ -152,6 +165,13 @@ namespace HexCiv.Core
         {
             return Entry(id, MaterialCultureCatalog.KindNameJa(kind),
                 MaterialCultureCatalog.CountKind(items, kind), detail);
+        }
+
+        static GlobalHistoryIndexEntry NaturalEntry(string id, NaturalFeatureKind kind,
+            List<NaturalFeatureDef> items, string detail)
+        {
+            return Entry(id, NaturalFeatureCatalog.KindNameJa(kind),
+                NaturalFeatureCatalog.CountKind(items, kind), detail);
         }
 
         static int CountKind(List<MasterpieceDef> works, MasterpieceKind kind)
