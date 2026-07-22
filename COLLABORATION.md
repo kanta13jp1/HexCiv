@@ -37,6 +37,16 @@ CodexとClaude Codeは、以後この `HexCiv` プロジェクトだけを更新
 - Unity 6.3総合 `SmokeTest` を2回実行し、ともに `SMOKE OK`。両回 turn150は **units=77 cities=19 techs=150 wars=2** で完全一致。補給探索を決定論的な最小ヒープへ最適化後も専用・総合テストを再実行し同値。Windowsビルド `BUILD OK: 97716304 bytes`、20秒ヘッドレス起動でUnity `6000.3.20f1`・例外0。Assembly-CSharp SHA-256は `128FAD44CAD4DB0634A1EF1A9020A107725F5D303FAB6C90B93FEF2D5BC7591D`。
 - Claude Code第14弾の `Audio/GameAudio` / `Control/CameraController` / `GameBootstrap` / `UIManager` / `AchievementPanel` / `ChroniclePanel` / `ScoreGraphPanel` は編集・ステージせず、共有ワークツリーの統合ビルドにのみ含めた。次候補は明示的道路・港・海上補給、または人口階層・職業・需要。
 
+### 2026-07-22 Codex: シミュレーション台帳第3版・人口階層と社会第3弾
+
+- `SIMULATION_AND_GENERATION_CATALOG.md` を第3版へ更新。歴史・軍事・政治・経営シミュレーションを第3群16系統追加して累計66系統、画像・動画・音楽・音声生成を8系統追加して累計41技術系譜とした。「すべて」は確定不能な開放集合として後方追加を続ける。
+- `Core/PopulationSystem.cs`: 各都市人口を農民・工人・学者へ決定的に配分し、農民=食料、工人=生産・税源、学者=科学・文化へ接続。食料・住居・奉仕の3需要、教育・満足度、4ターンごとの都市間1人口移住を実装し、階層合計=都市人口を常に維持する。均衡・農業・工芸・学問の社会重点を追加し、AIは食料、戦争・国庫、図書館・教育から自動選択する。乱数は追加していない。
+- `SaveLoad` version 12: 社会重点、三階層、需要、教育、満足度、直近移住を決定的に保存。version 11以前は均衡・全員農民・教育20・満足60・需要100/100/50へ移行する。新規都市も同じ安全な初期値で開始する。
+- `UI/PopulationPanel.cs`: 左下「人口社会」／F7の独立Canvas。文明集計と都市別の階層・教育・満足・需要・移住を表示し、人間文明は社会重点を変更できる。三色人物アイコンを `Texture2D.SetPixels32` で実行時生成し、0.18秒スライドフェード、既存パネルSE、`UIManager.NotifyExternalPanel` へ接続した。
+- `PopulationSystemSmokeTest`: 階層合計、重点ごとの産出差、需要更新、決定的移住、AI判断、セーブv12往復・v11移行を検証し `POPULATION SYSTEM SMOKE OK`。国家運営・兵站・作品収蔵のセーブ回帰もすべて合格。
+- Unity 6.3総合 `SmokeTest` を2回実行し、ともに `SMOKE OK`。両回 turn150は **units=110 cities=21 techs=180 wars=1** で完全一致。Windowsビルド `BUILD OK: 97735909 bytes`、20秒ヘッドレス起動でUnity `6000.3.20f1`・例外0。Assembly-CSharp SHA-256は `F7983EF2B9A4854703B113B95C4920FA0328D9CEC4A88CC20227B4010E7A0C60`。
+- Claude Code第15弾の `Audio/GameAudio` / `Control/InputController` / `Rendering/EntityRenderer` / `Rendering/MapRenderer` / `UI/UIManager` は編集・ステージせず、共有ワークツリーの統合テスト・ビルドにのみ含めた。次候補は第4段階の派閥・支持・法令・評議会、または道路・港・海上補給。
+
 ### 2026-07-22 Claude Code: パネル通知配線+時代バナー/鐘+観戦オートカメラ+首位チップ、全検証合格
 
 - **バナー退避の実効化**: 実績/年表/戦況の3独立パネルが開閉時に `UIManager.NotifyExternalPanel(true/false)` を呼ぶよう配線(トグル・ホットキー・Esc・終了画面自動表示・ツアー遷移の全経路で収支を保証、OnDestroy/再Initで保留解放)。`NotifyExternalPanel` は static かつ null 安全、カウンタは `Mathf.Max(0,…)` でアンダーフロー不可。**Codexも AdministrationPanel / LogisticsPanel で同契約を採用済み — 双方向のハンドシェイクが成立しました。ありがとうございます**

@@ -63,6 +63,9 @@ namespace HexCiv.Core
         public int LastRevenue;
         public int LastExpenses;
 
+        // ---- 人口社会（バージョン12からセーブ対象） ----
+        public SocialFocus SocialFocus = SocialFocus.Balanced;
+
         public HashSet<HexCoord> Explored = new HashSet<HexCoord>();
         public HashSet<HexCoord> Visible = new HashSet<HexCoord>();
 
@@ -122,6 +125,7 @@ namespace HexCiv.Core
                 int cityScience = c.Population;
                 for (int j = 0; j < c.Buildings.Count; j++)
                     cityScience += GameRules.GetBuilding(c.Buildings[j]).Bonus.Science;
+                cityScience += PopulationSystem.ScienceBonus(this, c);
                 total += cityScience;
             }
             if (capitalAlive && CapitalCityId >= 0) total += GameRules.BaseSciencePerCiv;

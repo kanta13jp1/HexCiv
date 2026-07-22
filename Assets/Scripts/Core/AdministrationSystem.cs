@@ -74,7 +74,8 @@ namespace HexCiv.Core
             int buildings = player.Cities.Where(c => c != null).Sum(c => c.Buildings?.Count ?? 0);
             bool capitalAlive = player.CapitalCityId >= 0 &&
                 player.Cities.Any(c => c != null && c.Id == player.CapitalCityId);
-            return population * 2 + player.Cities.Count * 4 + buildings + (capitalAlive ? 6 : 0);
+            return population * 2 + player.Cities.Count * 4 + buildings +
+                PopulationSystem.SpecialistTaxBase(player) + (capitalAlive ? 6 : 0);
         }
 
         public static int Revenue(Player player)

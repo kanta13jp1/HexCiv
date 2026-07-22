@@ -43,6 +43,7 @@ namespace HexCiv.Core
             if (capitalAlive) total += 2;
             total += CulturePolicyCatalog.EffectTotal(player, CulturePolicyEffect.Culture);
             total += MasterpieceSystem.CulturePerTurnBonus(player);
+            total += PopulationSystem.CultureBonus(player);
             return AdministrationSystem.ScaleOutput(player, Math.Max(0, total));
         }
 

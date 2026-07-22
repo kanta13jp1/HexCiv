@@ -16,6 +16,17 @@ namespace HexCiv.Core
         public int FoodStored;
         public int ProductionStored;
 
+        // ---- 人口社会（3階層の合計は常に Population と一致） ----
+        public int Farmers = 1;
+        public int Artisans;
+        public int Scholars;
+        public int Education = PopulationSystem.StartingEducation;
+        public int Satisfaction = PopulationSystem.StartingSatisfaction;
+        public int FoodNeedFulfillment = 100;
+        public int HousingNeedFulfillment = 100;
+        public int ServiceNeedFulfillment = 50;
+        public int LastNetMigration;
+
         public int Hp = GameRules.CityMaxHp;
         public int MaxHp = GameRules.CityMaxHp;
 
@@ -71,6 +82,9 @@ namespace HexCiv.Core
 
             for (int i = 0; i < Buildings.Count; i++)
                 total += GameRules.GetBuilding(Buildings[i]).Bonus;
+
+            var owner = s.GetPlayer(PlayerId);
+            total += PopulationSystem.YieldBonus(owner, this);
 
             total.Science += Population;
             return total;

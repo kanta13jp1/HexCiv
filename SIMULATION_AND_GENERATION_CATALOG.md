@@ -1,6 +1,6 @@
 # シミュレーションゲーム要素・生成技術台帳
 
-最終更新: 2026-07-22 / 第2版
+最終更新: 2026-07-22 / 第3版
 
 ## この台帳の役割
 
@@ -22,22 +22,22 @@
 | 歴史 | Civilization | ターン制4X、都市、技術、文化、複数勝利 | 基盤実装済み |
 | 歴史 | Europa Universalis | 国家外交、講和、交易、国家制度 | 宣戦・和平済み、外交拡張候補 |
 | 歴史 | Crusader Kings | 人物特性、関係、家系、継承、評議会 | 指導者台帳済み、人物政治は候補 |
-| 歴史 | Victoria | 人口集団、産業、市場、政治運動、国庫 | **国庫・税制を第1実装** |
+| 歴史 | Victoria | 人口集団、産業、市場、政治運動、国庫 | **国庫・税制・人口社会を第1・第3実装** |
 | 歴史 | Total War | 戦略地図と戦術戦闘の階層 | 戦略戦闘済み、戦術層は長期候補 |
 | 歴史 | Old World | 命令資源、家族、事件、野心 | 事件・人物関係候補 |
 | 歴史 | HUMANKIND | 時代遷移、文化継承、名声 | 時代表示済み、継承候補 |
 | 歴史 | Romance of the Three Kingdoms | 武将、都市内政、任命、同盟 | 指導者・都市済み、任命候補 |
-| 軍事 | Hearts of Iron | 補給、生産、戦線、師団編制、諜報 | 戦争済み、補給を次期候補 |
+| 軍事 | Hearts of Iron | 補給、生産、戦線、師団編制、諜報 | 戦争・補給済み、戦線候補 |
 | 軍事 | Command: Modern Operations | センサー、探知、射程、兵站、交戦規則 | 視界・射程済み、探知層候補 |
 | 軍事 | Combat Mission | 士気、抑圧、地形、命令遅延 | 地形防御済み、士気候補 |
 | 軍事 | Steel Panthers | ヘクス、部隊損耗、弾薬、諸兵科 | ヘクス・HP済み、弾薬候補 |
 | 軍事 | Panzer General | シナリオ、補充、経験、作戦目標 | 経験・目標候補 |
-| 軍事 | Unity of Command | 補給線、作戦機動、限定ターン目標 | 補給線を次期候補 |
+| 軍事 | Unity of Command | 補給線、作戦機動、限定ターン目標 | **補給線を第2実装** |
 | 軍事 | Gary Grigsby's War in the East | 兵站、指揮、疲労、戦域規模 | **戦争疲弊を第1実装** |
 | 軍事 | Wargame / WARNO | 偵察、指揮域、増援、複合兵科 | 偵察済み、指揮域候補 |
 | 政治 | Democracy | 有権者集団、政策連鎖、支持率、選挙 | 文化政策済み、支持層候補 |
 | 政治 | Suzerain | 政策決定、予算、派閥、物語分岐 | 国庫済み、事件・派閥候補 |
-| 政治 | Tropico | 派閥、住民需要、選挙、経済 | 都市人口済み、派閥候補 |
+| 政治 | Tropico | 派閥、住民需要、選挙、経済 | **需要・満足度を第3実装**、派閥候補 |
 | 政治 | Geo-Political Simulator | 省庁、指標、国際関係、危機 | 国家指標を第1実装 |
 | 政治 | Hidden Agenda | 閣僚、予算、治安、政治的圧力 | 閣僚・治安候補 |
 | 政治 | The Political Process | 選挙区、世論、運動、法案 | 選挙・法案候補 |
@@ -48,7 +48,7 @@
 | 経営 | OpenTTD | 路線、輸送需要、利益、設備更新 | 交易路・輸送候補 |
 | 経営 | Railroad Tycoon | 路線網、地域市場、株式、輸送価格 | 市場・金融候補 |
 | 経営 | Capitalism | 生産連鎖、価格、在庫、競争 | 生産連鎖候補 |
-| 経営 | Anno | 人口階層、需要、生産網、海上交易 | 人口階層・交易候補 |
+| 経営 | Anno | 人口階層、需要、生産網、海上交易 | **人口階層・需要を第3実装**、交易候補 |
 | 経営 | RollerCoaster Tycoon | 来訪者行動、価格、保守、満足度 | 観光・保守候補 |
 | 経営 | Theme Hospital | 職員、設備、待ち行列、品質 | 専門家・公共施設候補 |
 | 経営 | Football Manager | 人材、契約、育成、戦術、データ分析 | 人材登用・成長候補 |
@@ -77,13 +77,36 @@
 | 経営 | Workers & Resources: Soviet Republic | 建設資材、物流、労働、国家経済 | 国庫・補給済み、資材候補 |
 | 経営 | Transport Fever | 旅客・貨物需要、路線、輸送能力 | 補給基盤済み、交易路候補 |
 
+## シミュレーションゲーム設計参照索引（第3群）
+
+第3群ではさらに16系統を追加して累計66系統とした。今回は人口を単なる都市サイズではなく、職能・教育・需要・満足・移住を持つ社会として扱うための比較軸を優先した。
+
+| 系統 | 代表的な参照作品 | 抽出する設計要素 | HexCivでの状態 |
+|---|---|---|---|
+| 歴史 | Millennia | 地域人口、労働者、需要、産出チェーン、時代分岐 | **職能産出を第3実装**、チェーン候補 |
+| 歴史 | Making History | 国家経済、人口、工業、外交、戦争 | 人口・国庫済み、産業候補 |
+| 歴史 | Age of History | 州、人口、税、外交、領土変化 | 人口・税制済み、州候補 |
+| 歴史 | Terra Invicta | 国家支持、組織、人物、宇宙経済 | 支持・組織・人物は長期候補 |
+| 軍事 | Shadow Empire | 補給、兵站拠点、指揮、政治、資源 | 補給・国庫済み、指揮候補 |
+| 軍事 | The Operational Art of War | 作戦規模、補給、増援、戦闘準備 | 補給済み、戦闘準備候補 |
+| 軍事 | Armored Brigade | 指揮遅延、士気、視界、諸兵科 | 視界済み、士気・指揮遅延候補 |
+| 軍事 | Rule the Waves | 海軍設計、予算、造船、外交圧力 | 国庫済み、海軍・造船候補 |
+| 政治 | Lawgivers | 議会、法案、政党、選挙、支持 | 第4段階の法令・評議会候補 |
+| 政治 | Political Animals | 有権者属性、地域運動、選挙資源 | 支持層・選挙候補 |
+| 政治 | Crisis in the Kremlin | 省庁予算、派閥、改革、国家指標 | 国庫・安定度済み、派閥候補 |
+| 政治 | NationStates | 政策事件、選択、指標の長期変化 | 選択式事件候補 |
+| 経営 | Banished | 住民、職業、食料、住居、幸福、移住 | **階層・食料・住居・満足・移住を第3実装** |
+| 経営 | Frostpunk | 需要、労働配置、法律、不満、危機 | 需要・満足済み、法律・危機候補 |
+| 経営 | Oxygen Not Included | 個体需要、職能、物流、環境循環 | 職能・需要済み、環境循環候補 |
+| 経営 | Railway Empire | 路線、貨物需要、都市成長、競争 | 人口成長済み、交易路候補 |
+
 ### 機構実装ロードマップ
 
 | 段階 | 機構 | 内容 | 状態 |
 |---|---|---|---|
 | 1 | 国家運営 | 国庫、税制、人口・都市収入、都市・軍事維持費、安定度、戦争疲弊、AI税制 | 実装済み |
 | 2 | 兵站 | 都市からの補給到達、地形コスト、敵遮断、孤立、補給切れ、技術・穀物庫 | **実装済み**（道路タイル・港は次拡張） |
-| 3 | 人口社会 | 人口階層、職業、需要、教育、移住 | 設計候補 |
+| 3 | 人口社会 | 人口階層、職業、需要、教育、満足度、移住、AI社会重点 | **実装済み** |
 | 4 | 政治 | 派閥、支持、法令、評議会、事件選択 | 設計候補 |
 | 5 | 市場 | 資源在庫、交易路、価格、生産連鎖 | 設計候補 |
 | 6 | 人物史 | 特性、任命、関係、継承、家系 | 設計候補 |
@@ -110,9 +133,20 @@
 - **UI**: 左下「兵站」またはF10。文明別集計と自軍部隊の状態を表示し、生成補給箱アイコンとスライドフェードを使用する。
 - **セーブ**: version 11。version 10以前は補給良好・連続孤立0ターンへ移行する。
 
+## 第3実装: 人口・階層・社会
+
+- **三つの職能階層**: 全都市人口を農民・工人・学者へ自動配分し、合計を常に都市人口と一致させる。歴史上の特定身分を普遍化せず、ゲーム上の職能集計として扱う。
+- **産出**: 農民は食料、工人は生産と税源、学者は科学と文化へ寄与する。教育70以上の都市には追加科学が生じる。
+- **社会重点**: 均衡・農業重視・工芸重視・学問重視。人間はF7画面で選択し、AIは食料不足、戦争・国庫、図書館・教育から毎ターン判断する。
+- **需要**: 食料、住居、奉仕の充足度を0〜100で更新する。建物、首都、人口規模が住居と奉仕に影響する。
+- **教育と満足度**: 0〜100。技術、図書館、学者、税制、安定度、戦争疲弊、各需要から目標値を求め、毎ターン最大2ずつ漸進する。
+- **移住**: 4ターンごとに同一文明内で都市魅力を比較し、差が18以上なら低魅力都市から高魅力都市へ1人口だけ移す。乱数は使わない。
+- **UI・演出**: 左下「人口社会」またはF7。三色の人物アイコンを実行時生成し、0.18秒のスライドフェードと既存パネルSEを使用する。
+- **セーブ**: version 12。version 11以前は均衡、全員農民、教育20、満足60、需要100/100/50へ移行する。
+
 ## 画像・動画・音楽・音声生成技術の分類台帳
 
-「生成」は手続き生成、シミュレーション、制作支援、機械学習による合成を含みます。製品名の網羅ではなく、技術系譜を追跡します。第2版は8系統を増補し、累計33技術系譜です。
+「生成」は手続き生成、シミュレーション、制作支援、機械学習による合成を含みます。製品名の網羅ではなく、技術系譜を追跡します。第3版は8系統を増補し、累計41技術系譜です。
 
 | 媒体 | 技術系譜 | 代表的な方式 | HexCiv方針・状態 |
 |---|---|---|---|
@@ -127,6 +161,8 @@
 | 画像 | 自己回帰・マルチモーダル | token生成、画像言語モデル | 制作支援候補 |
 | 画像 | 微分可能・逆レンダリング | differentiable rendering、inverse graphics | 史跡再構成の研究候補 |
 | 画像 | 条件制御生成 | edge/depth/pose conditioning、adapter | オリジナルUI素材の構図制御候補 |
+| 画像 | ニューラル素材生成 | texture synthesis、PBR material generation、seamless tiling | 地形用の権利確認済みオリジナル素材候補 |
+| 画像 | 3D形状生成 | implicit field、point cloud、mesh diffusion | オリジナル遺産模型の制作支援候補 |
 | 動画 | 伝統的アニメーション | セル、ストップモーション、キーフレーム | UIキーフレーム相当を実装済み |
 | 動画 | 補間・トゥイーン | 線形/曲線補間、モーフィング、フレーム補間 | 国家運営画面のフェード・拡大で実装済み |
 | 動画 | キャラクター動作 | スケルタル、IK、モーションキャプチャ | ユニット高度化候補 |
@@ -134,6 +170,8 @@
 | 動画 | ニューラル合成 | GAN動画、動画拡散、自己回帰世界モデル | 実行時導入なし。事前生成のみ候補 |
 | 動画 | モーショングラフ | 動作断片接続、状態機械、行動遷移 | ユニット動作拡張候補 |
 | 動画 | 手続きカメラ | 注視点、衝突回避、イベント優先度 | 歴史ツアー・観戦カメラで一部実装済み |
+| 動画 | 動作拡散 | motion diffusion、text-to-motion、trajectory conditioning | 架空ユニットの事前生成動作候補 |
+| 動画 | ニューラル人物レンダリング | talking avatar、reenactment、neural character | 実在人物の無断再現は禁止、架空人物のみ候補 |
 | 音楽 | 規則・確率生成 | 音楽文法、Markov連鎖、セル・オートマトン | 実行時作曲へ拡張候補 |
 | 音楽 | 記号生成 | MIDI、RNN、Transformer | 制作支援候補 |
 | 音楽 | 音響合成 | 加算・減算・FM・ウェーブテーブル・物理モデル | 手続きBGM/SEで実装済み |
@@ -141,6 +179,8 @@
 | 音楽 | ニューラル音響 | neural codec、波形生成、音声拡散 | オリジナル事前生成のみ候補 |
 | 音楽 | 適応型レイヤリング | stems、vertical remixing、horizontal resequencing | 時代・地域BGM切替で一部実装済み |
 | 音楽 | 探索・進化生成 | genetic algorithm、constraint search | 制作支援候補 |
+| 音楽 | 音源分離・再構成 | source separation、stem extraction、remix | 権利のある自作音源の適応化候補 |
+| 音楽 | テキスト条件付き音楽 | audio token、latent audio、text-to-music | オリジナル事前生成のみ候補 |
 | 音声 | 規則合成 | フォルマント、調音モデル | ナレーション候補 |
 | 音声 | 連結合成 | diphone、unit selection | 権利確認済み録音が必要 |
 | 音声 | 統計的音声 | HMM、パラメトリック音声、vocoder | 歴史的系譜として記録 |
@@ -149,6 +189,8 @@
 | 音声 | 声質・歌唱変換 | voice conversion、singing synthesis | 権利・同意のある声のみ候補 |
 | 音声 | 音声対音声生成 | speech-to-speech、prosody transfer | 同意済み架空音声のみ将来候補 |
 | 音声 | 感情・韻律制御 | duration、pitch、energy、style token | ナレーション表現候補 |
+| 音声 | 少量話者適応 | speaker embedding、few-shot adaptation、voice cloning | 本人同意を記録できる声のみ候補 |
+| 音声 | 対話音声生成 | streaming TTS、turn-taking、contextual prosody | 架空ナレーター・明示設定時のみ候補 |
 
 ### 導入規則
 
@@ -161,6 +203,10 @@
 
 - [Cities: Skylines II — Economy & Production](https://www.paradoxinteractive.com/games/cities-skylines-ii/features/economy-production)
 - [Victoria 3 — Dev Diary #57: The Journey So Far](https://www.paradoxinteractive.com/games/victoria-3/news/dev-diary-57-the-journey-so-far)
+- [Victoria 3 — About](https://www.paradoxinteractive.com/games/victoria-3/about)
+- [Anno Union — Residential Tiers](https://www.anno-union.com/devblog-residential-tiers/)
+- [Anno Union — Fulfil Needs Your Way](https://www.anno-union.com/devblog-fulfil-needs-your-way/)
+- [Millennia — Economy Part One](https://www.paradoxinteractive.com/games/millennia/news/economy-part-one)
 - [Crusader Kings III — About](https://www.paradoxinteractive.com/games/crusader-kings-iii/about)
 - [Unity of Command — Developer Diary 5: The Supply Network](https://unityofcommand.net/blog/2016/04/06/development-diary-5-the-supply-network/)
 - [Unity of Command — The Power of Supply](https://unityofcommand.net/blog/2011/11/03/the-power-of-supply/)

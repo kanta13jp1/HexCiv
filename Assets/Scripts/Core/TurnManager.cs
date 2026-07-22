@@ -84,6 +84,9 @@ namespace HexCiv.Core
                     c.ExpandBordersIfNeeded(state);
                 }
 
+                // ---- 人口階層・需要・教育・移住 ----
+                PopulationSystem.AdvancePlayer(state, p);
+
                 // ---- 研究 ----
                 p.ScienceStored += p.SciencePerTurn(state);
                 if (!string.IsNullOrEmpty(p.CurrentResearchId))

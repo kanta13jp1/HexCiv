@@ -10,7 +10,7 @@ namespace HexCiv.Core
     // Serialize(Deserialize(json)) == json が成立する(スモークテストで検証)。
     // ======================================================================
 
-    /// <summary>セーブファイル全体(バージョン11)。</summary>
+    /// <summary>セーブファイル全体(バージョン12)。</summary>
     [Serializable]
     public class SaveData
     {
@@ -102,6 +102,8 @@ namespace HexCiv.Core
         public int lastRevenue;
         public int lastExpenses;
         public int capitalCityId = -1;
+        // ---- 人口社会（バージョン12追加） ----
+        public int socialFocus = (int)SocialFocus.Balanced;
         public List<int> atWarWith = new List<int>();          // 昇順ソート
         // ---- 開戦ターン(バージョン4追加。JsonUtility は Dictionary 非対応のため並行配列) ----
         // warStartEnemyIds は昇順ソートし、warStartTurns[i] が対応する開戦ターン(決定的)。
@@ -121,6 +123,16 @@ namespace HexCiv.Core
         public int population;
         public int foodStored;
         public int productionStored;
+        // ---- 人口階層・需要（バージョン12追加） ----
+        public int farmers;
+        public int artisans;
+        public int scholars;
+        public int education = PopulationSystem.StartingEducation;
+        public int satisfaction = PopulationSystem.StartingSatisfaction;
+        public int foodNeedFulfillment = 100;
+        public int housingNeedFulfillment = 100;
+        public int serviceNeedFulfillment = 50;
+        public int lastNetMigration;
         public int hp;
         public int maxHp;
         public List<string> buildings = new List<string>();    // 建設順を保持
@@ -170,9 +182,10 @@ namespace HexCiv.Core
         // 1: 初版 / 2: スロット表示用メタデータ追加 / 3: 指導者ID追加 / 4: 開戦ターン(和平)追加 /
         // 5: マップ種別(MapType)追加 / 6: 難易度(Difficulty)追加 / 7: 文化進行・政策・影響力追加 / 
         // 8: 遺産配置・発見と偉人ポイント・登用追加 / 9: 作品ポイント・収蔵追加 /
-        // 10: 国庫・税制・安定度・戦争疲弊追加 / 11: ユニット補給状態・孤立ターン追加。
+        // 10: 国庫・税制・安定度・戦争疲弊追加 / 11: ユニット補給状態・孤立ターン追加 /
+        // 12: 社会重点・人口階層・需要・教育・満足度・移住追加。
         // 旧バージョンのセーブも FromData で読み込める(欠落フィールドは既定値になる)。
-        public const int CurrentVersion = 11;
+        public const int CurrentVersion = 12;
 
         // ================= 公開API =================
 
@@ -336,6 +349,7 @@ namespace HexCiv.Core
                     lastRevenue = p.LastRevenue,
                     lastExpenses = p.LastExpenses,
                     capitalCityId = p.CapitalCityId,
+                    socialFocus = (int)PopulationSystem.NormalizeFocus(p.SocialFocus),
                     knownTechs = new List<string>(p.KnownTechs),
                     knownCulturePolicies = new List<string>(p.KnownCulturePolicies),
                     discoveredHeritageSites = new List<string>(p.DiscoveredHeritageSites),
@@ -383,6 +397,15 @@ namespace HexCiv.Core
                         population = c.Population,
                         foodStored = c.FoodStored,
                         productionStored = c.ProductionStored,
+                        farmers = c.Farmers,
+                        artisans = c.Artisans,
+                        scholars = c.Scholars,
+                        education = c.Education,
+                        satisfaction = c.Satisfaction,
+                        foodNeedFulfillment = c.FoodNeedFulfillment,
+                        housingNeedFulfillment = c.HousingNeedFulfillment,
+                        serviceNeedFulfillment = c.ServiceNeedFulfillment,
+                        lastNetMigration = c.LastNetMigration,
                         hp = c.Hp,
                         maxHp = c.MaxHp,
                         buildings = new List<string>(c.Buildings),
@@ -544,6 +567,7 @@ namespace HexCiv.Core
                     LastRevenue = pd.lastRevenue,
                     LastExpenses = pd.lastExpenses,
                     CapitalCityId = pd.capitalCityId,
+                    SocialFocus = PopulationSystem.FocusFromSaveValue(pd.socialFocus),
                 };
                 // フィールド初期化子の StartingTech を消してセーブ内容で置き換える
                 p.KnownTechs.Clear();
@@ -628,11 +652,22 @@ namespace HexCiv.Core
                         Population = cd.population,
                         FoodStored = cd.foodStored,
                         ProductionStored = cd.productionStored,
+                        Farmers = cd.farmers,
+                        Artisans = cd.artisans,
+                        Scholars = cd.scholars,
+                        Education = cd.education,
+                        Satisfaction = cd.satisfaction,
+                        FoodNeedFulfillment = cd.foodNeedFulfillment,
+                        HousingNeedFulfillment = cd.housingNeedFulfillment,
+                        ServiceNeedFulfillment = cd.serviceNeedFulfillment,
+                        LastNetMigration = cd.lastNetMigration,
                         Hp = cd.hp,
                         MaxHp = cd.maxHp,
                         Buildings = cd.buildings != null ? new List<string>(cd.buildings) : new List<string>(),
                         CurrentProduction = RestoreProduction(cd.prodKind, cd.prodId),
                     };
+                    if (d.version <= 11) PopulationSystem.InitializeCity(city);
+                    else PopulationSystem.NormalizeLoadedCity(owner, city);
                     owner.Cities.Add(city);
                     var tile = s.Map.Get(city.Coord);
                     if (tile == null)

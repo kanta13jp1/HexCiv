@@ -96,6 +96,7 @@ namespace HexCiv.Core
                 MaxHp = GameRules.CityMaxHp,
                 Hp = GameRules.CityMaxHp,
             };
+            PopulationSystem.InitializeCity(city);
             owner.Cities.Add(city);
             if (tile != null) tile.City = city;
 
