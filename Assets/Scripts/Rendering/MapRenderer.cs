@@ -17,6 +17,7 @@ namespace HexCiv.Render
         // ---- レイヤー高さ(契約 §6) ----
         const float TerrainY = 0f;
         const float DecoY = 0.02f;
+        const float HydrologyY = 0.028f; // 季節洪水・橋梁(装飾の上、補給/国境の下)
         const float SupplyY = 0.03f;   // 補給オーバーレイ(装飾0.02の上・国境0.04の下)
         const float BorderY = 0.04f;
         const float HighlightY = 0.05f;
@@ -25,6 +26,7 @@ namespace HexCiv.Render
         // ---- 描画順(sortingOrder。Sprites/Default は ZWrite Off のため明示的に制御する) ----
         const int SortTerrain = 0;
         const int SortDeco = 1;
+        const int SortHydrology = 2;
         const int SortSupply = 2;      // 補給オーバーレイ(装飾1の上・国境3の下)
         const int SortBorder = 3;
         const int SortHighlight = 4;
@@ -44,6 +46,10 @@ namespace HexCiv.Render
         Mesh fogMesh;
         Mesh borderMesh;
         Mesh highlightMesh;
+        Mesh hydrologyMesh;
+        MeshRenderer hydrologyRenderer;
+        MaterialPropertyBlock hydrologyMpb;
+        const float FloodPulsePeriod = 2.4f;
 
         Tile[] tileOrder;        // 霧メッシュのタイル順(タイルごとの頂点範囲は fogVertBase/Count)
         Color32[] fogColors;
@@ -150,6 +156,12 @@ namespace HexCiv.Render
             selectionRenderer = RenderUtil.NewMeshChild(transform, "SelectionPulse", selectionMesh, mat, Vector3.zero, SortSelection);
             selectionVisible = false;
 
+            // ターンごとに変わる増水・肥沃期と、都市建物に連動する橋梁を描く動的層。
+            hydrologyMesh = builderEmpty(hydrologyMesh);
+            hydrologyMesh.MarkDynamic();
+            hydrologyRenderer = RenderUtil.NewMeshChild(
+                transform, "SeasonalHydrology", hydrologyMesh, mat, Vector3.zero, SortHydrology);
+
             // 補給範囲オーバーレイ(子は上で全破棄済みのため毎回作り直す)。
             // 表示のON/OFFはリスタートを跨いで維持し、内容は次の Tick で必ず作り直す。
             supplyMesh = builderEmpty(supplyMesh);
@@ -174,6 +186,7 @@ namespace HexCiv.Render
             UpdateFog();
             RebuildBorders();
             UpdateTerritoryTint();
+            RebuildHydrologyOverlay();
         }
 
         /// <summary>移動可能・攻撃可能・経路・選択タイルのハイライトを表示する。引数はどれも null 可。</summary>
@@ -485,7 +498,27 @@ namespace HexCiv.Render
         {
             TickSelectionPulse();
             TickWater();
+            TickHydrology();
             TickSupplyOverlay();
+        }
+
+        /// <summary>
+        /// 増水期だけ季節水面をゆっくり明滅させる。軽量モードでは固定表示にする。
+        /// メッシュは更新せず、共有マテリアルを複製しない MaterialPropertyBlock だけを使う。
+        /// </summary>
+        void TickHydrology()
+        {
+            if (hydrologyRenderer == null || state == null) return;
+            float alpha = 1f;
+            if (!VisualQuality.LightMode &&
+                NaturalGeographySystem.FloodStageAt(state.TurnNumber) == FloodStage.Inundated)
+            {
+                float phase = Time.unscaledTime * (Mathf.PI * 2f / FloodPulsePeriod);
+                alpha = Mathf.Lerp(0.78f, 1f, 0.5f + 0.5f * Mathf.Sin(phase));
+            }
+            if (hydrologyMpb == null) hydrologyMpb = new MaterialPropertyBlock();
+            hydrologyMpb.SetColor(ColorPropId, new Color(1f, 1f, 1f, alpha));
+            hydrologyRenderer.SetPropertyBlock(hydrologyMpb);
         }
 
         /// <summary>
@@ -619,6 +652,81 @@ namespace HexCiv.Render
                 center + new Vector3(0.52f, 0f, 0.10f),
                 center + new Vector3(0.42f, 0f, 0.29f),
                 center + new Vector3(-0.42f, 0f, 0.29f), wet);
+        }
+
+        /// <summary>ターンの季節状態と建物状態から氾濫・肥沃地・橋梁を再構築する。</summary>
+        void RebuildHydrologyOverlay()
+        {
+            if (hydrologyMesh == null || state == null || state.Map == null) return;
+            builder.Clear();
+            FloodStage stage = NaturalGeographySystem.FloodStageAt(state.TurnNumber);
+            foreach (Tile tile in state.Map.AllTiles)
+            {
+                Vector3 center = tile.Coord.ToWorld();
+                center.y = HydrologyY + RenderUtil.TileVisualHeight(tile);
+
+                if (tile.HasFloodplain)
+                {
+                    if (stage == FloodStage.Inundated)
+                    {
+                        builder.AddHex(center, 0.78f, new Color(0.20f, 0.64f, 0.92f, 0.22f));
+                        AddFloodWave(center, -0.24f);
+                        AddFloodWave(center, 0.18f);
+                    }
+                    else if (stage == FloodStage.Fertile)
+                    {
+                        builder.AddHex(center, 0.72f, new Color(0.62f, 0.78f, 0.24f, 0.19f));
+                        Color silt = new Color(0.78f, 0.64f, 0.22f, 0.34f);
+                        builder.AddQuad(
+                            center + new Vector3(-0.48f, 0f, -0.05f),
+                            center + new Vector3(0.48f, 0f, -0.05f),
+                            center + new Vector3(0.42f, 0f, 0.05f),
+                            center + new Vector3(-0.42f, 0f, 0.05f), silt);
+                    }
+                }
+
+                if (!tile.HasRiver) continue;
+                Player bridgeOwner = NaturalGeographySystem.BridgeOwnerAt(state, tile.Coord);
+                if (bridgeOwner != null) AddBridge(tile, center, bridgeOwner.Color);
+            }
+            hydrologyMesh = builder.Build(hydrologyMesh);
+        }
+
+        void AddFloodWave(Vector3 center, float z)
+        {
+            Color wave = new Color(0.66f, 0.90f, 1f, 0.48f);
+            builder.AddQuad(
+                center + new Vector3(-0.45f, 0f, z - 0.025f),
+                center + new Vector3(0.30f, 0f, z - 0.025f),
+                center + new Vector3(0.36f, 0f, z + 0.025f),
+                center + new Vector3(-0.39f, 0f, z + 0.025f), wave);
+        }
+
+        /// <summary>河道の流向に直交する橋桁と文明色の中央帯を描く。</summary>
+        void AddBridge(Tile tile, Vector3 center, Color ownerColor)
+        {
+            Tile downstream = NaturalGeographySystem.RiverDestination(state.Map, tile);
+            Vector3 flow;
+            if (downstream != null)
+                flow = downstream.Coord.ToWorld() - center;
+            else if (tile.RiverOutflowDirection >= 0 && tile.RiverOutflowDirection < 6)
+                flow = tile.Coord.Neighbor(tile.RiverOutflowDirection).ToWorld() - center;
+            else
+                flow = Vector3.forward;
+            flow.y = 0f;
+            if (flow.sqrMagnitude < 0.001f) flow = Vector3.forward;
+            flow.Normalize();
+            Vector3 span = new Vector3(-flow.z, 0f, flow.x) * 0.43f;
+            Vector3 width = flow * 0.105f;
+            center.y += 0.003f;
+            Color deck = new Color(0.82f, 0.70f, 0.48f, 0.98f);
+            builder.AddQuad(center - span + width, center + span + width,
+                center + span - width, center - span - width, deck);
+
+            ownerColor.a = 0.92f;
+            Vector3 stripe = flow * 0.025f;
+            builder.AddQuad(center - span * 0.92f + stripe, center + span * 0.92f + stripe,
+                center + span * 0.92f - stripe, center - span * 0.92f - stripe, ownerColor);
         }
 
         void AddHill(Vector3 c, Tile t)

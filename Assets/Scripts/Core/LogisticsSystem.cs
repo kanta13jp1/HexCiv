@@ -75,7 +75,7 @@ namespace HexCiv.Core
                 Tile currentTile = state.Map.Get(current);
                 foreach (Tile tile in state.Map.NeighborsOf(current))
                 {
-                    if (!CanTraverseSupplyEdge(player, currentTile, tile)) continue;
+                    if (!CanTraverseSupplyEdge(state, player, currentTile, tile)) continue;
                     int candidate = currentCost + StepCost(player, tile);
                     if (costs.TryGetValue(tile.Coord, out int known) && known <= candidate) continue;
                     costs[tile.Coord] = candidate;
@@ -215,17 +215,58 @@ namespace HexCiv.Core
             return city != null && city.Buildings != null && city.Buildings.Contains("harbor");
         }
 
+        /// <summary>港と護送船団庁の双方を持つ都市が一つでもあれば海上護衛網が稼働する。</summary>
+        public static bool HasConvoyNetwork(Player player)
+        {
+            if (player == null) return false;
+            for (int i = 0; i < player.Cities.Count; i++)
+            {
+                City city = player.Cities[i];
+                if (HasHarbor(city) && city.Buildings.Contains("convoy_office")) return true;
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// 水域に隣接する交戦中の敵戦闘ユニットまたは敵港湾都市を沿岸封鎖戦力とみなす。
+        /// 護送船団なしなら1戦力、ありなら2戦力で海上補給路を遮断する。
+        /// 現在の陸戦ユニット中心の盤面で、艦隊・沿岸砲台・私掠船を抽象化したモデル。
+        /// </summary>
+        public static bool IsWaterBlockaded(GameState state, Player player, Tile water)
+        {
+            if (state == null || state.Map == null || player == null ||
+                water == null || !water.IsWater) return false;
+            int pressure = 0;
+            int threshold = HasConvoyNetwork(player) ? 2 : 1;
+            foreach (Tile neighbor in state.Map.NeighborsOf(water.Coord))
+            {
+                bool hostile = false;
+                if (neighbor.Unit != null && !neighbor.Unit.Def.IsCivilian &&
+                    neighbor.Unit.PlayerId != player.Id &&
+                    player.IsAtWarWith(neighbor.Unit.PlayerId))
+                    hostile = true;
+                if (!hostile && neighbor.City != null &&
+                    neighbor.City.PlayerId != player.Id &&
+                    player.IsAtWarWith(neighbor.City.PlayerId) &&
+                    HasHarbor(neighbor.City))
+                    hostile = true;
+                if (hostile && ++pressure >= threshold) return true;
+            }
+            return false;
+        }
+
         /// <summary>
         /// 陸上補給は従来どおり。港のある自都市からのみ水域へ入り、水上からは自領沿岸へ
         /// 荷揚げできる。これにより敵の港を通り抜けず、島嶼・半島へ海上補給を延ばせる。
         /// </summary>
-        static bool CanTraverseSupplyEdge(Player player, Tile current, Tile next)
+        static bool CanTraverseSupplyEdge(GameState state, Player player, Tile current, Tile next)
         {
             if (player == null || current == null || next == null || BlocksSupply(player, next))
                 return false;
 
             if (next.IsWater)
             {
+                if (IsWaterBlockaded(state, player, next)) return false;
                 if (current.IsWater) return true;
                 return current.City != null && current.City.PlayerId == player.Id &&
                     HasHarbor(current.City);

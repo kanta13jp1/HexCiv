@@ -1,6 +1,6 @@
 # シミュレーションゲーム要素・生成技術台帳
 
-最終更新: 2026-07-23 / 第7版
+最終更新: 2026-07-23 / 第8版
 
 ## この台帳の役割
 
@@ -152,13 +152,13 @@
 
 | 系統 | 代表的な参照作品 | 抽出する設計要素 | HexCivでの状態 |
 |---|---|---|---|
-| 歴史 | Pharaoh: A New Era | 河川氾濫、肥沃化、農業周期、都市物流 | **氾濫原の食料効果を第7実装**、周期氾濫は候補 |
+| 歴史 | Pharaoh: A New Era | 河川氾濫、肥沃化、農業周期、都市物流 | **氾濫原と12ターン季節周期を第7・第8実装** |
 | 歴史 | Sumerians | 灌漑、水路、河川都市、農業余剰 | 河川都市・氾濫原済み、灌漑網候補 |
 | 歴史 | Grand Ages: Rome | 道路、港、海上交易、属州都市 | **港と海上補給を第7実装**、道路網は候補 |
 | 歴史 | Oriental Empires | 河川流域、交易、都市圏、軍の移動 | 流向・渡河・都市圏済み |
-| 軍事 | Order of Battle: World War II | 河川、橋、補給、海上輸送 | **渡河ペナルティ・橋梁抽象化・海上補給を第7実装** |
-| 軍事 | WarPlan | 港、船団、補給、戦域間輸送 | 港湾補給済み、船団・封鎖候補 |
-| 軍事 | Strategic Mind: Blitzkrieg | 渡河、橋、地形目標、作戦テンポ | 渡河と建築学による橋梁抽象化済み |
+| 軍事 | Order of Battle: World War II | 河川、橋、補給、海上輸送 | **渡河・橋梁網・海上補給を第7・第8実装** |
+| 軍事 | WarPlan | 港、船団、補給、戦域間輸送 | **港湾補給・護送船団・封鎖を第7・第8実装** |
+| 軍事 | Strategic Mind: Blitzkrieg | 渡河、橋、地形目標、作戦テンポ | **渡河と都市圏橋梁網を第7・第8実装** |
 | 軍事 | Campaign Series | ヘクス地形、河川、橋梁、補給 | ヘクス・河川・補給済み、橋破壊は候補 |
 | 政治 | Balance of Power | 危機段階、影響圏、外交的抑制 | 宣戦・和平済み、段階的危機候補 |
 | 政治 | Ostalgie | 政治派閥、経済指標、外交圏、改革 | 支持・市場・外交済み、改革事件候補 |
@@ -167,18 +167,41 @@
 | 経営 | Captain of Industry | バルク物流、港湾、輸送容量、生産連鎖 | 港・抽象5財済み、多段加工候補 |
 | 経営 | Highrise City | 資源網、輸送、都市需要、地域物流 | 需要・輸送財済み、明示物流網候補 |
 | 経営 | SeaOrama: World of Shipping | 船隊、港、航路、契約、市況 | 港・市場済み、船隊・契約候補 |
-| 経営 | Port Royale 4 | 港市、船団、価格差、護衛、海戦 | 港・価格差交易・海上補給済み、護衛・封鎖候補 |
+| 経営 | Port Royale 4 | 港市、船団、価格差、護衛、海戦 | **港・価格差交易・海上補給・護衛・封鎖を実装済み** |
+
+## シミュレーションゲーム設計参照索引（第7群）
+
+第7群では季節洪水、橋梁工兵、海上封鎖、護送船団、港湾経営を中心に16系統を追加し、累計130系統とした。艦船ユニットが未実装の現段階では、沿岸の交戦中戦力を艦隊・沿岸砲・私掠活動の集約表現として扱う。
+
+| 系統 | 代表的な参照作品 | 抽出する設計要素 | HexCivでの状態 |
+|---|---|---|---|
+| 歴史 | Nebuchadnezzar | 河川都市、灌漑、農業、物流 | 河川都市・季節肥沃化済み、灌漑網は候補 |
+| 歴史 | Builders of Egypt | ナイル周期、都市生産、交易、宗教 | **季節洪水・肥沃期を第8実装** |
+| 歴史 | Egypt: Old Kingdom | 河川農業、季節、国家事業、危機 | 季節産出・国家運営済み、事業計画は候補 |
+| 歴史 | Imperiums: Greek Wars | 都市国家、海域、補給、外交 | 補給・外交・海上網済み、海軍は候補 |
+| 軍事 | Atlantic Fleet | 船団護衛、通商破壊、索敵、海戦 | **護送船団と沿岸封鎖を第8実装**、艦隊は候補 |
+| 軍事 | UBOAT | 船団、哨戒、補給、潜水艦戦 | **船団耐性と封鎖圧力を第8実装** |
+| 軍事 | Silent Hunter III | 航路、船団、護衛、探知 | 船団・視界済み、海上探知は候補 |
+| 軍事 | War on the Sea | 港湾、船団、航空・海上阻止、補給 | 港・封鎖・補給済み、諸兵科海戦は候補 |
+| 軍事 | Ultimate Admiral: Dreadnoughts | 艦隊設計、海上封鎖、港、国家経済 | **港・封鎖・国庫を実装済み**、造船は候補 |
+| 軍事 | Carrier Battles 4 Guadalcanal | 海上補給、船団、制海、作戦目標 | **海上補給と二重封鎖を第8実装** |
+| 政治 | Conflict: Middle East Political Simulator | 外交危機、軍事圧力、資源、内政 | 外交・戦争・国庫済み、危機事件は候補 |
+| 政治 | Realpolitiks II | 国家指標、外交、戦争、経済圏 | 国家指標・市場・戦争済み、国際機構は候補 |
+| 経営 | Ports of Call | 船隊、港、航路、運航リスク | 港・船団抽象済み、個別船隊は候補 |
+| 経営 | TransOcean: The Shipping Company | 船団、契約、港湾、航路収益 | 港・市場・船団済み、契約は候補 |
+| 経営 | Sailwind | 帆走、積荷、風、島嶼交易 | 海上物流済み、風と個別積荷は候補 |
+| 経営 | Sweet Transit | 交通網、橋、都市需要、物流容量 | **橋梁網・需要・輸送財を実装済み**、明示路線は候補 |
 
 ### 機構実装ロードマップ
 
 | 段階 | 機構 | 内容 | 状態 |
 |---|---|---|---|
 | 1 | 国家運営 | 国庫、税制、人口・都市収入、都市・軍事維持費、安定度、戦争疲弊、AI税制 | 実装済み |
-| 2 | 兵站 | 都市からの補給到達、地形コスト、敵遮断、孤立、補給切れ、技術・穀物庫 | **陸上網・港湾拠点・海上補給を実装済み**（道路タイル・船団・封鎖は次拡張） |
+| 2 | 兵站 | 都市からの補給到達、地形コスト、敵遮断、孤立、補給切れ、技術・穀物庫 | **陸上網・港湾拠点・海上補給・沿岸封鎖・護送船団を実装済み**（道路タイル・艦隊は次拡張） |
 | 3 | 人口社会 | 人口階層、職業、需要、教育、満足度、移住、AI社会重点 | **実装済み** |
 | 4 | 政治 | 派閥、支持、法令、評議会、事件選択 | **派閥・支持・法律・正統性を実装済み**（事件・選挙は次拡張） |
 | 5 | 市場 | 資源在庫、交易路、価格、生産連鎖 | **5財・需要・在庫・価格・自動交易・地域産業・港湾市場を実装済み**（明示路線・多段加工は次拡張） |
-| 6 | 自然地理 | 山・川・海・湖・森・砂漠、河川、自然多様性、立地効果 | **72件台帳・内陸湖・流向河川・氾濫原・渡河を実装済み**（分流・気候・災害は次拡張） |
+| 6 | 自然地理 | 山・川・海・湖・森・砂漠、河川、自然多様性、立地効果 | **72件台帳・内陸湖・流向河川・季節氾濫・渡河・橋梁網を実装済み**（分流・気候・災害は次拡張） |
 | 7 | 人物史 | 特性、任命、関係、継承、家系 | 設計候補 |
 
 ## 第1実装: 国家運営
@@ -246,15 +269,25 @@
 
 - **流向**: 各河川タイルは0〜5の下流方向を保持し、河口まで循環せず到達する。分岐を描かず、合流時は既存下流を尊重する。
 - **氾濫原**: 平地または砂漠の河川沿いに決定的に形成し、河川食料+1に加えて食料+1を得る。専用の明色帯を手続き描画する。
-- **渡河**: 河道に沿わず河川タイルへ出入りする移動はコスト+1、近接攻撃力80%。建築学を得ると橋梁・土木技術の抽象表現として両ペナルティを無効化する。
+- **渡河**: 河道に沿わず河川タイルへ出入りする移動はコスト+1、近接攻撃力80%。建築学は橋梁網を解禁するが、研究だけではペナルティを無効化しない。
 - **港**: 水域へ隣接する都市だけが建設できる。港は食料・生産・市場アクセスを増やし、都市模型には水側を向く桟橋と標識を実行時生成する。
 - **海上補給**: 自文明の港から水域へ補給が入り、海上を低コストで進み、自領沿岸へ荷揚げされる。敵部隊・敵都市による遮断規則は陸上と共通。
 - **表示**: 河道は下流方向だけを結び、河川上に小さな流向矢印を生成する。補給オーバーレイは海上経路も同じ色規則で表示する。
 - **セーブ**: version 16で流向と氾濫原を保存。version 15は保存済み河川から流向・氾濫原を再構築し、version 14以前は河川自体を決定的に補完する。
 
+## 第8実装: 季節洪水・橋梁網・沿岸封鎖・護送船団
+
+- **季節洪水**: 12ターン周期を決定論的に計算し、2ターンの増水、3ターンの退水後肥沃期、7ターンの平常期を繰り返す。増水中は氾濫原の食料-1・移動コスト+1、肥沃期は食料+1。
+- **橋梁網**: 建築学を得た河川圏都市だけが建設できる。都市労働圏の渡河移動・近接攻撃ペナルティと、架橋地点の増水移動ペナルティを無効化する。都市占領時は守備・管理網が失われ再建が必要。
+- **沿岸封鎖**: 水域に隣接する交戦中の敵戦闘部隊または敵港湾都市を封鎖戦力として数え、海上補給の経路探索から当該水域を除外する。
+- **護送船団庁**: 港を持つ都市だけが建設できる。文明の海上護衛網を有効にし、単独の封鎖戦力を突破する。二つ以上の封鎖戦力には遮断され、和平すると解除される。
+- **AI・占領**: AIの建物優先へ港→護送船団庁と河川圏の橋梁網を加える。占領時は橋梁網と護送船団庁を失うが、恒久施設の港は残る。
+- **表示・アニメーション**: 増水面、退水後の堆積帯、流向に直交する橋桁を外部画像なしで実行時生成する。増水面はMaterialPropertyBlockでゆっくり脈動し、軽量演出モードでは固定表示する。
+- **セーブ**: 洪水状態はTurnNumberから再現し、橋梁網・護送船団庁は既存の建物ID一覧へ保存されるため、version 16のまま互換を維持する。
+
 ## 画像・動画・音楽・音声生成技術の分類台帳
 
-「生成」は手続き生成、シミュレーション、制作支援、機械学習による合成を含みます。製品名の網羅ではなく、技術系譜を追跡します。第7版は8系統を増補し、累計73技術系譜です。
+「生成」は手続き生成、シミュレーション、制作支援、機械学習による合成を含みます。製品名の網羅ではなく、技術系譜を追跡します。第8版は8系統を増補し、累計81技術系譜です。
 
 | 媒体 | 技術系譜 | 代表的な方式 | HexCiv方針・状態 |
 |---|---|---|---|
@@ -331,6 +364,14 @@
 | 動画 | 港湾活動パーティクル | berth event、cargo particle、schedule-driven motion | 建設・交易・補給イベントの候補 |
 | 音楽 | 地理状態ソニフィケーション | hydrology parameter、port activity、adaptive motif | 河川量・港湾繁栄を自作BGMへ反映する候補 |
 | 音声 | 水辺環境音の手続き合成 | filtered noise、stochastic splash、harbor event grammar | 外部録音なしの河川・港環境音候補 |
+| 画像 | 季節状態マスク合成 | turn phase、categorical mask、layer compositing | **増水・肥沃・平常の動的地表層を第8実装** |
+| 画像 | 流向適応インフラ合成 | tangent/normal frame、oriented primitive、ownership color | **河道に直交する橋桁と文明色帯を第8実装** |
+| 画像 | 半透明水位オーバーレイ | alpha mesh、depth layering、fog-compatible composition | **増水面・波線を第8実装** |
+| 動画 | 状態駆動水面パルス | simulation phase、sine modulation、property block | **増水期のみの軽量アニメーションを第8実装** |
+| 動画 | 季節タイムラプス可視化 | discrete state transition、temporal sampling、change emphasis | 領土タイムラプスと連携する季節履歴の候補 |
+| 音楽 | 季節適応オーケストレーション | state parameter、layer mix、motif transition | 自作BGMの増水・収穫モチーフ切替候補 |
+| 音声 | インフラ状態ソニフィケーション | event mapping、warning grammar、spatial cue | 架橋完成・封鎖・船団突破の自作SE候補 |
+| 音声 | 水文粒状合成 | filtered noise grain、density envelope、flow parameter | 河川流量に追従する外部録音なし環境音候補 |
 
 ### 導入規則
 
@@ -364,6 +405,9 @@
 - [U.S. Army — Tactical River Crossings](https://www.armyupress.army.mil/Journals/Military-Review/English-Edition-Archives/March-April-2026/Tactical-River-Crossings/)
 - [UNCTAD — Port Interface](https://resilientmaritimelogistics.unctad.org/guidebook/31-port-interface)
 - [UNCTAD — Resilient Ports as a Key Pillar of a Resilient Maritime Supply Chain](https://resilientmaritimelogistics.unctad.org/guidebook/2-resilient-ports-key-resilient-maritime-supply-chain)
+- [U.S. Naval History and Heritage Command — Order for Ships in Convoy (1917)](https://www.history.navy.mil/research/publications/documentary-histories/wwi/october-1917/rear-admiral-albert.html)
+- [U.S. Naval History and Heritage Command — Coastal Convoys and the Second Happy Time](https://www.history.navy.mil/about-us/leadership/director/directors-corner/h-grams/h-gram-008/h-008-5.html)
+- [The National Archives — Royal Navy operations and Merchant Navy convoy records](https://www.nationalarchives.gov.uk/help-with-your-research/research-guides/royal-navy-operations-second-world-war)
 - [FAO — Global Forest Resources Assessment 2025](https://www.fao.org/forest-resources-assessment/past-assessments/fra-2025/en)
 - [JRC — World Atlas of Desertification](https://wad.jrc.ec.europa.eu/)
 - [GEBCO — Gridded Bathymetry Data](https://www.gebco.net/data-products-gridded-bathymetry-data)

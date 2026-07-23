@@ -3,6 +3,14 @@ using System.Collections.Generic;
 
 namespace HexCiv.Core
 {
+    /// <summary>12ターンの河川季節サイクルにおける氾濫原の状態。</summary>
+    public enum FloodStage
+    {
+        Normal = 0,
+        Inundated = 1,
+        Fertile = 2,
+    }
+
     /// <summary>手続き生成世界または文明圏に含まれる自然地理のタイル集計。</summary>
     public sealed class NaturalGeographyProfile
     {
@@ -315,14 +323,102 @@ namespace HexCiv.Core
             return !IsRiverSegment(map, from, to);
         }
 
+        /// <summary>
+        /// 12ターン周期の氾濫季。最初の2ターンは増水、次の3ターンは退水後の肥沃期、
+        /// 残り7ターンは平常とする。乱数や保存項目を増やさない決定論的な季節モデル。
+        /// </summary>
+        public static FloodStage FloodStageAt(int turnNumber)
+        {
+            int phase = (turnNumber - 1) % 12;
+            if (phase < 0) phase += 12;
+            if (phase < 2) return FloodStage.Inundated;
+            if (phase < 5) return FloodStage.Fertile;
+            return FloodStage.Normal;
+        }
+
+        /// <summary>季節効果を含むタイル産出。恒久的な氾濫原+1食料の上に季節差を加える。</summary>
+        public static Yields YieldsAt(GameState state, Tile tile)
+        {
+            if (tile == null) return new Yields(0, 0, 0);
+            Yields yields = tile.GetYields();
+            if (!tile.HasFloodplain || state == null) return yields;
+
+            switch (FloodStageAt(state.TurnNumber))
+            {
+                case FloodStage.Inundated:
+                    yields.Food = Math.Max(0, yields.Food - 1);
+                    break;
+                case FloodStage.Fertile:
+                    yields.Food += 1;
+                    break;
+            }
+            return yields;
+        }
+
+        /// <summary>都市労働圏内に河道があり、橋梁網を建設できるか。</summary>
+        public static bool HasRiverInRange(HexMap map, HexCoord center, int range)
+        {
+            if (map == null) return false;
+            foreach (Tile tile in map.TilesInRange(center, range))
+                if (tile.HasRiver) return true;
+            return false;
+        }
+
+        /// <summary>指定河道が文明の橋梁網で覆われているか。</summary>
+        public static bool HasBridgeAtTile(GameState state, Player player, HexCoord riverCoord)
+        {
+            if (state == null || state.Map == null || player == null) return false;
+            Tile river = state.Map.Get(riverCoord);
+            if (river == null || !river.HasRiver) return false;
+            for (int i = 0; i < player.Cities.Count; i++)
+            {
+                City city = player.Cities[i];
+                if (city == null || city.Buildings == null ||
+                    !city.Buildings.Contains("bridgeworks")) continue;
+                if (city.Coord.DistanceTo(riverCoord) <= GameRules.CityWorkRadius)
+                    return true;
+            }
+            return false;
+        }
+
+        /// <summary>渡河地点を覆う橋梁網の有無。河道側のタイルを橋の設置地点とする。</summary>
+        public static bool HasBridgeCoverage(GameState state, Player player, HexCoord from, HexCoord to)
+        {
+            if (state == null || state.Map == null || player == null ||
+                !CrossesRiver(state.Map, from, to)) return false;
+            Tile a = state.Map.Get(from);
+            Tile b = state.Map.Get(to);
+            if (a != null && a.HasRiver && HasBridgeAtTile(state, player, a.Coord)) return true;
+            return b != null && b.HasRiver && HasBridgeAtTile(state, player, b.Coord);
+        }
+
+        /// <summary>表示用に河道を覆う橋梁網の所有文明を決定的に返す。</summary>
+        public static Player BridgeOwnerAt(GameState state, HexCoord riverCoord)
+        {
+            if (state == null) return null;
+            Player best = null;
+            for (int i = 0; i < state.Players.Count; i++)
+            {
+                Player player = state.Players[i];
+                if (!HasBridgeAtTile(state, player, riverCoord)) continue;
+                if (best == null || player.Id < best.Id) best = player;
+            }
+            return best;
+        }
+
         public static int MovementCost(GameState state, Unit unit, HexCoord from, HexCoord to)
         {
             Tile destination = state != null && state.Map != null ? state.Map.Get(to) : null;
             int cost = GameRules.MoveCostInto(destination);
             if (cost >= GameRules.ImpassableCost || unit == null || state == null) return cost;
             Player owner = state.GetPlayer(unit.PlayerId);
-            if (CrossesRiver(state.Map, from, to) && (owner == null || !owner.HasTech("construction")))
+            bool crossesRiver = CrossesRiver(state.Map, from, to);
+            bool hasBridge = crossesRiver && HasBridgeCoverage(state, owner, from, to);
+            if (crossesRiver && !hasBridge)
                 cost += GameRules.RiverCrossingMovePenalty;
+            if (destination != null && destination.HasFloodplain &&
+                FloodStageAt(state.TurnNumber) == FloodStage.Inundated && !hasBridge)
+                cost += GameRules.FloodedMovePenalty;
             return cost;
         }
 
@@ -331,7 +427,7 @@ namespace HexCiv.Core
             if (state == null || attacker == null || attacker.Def.IsRanged) return 1f;
             Player owner = state.GetPlayer(attacker.PlayerId);
             return CrossesRiver(state.Map, attacker.Coord, target) &&
-                (owner == null || !owner.HasTech("construction"))
+                !HasBridgeCoverage(state, owner, attacker.Coord, target)
                 ? GameRules.RiverCrossingAttackMultiplier
                 : 1f;
         }

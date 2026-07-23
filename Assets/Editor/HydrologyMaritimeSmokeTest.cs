@@ -91,7 +91,13 @@ public static class HydrologyMaritimeSmokeTest
         Require(river.GetYields().Food == 3, "平原+河川+氾濫原の食料が3ではない");
 
         var player = new Player { Id = 0, NameJa = "試験文明" };
-        var state = new GameState { Map = map, Config = new GameConfig(), Rng = new System.Random(7) };
+        var state = new GameState
+        {
+            Map = map,
+            Config = new GameConfig(),
+            Rng = new System.Random(7),
+            TurnNumber = 6,
+        };
         state.Players.Add(player);
         var unit = new Unit { Id = 1, PlayerId = 0, DefId = "warrior", Coord = bankCoord, MovesLeft = 2 };
         Require(NaturalGeographySystem.MovementCost(state, unit, bankCoord, riverCoord) == 2,
@@ -99,10 +105,21 @@ public static class HydrologyMaritimeSmokeTest
         Require(Math.Abs(NaturalGeographySystem.RiverCrossingAttackMultiplier(state, unit, riverCoord) -
             GameRules.RiverCrossingAttackMultiplier) < 0.001f, "渡河攻撃補正が不正");
         player.KnownTechs.Add("construction");
+        Require(NaturalGeographySystem.MovementCost(state, unit, bankCoord, riverCoord) == 2,
+            "橋梁網なしでも建築学だけで渡河移動ペナルティが消える");
+        var bridgeCity = new City
+        {
+            Id = 9,
+            PlayerId = player.Id,
+            NameJa = "橋都",
+            Coord = riverCoord.Neighbor(3),
+            Buildings = new List<string> { "bridgeworks" },
+        };
+        player.Cities.Add(bridgeCity);
         Require(NaturalGeographySystem.MovementCost(state, unit, bankCoord, riverCoord) == 1,
-            "建築学取得後も渡河移動ペナルティが残る");
+            "橋梁網完成後も渡河移動ペナルティが残る");
         Require(Math.Abs(NaturalGeographySystem.RiverCrossingAttackMultiplier(state, unit, riverCoord) - 1f) < 0.001f,
-            "建築学取得後も渡河攻撃ペナルティが残る");
+            "橋梁網完成後も渡河攻撃ペナルティが残る");
     }
 
     static void VerifyHarborSupplyAndSave()

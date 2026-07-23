@@ -32,6 +32,7 @@ namespace HexCiv.Core
         public const float HillDefenseBonus = 0.25f;
         public const float ForestDefenseBonus = 0.25f;
         public const int RiverCrossingMovePenalty = 1;
+        public const int FloodedMovePenalty = 1;
         public const float RiverCrossingAttackMultiplier = 0.80f;
         public const int ImpassableCost = 9999;
         public const string StartingTech = "agriculture";
@@ -79,6 +80,8 @@ namespace HexCiv.Core
             new BuildingDef { Id = "library",  NameJa = "図書館", Cost = 80, RequiresTech = "writing", Bonus = new Yields(0, 0, 3), DescJa = "科学+3" },
             new BuildingDef { Id = "workshop", NameJa = "作業場", Cost = 80, RequiresTech = "construction", Bonus = new Yields(0, 2, 0), DescJa = "生産+2" },
             new BuildingDef { Id = "harbor",   NameJa = "港",     Cost = 70, RequiresTech = "construction", Bonus = new Yields(1, 1, 0), DescJa = "食料+1 生産+1・海上補給" },
+            new BuildingDef { Id = "bridgeworks", NameJa = "橋梁網", Cost = 90, RequiresTech = "construction", Bonus = new Yields(0, 1, 0), DescJa = "生産+1・都市圏の渡河を保護" },
+            new BuildingDef { Id = "convoy_office", NameJa = "護送船団庁", Cost = 95, RequiresTech = "construction", Bonus = new Yields(0, 1, 0), DescJa = "生産+1・単独の沿岸封鎖を突破" },
             new BuildingDef { Id = "walls",    NameJa = "城壁",   Cost = 70, RequiresTech = "masonry", CityDefense = 6, DescJa = "都市防御+6" },
         };
 
@@ -96,7 +99,7 @@ namespace HexCiv.Core
             new TechDef { Id = "bronze_working",   NameJa = "青銅器", Cost = 55, Prereqs = new[] { "mining" },               DescJa = "槍兵を解禁" },
             new TechDef { Id = "iron_working",     NameJa = "鉄器",   Cost = 85, Prereqs = new[] { "bronze_working" },       DescJa = "剣士を解禁" },
             new TechDef { Id = "mathematics",      NameJa = "数学",   Cost = 85, Prereqs = new[] { "wheel" },                DescJa = "カタパルトを解禁" },
-            new TechDef { Id = "construction",     NameJa = "建築学", Cost = 85, Prereqs = new[] { "masonry" },              DescJa = "作業場を解禁" },
+            new TechDef { Id = "construction",     NameJa = "建築学", Cost = 85, Prereqs = new[] { "masonry" },              DescJa = "作業場・港・橋梁網・護送船団庁を解禁" },
         };
 
         static Dictionary<string, UnitDef> unitsById;

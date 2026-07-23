@@ -140,6 +140,10 @@ namespace HexCiv.Core
             city.Hp = Math.Max(1, city.MaxHp / 2);
             city.CurrentProduction = null;
             city.ProductionStored = 0;
+            // 橋梁の守備隊と護送船団の指揮系統は占領時に失われる。
+            // 港などの恒久施設は残るため、新所有者は再建してネットワークを復旧できる。
+            city.Buildings.Remove("bridgeworks");
+            city.Buildings.Remove("convoy_office");
 
             foreach (var t in Map.AllTiles)
                 if (t.OwnerCityId == city.Id) t.OwnerPlayerId = newOwner.Id;

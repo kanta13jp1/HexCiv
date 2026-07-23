@@ -135,7 +135,11 @@ namespace HexCiv.Core.AI
                 bool wantUnit = s.Rng.Next(100) < 30;
                 if (!wantUnit)
                 {
-                    string[] priority = { "library", "granary", "harbor", "workshop", "walls", "monument" };
+                    string[] priority =
+                    {
+                        "library", "granary", "harbor", "convoy_office",
+                        "bridgeworks", "workshop", "walls", "monument"
+                    };
                     for (int i = 0; i < priority.Length && pick == null; i++)
                         pick = FindItem(avail, ProductionKind.Building, priority[i]);
                 }

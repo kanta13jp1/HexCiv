@@ -54,7 +54,7 @@ namespace HexCiv.Core
         public Yields ComputeYields(GameState s)
         {
             var center = s.Map.Get(Coord);
-            var total = center != null ? center.GetYields() : new Yields(0, 0);
+            var total = NaturalGeographySystem.YieldsAt(s, center);
 
             var candidates = new List<Tile>();
             foreach (var t in s.Map.TilesInRange(Coord, GameRules.CityWorkRadius))
@@ -65,8 +65,8 @@ namespace HexCiv.Core
             }
             candidates.Sort((a, b) =>
             {
-                var ya = a.GetYields();
-                var yb = b.GetYields();
+                var ya = NaturalGeographySystem.YieldsAt(s, a);
+                var yb = NaturalGeographySystem.YieldsAt(s, b);
                 int cmp = (yb.Food + yb.Production).CompareTo(ya.Food + ya.Production);
                 if (cmp != 0) return cmp;
                 cmp = yb.Food.CompareTo(ya.Food);
@@ -78,7 +78,7 @@ namespace HexCiv.Core
 
             int worked = Math.Min(Population, candidates.Count);
             for (int i = 0; i < worked; i++)
-                total += candidates[i].GetYields();
+                total += NaturalGeographySystem.YieldsAt(s, candidates[i]);
 
             for (int i = 0; i < Buildings.Count; i++)
                 total += GameRules.GetBuilding(Buildings[i]).Bonus;
@@ -100,7 +100,10 @@ namespace HexCiv.Core
                 if (owner.HasTech(u.RequiresTech)) list.Add(ProductionItem.FromUnit(u));
             foreach (var b in GameRules.Buildings)
                 if (owner.HasTech(b.RequiresTech) && !Buildings.Contains(b.Id) &&
-                    (b.Id != "harbor" || NaturalGeographySystem.IsWaterfront(s.Map, Coord)))
+                    (b.Id != "harbor" || NaturalGeographySystem.IsWaterfront(s.Map, Coord)) &&
+                    (b.Id != "bridgeworks" || NaturalGeographySystem.HasRiverInRange(
+                        s.Map, Coord, GameRules.CityWorkRadius)) &&
+                    (b.Id != "convoy_office" || Buildings.Contains("harbor")))
                     list.Add(ProductionItem.FromBuilding(b));
             return list;
         }
