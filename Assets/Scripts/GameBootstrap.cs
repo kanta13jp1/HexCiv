@@ -127,7 +127,11 @@ namespace HexCiv
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         static void AutoSpawn()
         {
-            if (FindObjectOfType<GameBootstrap>() != null) return;
+            // 2026-07-22 Claude Code: 非推奨API(CS0618)の解消。
+            // 「既に1つでも存在するか」だけを見る存在確認のため FindAnyObjectByType を使う
+            // (最初の1件を特定する必要がない分だけ軽い)。既定の FindObjectsInactive.Exclude は
+            // 明示せず、従来の FindObjectOfType と同じ「非アクティブは対象外」の意味を保つ。
+            if (FindAnyObjectByType<GameBootstrap>() != null) return;
             var go = new GameObject("HexCivGame");
             go.AddComponent<GameBootstrap>();
         }
@@ -1178,11 +1182,14 @@ namespace HexCiv
             {
                 cam.clearFlags = CameraClearFlags.SolidColor;
                 cam.backgroundColor = new Color(0.05f, 0.07f, 0.13f);   // 暗い紺
-                if (FindObjectOfType<AudioListener>() == null)
+                // 2026-07-22 Claude Code: 非推奨API(CS0618)の解消。どちらも「シーンに1つでも
+                // 存在するか」の存在確認のため FindAnyObjectByType を使う(どの1件かは問わない)。
+                // 非アクティブを含めない既定の挙動は従来の FindObjectOfType と同一。
+                if (FindAnyObjectByType<AudioListener>() == null)
                     cam.gameObject.AddComponent<AudioListener>();
             }
 
-            if (FindObjectOfType<Light>() == null)
+            if (FindAnyObjectByType<Light>() == null)
             {
                 var lgo = new GameObject("Directional Light");
                 var light = lgo.AddComponent<Light>();

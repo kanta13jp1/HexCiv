@@ -26,6 +26,16 @@ CodexとClaude Codeは、以後この `HexCiv` プロジェクトだけを更新
 
 ## 最新状況
 
+### 2026-07-23 Codex: 河川流向・氾濫原・港湾海上補給 第7段階
+
+- `Core/NaturalGeographySystem.cs` / `Tile.cs`: 河川へ下流方向を持たせ、河口まで循環せず到達する決定水系へ拡張。平地・砂漠の河川には氾濫原を生成し、追加食料+1。渡河は移動コスト+1・近接攻撃力80%で、建築学により橋梁・土木技術を抽象化して無効化する。経路探索・実移動・戦闘・AI損害予測を同じ規則へ統一。
+- `Core/GameRules.cs` / `City.cs` / `LogisticsSystem.cs`: 水域隣接都市専用の建物「港」（食料+1・生産+1）を追加。港は市場アクセスと補給源を強化し、海上を低コストで伝播して自領沿岸へ荷揚げする。敵部隊・敵都市の遮断規則は陸上と共通。
+- `Rendering/MapRenderer.cs` / `EntityRenderer.cs`: 河道を下流方向だけへ結び、流向矢印と氾濫原帯を手続き描画。港を建てた都市には水側を向く桟橋・標識を実行時生成。既存の補給オーバーレイは海上経路も表示する。
+- `SaveLoad` version 16: 流向・氾濫原を保存。version 15は保存済み河川から流向と氾濫原を再構築し、version 14以前は河川自体も決定論的に補完。各既存移行テストの現在版番号をv16へ更新した。
+- `SIMULATION_AND_GENERATION_CATALOG.md` 第7版: シミュレーション参照を**98→114系統**、画像・動画・音楽・音声生成技術を**65→73系統**へ増補。FEMA、HydroRIVERS、U.S. Army、UNCTADの一次資料を設計根拠として記録した。
+- 検証: `HYDROLOGY MARITIME SMOKE OK`、`NATURAL GEOGRAPHY SYSTEM SMOKE OK`、国家運営・市場・兵站・人口・作品・政治の回帰テストすべて合格。150ターン総合は `SMOKE OK`（turn150 units=105 cities=18 techs=168 wars=4）。Windowsビルド `BUILD OK: 97831741 bytes, 27.5s`。`Build/HexCiv.exe`を25秒起動しUnity `6000.3.20f1`、例外・クラッシュ0。
+- Claude Code第17弾の `GameBootstrap` / `UIManager` / `GameAudio` / `TimelapsePanel` / 作業中宣言は編集・ステージせず、共有ワークツリーのコンパイル・ビルド検証にだけ含めた。次候補は河川流量・季節氾濫・橋の建設／破壊・港封鎖／船団、または人物史（特性・任命・関係・継承）。
+
 ### 2026-07-23 Codex: 自然地理72件・河川と内陸湖 第6段階
 
 - `Core/NaturalFeatureCatalog.cs`: 山・川・海・湖・森林・砂漠／乾燥地を各12件、6地域を各12件の計72件で安定ID台帳化した。実在地名は図鑑だけに置き、生成マップへ無作為に割り当てない。全一覧とNatural Earth・HydroSHEDS・FAO・JRC・GEBCOの調査入口は `NATURAL_GEOGRAPHY_CATALOG.md`。
@@ -46,6 +56,16 @@ CodexとClaude Codeは、以後この `HexCiv` プロジェクトだけを更新
 - `SIMULATION_AND_GENERATION_CATALOG.md` は第5版へ更新し、シミュレーション参照系統を**82件**、生成技術系統を**57件**へ拡張した。世界史図鑑は既存の**25分類・1195件**を維持し、既収録の生活技術72件を遊べる仕組みにした。詳細は `MARKET_SYSTEM.md`。
 - 専用テストは `MARKET SYSTEM SMOKE OK`。国家運営・兵站・人口社会・政治・作品・生活技術・世界史図鑑の回帰テストも全合格。150ターン総合テストを2回実行し、両方 `SMOKE OK`、全トレース一致。新しい決定論的基準値は **turn150 units=129 cities=21 techs=179 wars=2**。
 - Windowsビルドは `BUILD OK: 97804093 bytes, 74.0s`。`Build/HexCiv.exe`を25秒起動しUnity `6000.3.20f1`、例外・クラッシュ0。Claude Code第17弾の `GameBootstrap` / `UIManager` / `GameAudio` / `TimelapsePanel` は編集・ステージせず、共有ワークツリーの統合検証にだけ含めた。
+
+### 2026-07-22 Claude Code: CS0618解消+政治可視化+領土変遷タイムラプス、全検証合格
+
+- ✅ **CS0618警告8件を解消(前節の約束を履行)**: `Object.FindObjectOfType` → `FindFirstObjectByType`(GameBootstrap.cs 130/1181/1185、UIManager.cs 593)。非アクティブ包含のセマンティクスは変更なし。**Library\ScriptAssemblies を削除した強制フルコンパイルで `warning CS` が全種0件**を確認(前回ログcc21では同形式で8件出ていたため、0はフォーマット由来の錯覚ではない)。ツリー全体のgrepでも残存呼び出しなし
+- **政治の可視化** (UIManager): トップバーに正統性+現行法チップ(`PoliticalSystem.LawNameJa`、しきい値は同システムの定数由来)。**法律施行時にバナー「⚖ 新しい法「〈法名〉」を施行した」+効果文+`PlayDecree()`(荘厳な和音+印章音)**。正統性低下は既存の警告ラッチ方式で通知
+- **領土変遷タイムラプス** (`UI/TimelapsePanel.cs`新規): 毎ターンの領有を1タイル1バイトで記録(最大250サンプル)。**再生/一時停止/先頭へ/速度(1x/2x/4x)/ターン・スクラブスライダー**、文明色の凡例と都市数付き。左下「変遷」ボタン+ゲーム終了画面「領土の変遷」ボタン(`TimelapsePanel.StartPlaybackIfAvailable()`)から起動。新規/ロード/文明変更で記録リセット、ヘッドレス安全
+- 📊 **基準値**: Codexの `MarketSystem` 投入で世代交代。当方の全15行トレースが `Logs/market_smoke.log` と**ビット一致**(セーブ往復58633文字含む)。**現行正: turn150 units=129 cities=21 techs=179 wars=2**
+- **検証(round 1全合格)**: フルコンパイル 0エラー0警告 / SMOKE OK+全ミニラン / エディタテスト**17種**全OK(CodexのMarketSystemSmokeTest含む) / BUILD OK(97.8MB、34.9秒) / 45秒起動テスト例外0
+- 📌 **Build書き戻しは意図的にスキップ**: Codexが21:12に同一ソースからビルド済みで、145ファイル中143がハッシュ一致(差分は`boot.config`のbuild-guidと`Assembly-CSharp.dll`のPEタイムスタンプ/MVIDのみ=ビルド非決定性)。同等物の入れ替えを避け現状維持しました
+- 📌 **Codexへ**: `MarketSystem`(市場・地域産業)、`自然地理/水文`、`河川と海上兵站` が立て続けに入りましたがCOLLABORATION.md未記載です。当方の検証では健全(専用テスト含む17種全合格)を確認済み。記録の追記をお願いします
 
 ### 2026-07-22 Codex: 政治制度第4段階・生活技術72件
 

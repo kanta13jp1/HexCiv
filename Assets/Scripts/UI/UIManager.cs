@@ -288,6 +288,37 @@ namespace HexCiv.UI
         int lastIsolationWarnTurn = -999;
         int lastUnrestWarnTurn = -999;
 
+        // ---- 政治チップ+法の施行/正統性の警告(2026-07-22 Claude Code 追加) ----
+        /// <summary>
+        /// トップバー三段目・左端の政治チップ列(「正統性 62」「⚖ 長老評議会」)。
+        /// 値は Core/PoliticalSystem(Codex実装)の公開APIと Player の公開フィールドを読むだけの
+        /// 表示専用で(raycast無効)、シミュレーションには一切影響しない。観戦モード
+        /// (HumanPlayer==null)・ゲーム終了時・滅亡時は隠す。
+        /// 配置は三段目 y-66〜-90 の x12〜316 で、二段目の国家運営チップ(y-38〜-64)・首位チップ
+        /// (x480〜)・時代表示(x614〜)とは段が異なり、中央のイベントバナー(コンパクト x420〜860 /
+        /// 観戦用 x320〜960)とも横に重ならない。ログ先頭は LogTopNormalY を -68→-94 へ下げている。
+        /// </summary>
+        GameObject politicsChips;
+        Text legitimacyChipLabel;
+        Text lawChipLabel;
+        /// <summary>次に政治チップと政治イベント判定を行う時刻(最大毎秒1回。Time.unscaledTime 基準)。</summary>
+        float nextPoliticsChipAt;
+        /// <summary>直近に表示した現行法(法律変更のエッジ検出に使う)。</summary>
+        CivicLaw shownLaw;
+        /// <summary>現行法の基準を取得済みか(false=新規/ロード直後。初回は告知せず基準化するだけ)。</summary>
+        bool lawBaselineKnown;
+        /// <summary>正統性低下警告の「発生中」ラッチ(他の警告と同じエッジ検出)。</summary>
+        bool warnLegitimacyLatched;
+        /// <summary>正統性低下を最後に通知したターン(WarningCooldownTurns の判定用。-999=未通知)。</summary>
+        int lastLegitimacyWarnTurn = -999;
+
+        /// <summary>
+        /// 「正統性が低い」とみなす閾値。独自の数値を導入せず、Core/PoliticalSystem の
+        /// 開始正統性(<see cref="PoliticalSystem.StartingLegitimacy"/> = 60)の半分を境界にする
+        /// (表示・警告専用で、シミュレーション側の判定には一切使われない)。
+        /// </summary>
+        static int LowLegitimacyThreshold => PoliticalSystem.StartingLegitimacy / 2;
+
         // ---- 独立Canvas UIの開閉検知(2026-07-21 Claude Code 追加。参照のみ・一切変更しない) ----
         /// <summary>Codex 実装の世界史図鑑(独立Canvas)。Esc のフルスクリーン解除判定のため開閉のみ読む。</summary>
         WorldHistoryPanel worldHistoryRef;
@@ -404,9 +435,10 @@ namespace HexCiv.UI
         readonly List<string> logLines = new List<string>();
         const int MaxLogLines = 6;
         /// <summary>通常時のログ先頭Y(トップバー高さ34の下)。2026-07-22 Claude Code 変更:
-        /// 二段目左端(y-38〜-64)へ国家運営チップ列を追加したため、-42 から -68 へ下げて
-        /// ログ先頭行との重なりを避ける(表示位置のみの変更。行数・幅・書式は従来どおり)。</summary>
-        const float LogTopNormalY = -68f;
+        /// 二段目左端(y-38〜-64)へ国家運営チップ列を、続けて三段目左端(y-66〜-90)へ政治チップ列を
+        /// 追加したため、-42 → -68 → -94 と下げてログ先頭行との重なりを避ける
+        /// (表示位置のみの変更。行数・幅・書式は従来どおり)。</summary>
+        const float LogTopNormalY = -94f;
         /// <summary>観戦時のログ先頭Y(観戦バー y-38〜-72 の下に8px余白。2026-07-21 追加)。</summary>
         const float LogTopSimulationY = -80f;
 
@@ -518,6 +550,15 @@ namespace HexCiv.UI
             lastUnrestWarnTurn = -999;
             nextAdminChipAt = 0f;
 
+            // 政治の告知(2026-07-22 追加): 新規ゲーム・リスタート・ロードでは前ゲームの
+            // 現行法・警告状態を一切持ち越さない。lawBaselineKnown=false により、最初の判定は
+            // 「基準の取得」だけを行い施行バナーを出さない(ロード直後の誤告知を防ぐ)。
+            lawBaselineKnown = false;
+            shownLaw = CivicLaw.CouncilOfElders;
+            warnLegitimacyLatched = false;
+            lastLegitimacyWarnTurn = -999;
+            nextPoliticsChipAt = 0f;
+
             BuildCanvas();
             BuildTopBar();
             BuildAudioControls();
@@ -536,6 +577,7 @@ namespace HexCiv.UI
             BuildEraIndicator();
             BuildLeaderChip();
             BuildAdministrationChips();
+            BuildPoliticsChips();
             BuildControlHint();
             BuildTutorial();
             BuildTooltip();
@@ -572,6 +614,7 @@ namespace HexCiv.UI
             DecorateExternalPanelButtons();   // 左下ボタンのアイコン付与(完了後は即return。2026-07-21 追加)
             UpdateLeaderChip();               // 首位文明チップ(最大毎秒1回。2026-07-22 追加)
             UpdateAdministrationChips();      // 国庫・安定度チップ+警告(最大毎秒1回。2026-07-22 追加)
+            UpdatePoliticsChips();            // 正統性・現行法チップ+政治告知(最大毎秒1回。2026-07-22 追加)
         }
 
         void BuildCanvas()
@@ -590,7 +633,10 @@ namespace HexCiv.UI
 
             canvasRect = (RectTransform)cgo.transform;
 
-            if (FindObjectOfType<EventSystem>() == null)
+            // 2026-07-22 Claude Code: 非推奨API(CS0618)の解消。EventSystem は「1つでもあれば
+            // 作らない」存在確認なので FindAnyObjectByType を使う(どの1件かは問わない)。
+            // 非アクティブを含めない既定の挙動は従来の FindObjectOfType と同一。
+            if (FindAnyObjectByType<EventSystem>() == null)
             {
                 var es = new GameObject("EventSystem", typeof(EventSystem), typeof(StandaloneInputModule));
                 es.transform.SetParent(transform, false);
@@ -1645,6 +1691,149 @@ namespace HexCiv.UI
             GameAudio.Instance?.PlayWarning();
         }
 
+        // ================= 政治チップ+法の施行/正統性の告知(2026-07-22 Claude Code 追加) =================
+
+        /// <summary>
+        /// 正統性・現行法チップ列を構築する。トップバー三段目の左端(x12〜316、y-66〜-90)に置き、
+        /// 二段目の国家運営チップ(y-38〜-64)・首位チップ(x480〜)・時代表示(x614〜)・二段目の
+        /// ボタン列(x704〜888)・右上サウンド(x944〜)のいずれとも重ならない。中央のイベント
+        /// バナー(コンパクト x420〜860、観戦用 x320〜960)とも横に重ならない幅に収めている。
+        /// ログ先頭行は LogTopNormalY(-94)でこの列の下から始まる。
+        /// 表示専用(raycast無効)でクリックを一切遮らず、値は Core/PoliticalSystem の公開APIと
+        /// Player の公開フィールドを読むだけ。詳細な政治画面は Codex の UI/PoliticsPanel(F6)。
+        /// </summary>
+        void BuildPoliticsChips()
+        {
+            politicsChips = UIStyle.CreateContainer(canvas.transform, "PoliticsChips");
+            UIStyle.SetRect(politicsChips, new Vector2(0f, 1f), new Vector2(0f, 1f),
+                new Vector2(0f, 1f), new Vector2(12f, -66f), new Vector2(304f, 24f));
+
+            legitimacyChipLabel = UIStyle.CreateText(politicsChips.transform, "LegitimacyLabel", "", 13,
+                TextAnchor.MiddleLeft, UIStyle.TextMain);
+            UIStyle.SetRect(legitimacyChipLabel.gameObject, new Vector2(0f, 0.5f), new Vector2(0f, 0.5f),
+                new Vector2(0f, 0.5f), new Vector2(0f, 0f), new Vector2(104f, 22f));
+            AddChipShadow(legitimacyChipLabel);
+
+            lawChipLabel = UIStyle.CreateText(politicsChips.transform, "LawLabel", "", 13,
+                TextAnchor.MiddleLeft, UIStyle.Accent);
+            // 法名は最長でも4文字だが、将来の追加法でも枠を越えないよう自動縮小を許す
+            lawChipLabel.resizeTextForBestFit = true;
+            lawChipLabel.resizeTextMinSize = 9;
+            lawChipLabel.resizeTextMaxSize = 13;
+            UIStyle.SetRect(lawChipLabel.gameObject, new Vector2(0f, 0.5f), new Vector2(0f, 0.5f),
+                new Vector2(0f, 0.5f), new Vector2(108f, 0f), new Vector2(192f, 22f));
+            AddChipShadow(lawChipLabel);
+
+            nextPoliticsChipAt = 0f;
+            politicsChips.SetActive(false);   // 初回 RefreshPoliticsChips が可否を判定してから表示する
+        }
+
+        /// <summary>
+        /// 政治チップと政治イベント判定を最大毎秒1回だけ実行する(Update から。非スケール時間基準)。
+        /// 観戦モード・ゲーム終了時はチップを隠し、告知・警告判定も行わない。
+        /// </summary>
+        void UpdatePoliticsChips()
+        {
+            if (politicsChips == null || state == null) return;
+            if (Time.unscaledTime < nextPoliticsChipAt) return;
+            nextPoliticsChipAt = Time.unscaledTime + 1f;
+            RefreshPoliticsChips();
+        }
+
+        /// <summary>
+        /// 人間文明の正統性(色分け)と現行法名をチップへ反映し、続けて政治イベントを判定する。
+        /// 法名は Core/PoliticalSystem.LawNameJa をそのまま使い、独自の訳語は持たない。
+        /// いかなる状態も書き換えない。
+        /// </summary>
+        void RefreshPoliticsChips()
+        {
+            if (politicsChips == null || state == null) return;
+
+            var p = state.HumanPlayer;
+            bool show = p != null && !p.IsEliminated && !state.IsGameOver && !simulationModeActive;
+            if (!show)
+            {
+                if (politicsChips.activeSelf) politicsChips.SetActive(false);
+                return;
+            }
+            if (!politicsChips.activeSelf) politicsChips.SetActive(true);
+
+            int legitimacy = Mathf.Clamp(p.Legitimacy, 0, 100);
+            if (legitimacyChipLabel != null)
+            {
+                legitimacyChipLabel.text = $"正統性 {legitimacy}";
+                legitimacyChipLabel.color = LegitimacyChipColor(legitimacy);
+            }
+
+            CivicLaw law = PoliticalSystem.NormalizeLaw(p.ActiveLaw);
+            if (lawChipLabel != null) lawChipLabel.text = "⚖ " + PoliticalSystem.LawNameJa(law);
+
+            CheckPoliticalEvents(law, legitimacy);
+        }
+
+        /// <summary>
+        /// 正統性の色スケール(0=赤 → PoliticalSystem.StartingLegitimacy=琥珀 → 100=緑)。
+        /// 独自の段階閾値を設けず、シミュレーション側の開始値を中間の基準点にした連続補間にする
+        /// (StabilityChipColor と同じ流儀・同じ配色)。
+        /// </summary>
+        static Color LegitimacyChipColor(int legitimacy)
+        {
+            float pivot = Mathf.Max(1f, PoliticalSystem.StartingLegitimacy);
+            if (legitimacy < pivot)
+                return Color.Lerp(UIStyle.Danger, StabilityMidColor, Mathf.Clamp01(legitimacy / pivot));
+            float upper = Mathf.Max(1f, 100f - pivot);
+            return Color.Lerp(StabilityMidColor, StabilityHighColor,
+                Mathf.Clamp01((legitimacy - pivot) / upper));
+        }
+
+        /// <summary>
+        /// 政治イベント(法律の施行・正統性の低下)をエッジ検出で判定する。
+        /// 法律は現行法(Player.ActiveLaw)の変化をポーリングで捉え、変わった時だけ施行バナーと
+        /// 儀礼音を出す。新規ゲーム・ロード直後の初回は基準を取るだけで告知しない。
+        /// 正統性の低下は他の警告と同じく「解消するまで再発火しないラッチ」+「同種は
+        /// WarningCooldownTurns ターン以内に再通知しない」制限の両方を持つ。読み取りのみ。
+        /// </summary>
+        void CheckPoliticalEvents(CivicLaw law, int legitimacy)
+        {
+            int turn = state.TurnNumber;
+
+            if (!lawBaselineKnown)
+            {
+                lawBaselineKnown = true;
+                shownLaw = law;
+            }
+            else if (law != shownLaw)
+            {
+                shownLaw = law;
+                ShowDecreeBanner(law);
+            }
+
+            bool lowLegitimacy = legitimacy < LowLegitimacyThreshold;
+            if (!lowLegitimacy) warnLegitimacyLatched = false;
+            else if (!warnLegitimacyLatched)
+            {
+                warnLegitimacyLatched = true;
+                if (turn - lastLegitimacyWarnTurn >= WarningCooldownTurns)
+                {
+                    lastLegitimacyWarnTurn = turn;
+                    ShowAdministrationWarning("⚠ 正統性が揺らいでいる");
+                }
+            }
+        }
+
+        /// <summary>
+        /// 法の施行の告知(2026-07-22 Claude Code 追加)。既存のコンパクトバナー機構で
+        /// 見出し(法名)と効果(PoliticalSystem.LawEffectJa)を2枚に分けて縦積み表示し、
+        /// 荘厳な儀礼音を鳴らす。効果文はシミュレーション側の文言をそのまま使う。
+        /// GameAudio 不在(ヘッドレス等)でも null 安全。
+        /// </summary>
+        void ShowDecreeBanner(CivicLaw law)
+        {
+            ShowEventBannerCompact($"⚖ 新しい法「{PoliticalSystem.LawNameJa(law)}」を施行した", UIStyle.Accent);
+            ShowEventBannerCompact(PoliticalSystem.LawEffectJa(law), UIStyle.TextMain);
+            GameAudio.Instance?.PlayDecree();
+        }
+
         void BuildCivilizationPanel()
         {
             civilizationPanel = UIStyle.CreatePanel(canvas.transform, "CivilizationPanel",
@@ -1850,19 +2039,29 @@ namespace HexCiv.UI
             // 暗幕オーバーレイ(gameOverOverlay。ShowGameOver で最前面化済み)よりさらに手前に
             // 描画される。閉じる(グラフの×ボタン/Esc)とオーバーレイ表示へ戻り、
             // 「もう一度プレイ」は従来どおり押せる。
+            // 2026-07-22 Claude Code 変更: 「領土の変遷」の追加に伴い、下段を3ボタン横並びへ
+            // 広げた(幅240→228、中心 -125/+125 → -238/0/+238。y・高さ・ハンドラ・文言は不変)。
+            // 3ボタンは x-352〜-124 / -114〜114 / 124〜352 を占め、互いに10px以上離れている。
             var finalGraph = UIStyle.CreateButton(gameOverOverlay.transform, "FinalScoreGraphButton",
                 "最終戦況", 18, OnFinalScoreGraphClicked);
             UIStyle.SetRect(finalGraph.gameObject, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
-                new Vector2(0.5f, 0.5f), new Vector2(-125f, -205f), new Vector2(240f, 48f));
+                new Vector2(0.5f, 0.5f), new Vector2(-238f, -205f), new Vector2(228f, 48f));
 
-            // 歴史ツアー(2026-07-21 Claude Code 追加): 最終戦況の右隣。ChroniclePanel の
-            // 歴史ツアーをツアーモードで直接開始する(記録イベントの現場をカメラで順に巡る。
+            // 歴史ツアー(2026-07-21 Claude Code 追加): ChroniclePanel の歴史ツアーを
+            // ツアーモードで直接開始する(記録イベントの現場をカメラで順に巡る。
             // ツアーのラベルCanvasはこのオーバーレイより手前のため終了画面上でも見える)。
-            // 横並びにするため最終戦況を左(-125)へ寄せた(ハンドラ・文言・サイズは従来どおり)。
             var historyTour = UIStyle.CreateButton(gameOverOverlay.transform, "HistoryTourButton",
                 "歴史ツアー", 18, OnHistoryTourClicked);
             UIStyle.SetRect(historyTour.gameObject, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
-                new Vector2(0.5f, 0.5f), new Vector2(125f, -205f), new Vector2(240f, 48f));
+                new Vector2(0.5f, 0.5f), new Vector2(0f, -205f), new Vector2(228f, 48f));
+
+            // 領土の変遷(2026-07-22 Claude Code 追加): 歴史ツアーの右隣。TimelapsePanel
+            // (独立Canvasの自己起動UI)の領土タイムラプス再生を直接開始する。
+            // 静的入口が内部でインスタンスを検索するため、不在・未構築でも安全(何もしない)。
+            var timelapse = UIStyle.CreateButton(gameOverOverlay.transform, "TimelapseButton",
+                "領土の変遷", 18, OnTimelapseClicked);
+            UIStyle.SetRect(timelapse.gameObject, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
+                new Vector2(0.5f, 0.5f), new Vector2(238f, -205f), new Vector2(228f, 48f));
 
             gameOverOverlay.SetActive(false);
         }
@@ -1966,6 +2165,9 @@ namespace HexCiv.UI
             // (観戦バー・観戦時の時代/首位チップ位置と二段目左端で重ならないようにする)
             nextAdminChipAt = 0f;
             RefreshAdministrationChips();
+            // 政治チップも観戦中(人間文明なし)は非表示。モード切替直後に判定し直す(2026-07-22 追加)
+            nextPoliticsChipAt = 0f;
+            RefreshPoliticsChips();
             if (active)
             {
                 CloseAllPanels();
@@ -1978,9 +2180,11 @@ namespace HexCiv.UI
         /// <summary>
         /// ログ表示位置を現在モードへ合わせる(2026-07-21 Claude Code 追加)。
         /// 観戦中は中央上の観戦バー(y-38〜-72、x340〜940)がログ(x12〜約478)の先頭行と
-        /// 重なって隠すため、ログをバーの下(y-80)から開始する。通常プレイは二段目左端の
-        /// 国家運営チップ列(y-38〜-64)の下 y-68(LogTopNormalY。2026-07-22 に -42 から変更)へ
-        /// 戻す。どちらのモードでもトップバー・二段目の要素とは重ならない。
+        /// 重なって隠すため、ログをバーの下(y-80)から開始する(観戦中は国家運営・政治の
+        /// チップ列がどちらも非表示のため、この位置で重ならない)。通常プレイは二段目の
+        /// 国家運営チップ列(y-38〜-64)と三段目の政治チップ列(y-66〜-90)の下 y-94
+        /// (LogTopNormalY。2026-07-22 に -42 → -68 → -94 と変更)へ戻す。
+        /// どちらのモードでもトップバー・二段目・三段目の要素とは重ならない。
         /// </summary>
         void UpdateLogPosition()
         {
@@ -2819,6 +3023,16 @@ namespace HexCiv.UI
         void OnHistoryTourClicked()
         {
             ChroniclePanel.StartTourIfAvailable();
+        }
+
+        /// <summary>
+        /// ゲーム終了画面の「領土の変遷」ボタン(2026-07-22 Claude Code 追加)。
+        /// TimelapsePanel(独立Canvasの自己起動UI)の領土タイムラプス再生を直接開始する。
+        /// 静的入口が内部でインスタンスを検索するため、不在・未構築でも安全(何もしない)。
+        /// </summary>
+        void OnTimelapseClicked()
+        {
+            TimelapsePanel.StartPlaybackIfAvailable();
         }
 
         void OnSaveClicked()

@@ -85,6 +85,14 @@ namespace HexCiv.Audio
         // 音量・ミュートは既存の Play() が一括処理する。
         AudioClip unrestClip;
 
+        // --- 2026-07-22 Claude Code 追加: 法の施行(荘厳な儀礼音) ---
+        // 人間文明の現行法(Core/PoliticalSystem の CivicLaw)が変わった瞬間に、UIManager が
+        // 施行バナーと同時に PlayDecree を呼ぶ。木槌/印章の一打に低い荘厳な和音を重ねた儀礼音で、
+        // 二連ブザーの警告(PlayWarning)、こもったざわめき(PlayUnrest)、高音域のチャイム類
+        // (実績・遺産・偉人・作品)、長い鐘(PlayEraBell)のいずれとも音域・構成で聞き分けられる。
+        // 音量・ミュートは既存の Play() が一括処理する。
+        AudioClip decreeClip;
+
         // --- 2026-07-22 Claude Code 追加: 戦時の緊張レイヤー(BGMの追加音源) ---
         // 人間文明がどこかと交戦中(観戦モードではいずれかの文明が交戦中)の間だけ、
         // 既存BGMの「下に」重ねる低い緊張レイヤー(遅い低音ドラムの脈+暗い持続音)。
@@ -510,6 +518,10 @@ namespace HexCiv.Audio
             // 破棄も既存と同じ扱いになる。緊張レイヤーは8秒のループ素材(約0.7MB)。
             unrestClip = CreateUnrestClip();
             tensionClip = CreateWarTensionClip();
+
+            // --- 2026-07-22 Claude Code 追加: 法の施行(荘厳な儀礼音) ---
+            // 生成はこの初期化経路で一度だけ行い、RegisterClip 経由で破棄も既存と同じ扱い。
+            decreeClip = CreateDecreeClip();
         }
 
         public void PlayUiClick() => Play(uiClickClip);
@@ -607,6 +619,14 @@ namespace HexCiv.Audio
         /// クリップ未生成(ヘッドレス等)でも無害。
         /// </summary>
         public void PlayUnrest() => Play(unrestClip);
+
+        /// <summary>
+        /// 法の施行(荘厳な儀礼音。2026-07-22 Claude Code 追加)。UIManager が、人間文明の
+        /// 現行法(Core/PoliticalSystem の CivicLaw)の変化を検知した瞬間に施行バナーと同時に呼ぶ。
+        /// 木槌/印章の一打+低い荘厳な和音。音量・ミュートは既存の Play() が一括処理し、
+        /// クリップ未生成(ヘッドレス等)でも無害。
+        /// </summary>
+        public void PlayDecree() => Play(decreeClip);
 
         // 2026-07-21 Claude Code 追加: イベントスティング(音量・ミュートは Play() が一括処理)
         public void PlayWarDeclared() => Play(warStingClip);
@@ -1915,6 +1935,60 @@ namespace HexCiv.Audio
             }
 
             return RegisterClip("City Unrest Murmur", data);
+        }
+
+        /// <summary>
+        /// 法の施行の儀礼音(2026-07-22 Claude Code 追加)。約1.35秒。
+        /// 冒頭に木槌/印章の一打(ローパスした短いノイズの立ち上がり+98/196Hzの木質な胴鳴り、
+        /// 約0.2秒で消える)を置き、0.10秒からG2-B♭2-D3-G3の低い荘厳な和音をゆっくり立ち上げて
+        /// 長く減衰させる。倍音は最高でも392Hzまでなので折り返しは生じない。
+        /// 二連ブザーの警告(約0.48秒・233Hzの反復)、こもったざわめき(旋律なしのノイズ)、
+        /// 高音域のチャイム類(1kHz以上の分散和音)、1.5秒の大鐘(非整数倍音の単音)のいずれとも
+        /// 音域・構成・長さで聞き分けられる。ノイズは固定シードの System.Random(既存の不満SEと
+        /// 同じ流儀)で毎回同一波形、state.Rng には一切触れないためシミュレーションの決定性に
+        /// 干渉しない。
+        /// </summary>
+        AudioClip CreateDecreeClip()
+        {
+            const float duration = 1.35f;
+            int length = Mathf.CeilToInt(duration * SampleRate);
+            var data = new float[length];
+            var random = new System.Random(20260722 + 31);
+            float lowpass = 0f;
+
+            for (int i = 0; i < length; i++)
+            {
+                float t = i / (float)SampleRate;
+
+                // (1) 木槌/印章の一打(t=0)。ノイズは常に進めて波形を一意に保つ。
+                float noise = (float)(random.NextDouble() * 2.0 - 1.0);
+                lowpass += (noise - lowpass) * 0.22f;   // 高域を削って「木を打つ」質感にする
+                float thud = 0f;
+                if (t < 0.22f)
+                {
+                    float knock = lowpass * Mathf.Exp(-t * 44f);
+                    float body = (Sine(98f, t) * 0.75f + Sine(196f, t) * 0.45f) * Mathf.Exp(-t * 22f);
+                    thud = (knock * 0.9f + body) * Mathf.Clamp01(t / 0.002f);
+                }
+
+                // (2) 荘厳な和音(0.10秒から)。低いG-B♭-D-Gをゆっくり立ち上げ長く減衰させる。
+                float ct = t - 0.10f;
+                float chord = 0f;
+                if (ct >= 0f)
+                {
+                    float env = Mathf.Clamp01(ct / 0.09f) * Mathf.Exp(-ct * 1.5f);
+                    chord = (Sine(98f, ct) * 0.85f + Sine(116.54f, ct) * 0.60f
+                        + Sine(146.83f, ct) * 0.70f + Sine(196f, ct) * 0.46f
+                        + Sine(392f, ct) * 0.14f) * env;
+                }
+
+                // クリップ末尾は短くフェードして途切れ音を防ぐ
+                float sample = (thud * 0.52f + chord * 0.32f) *
+                    Mathf.Clamp01((duration - t) / 0.12f);
+                data[i] = Mathf.Clamp(sample, -0.9f, 0.9f);
+            }
+
+            return RegisterClip("Decree Ceremony", data);
         }
 
         /// <summary>
