@@ -1,0 +1,569 @@
+{
+  "schemaVersion": 1,
+  "id": "uruk_4000",
+  "title": {
+    "key": "campaign.uruk_4000.title",
+    "ja": "ウルク—都市の夜明け"
+  },
+  "summary": {
+    "key": "campaign.uruk_4000.summary",
+    "ja": "紀元前4000～3000年の南メソポタミア。ウルク共同体を都市国家へ育て、河川農業・人口・物資・交易を導く50ターンの史実キャンペーン。"
+  },
+  "startYear": -4000,
+  "endYear": -3000,
+  "maxTurns": 50,
+  "seed": 40003000,
+  "mapWidth": 32,
+  "mapHeight": 20,
+  "mapConfidence": "inferred",
+  "calendar": [
+    {
+      "firstTurn": 1,
+      "lastTurn": 50,
+      "yearsPerTurn": 20
+    }
+  ],
+  "terrainRows": [
+    "ddddddddddddddddddddddddmmmmmmmm",
+    "dddddddddddd............mmmmmmmm",
+    "dddddddddd..............mmmmmmmm",
+    "dddddddd................mmmmmmmm",
+    "ddddddd.................hmmmmmmm",
+    "dddddd..................hhmmmmmm",
+    "dddddd..................hhmmmmmm",
+    "dddddd..................hhmmmmmm",
+    "dddddd...................hmmmmmm",
+    "dddddd....................mmmmmm",
+    "dddddd....................mmmmmm",
+    "ddddddd...................mmmmmm",
+    "ddddddd....................mmmmm",
+    "dddddddd.................==mmmmm",
+    "dddddddd...............=====mmmm",
+    "ddddddddd............========mmm",
+    "dddddddddd........===========mmm",
+    "ddddddddddd.....==============mm",
+    "dddddddddddd..==================",
+    "dddddddddddd~~~~~~~~~~~~~~~~~~~~"
+  ],
+  "rivers": [
+    {
+      "id": "lower_euphrates_reconstruction",
+      "name": {
+        "key": "river.lower_euphrates.name",
+        "ja": "ユーフラテス下流（復元）"
+      },
+      "confidence": "inferred",
+      "points": [
+        { "col": 11, "row": 1 },
+        { "col": 12, "row": 2 },
+        { "col": 12, "row": 3 },
+        { "col": 13, "row": 4 },
+        { "col": 13, "row": 5 },
+        { "col": 14, "row": 6 },
+        { "col": 14, "row": 7 },
+        { "col": 15, "row": 8 },
+        { "col": 15, "row": 9 },
+        { "col": 16, "row": 10 },
+        { "col": 16, "row": 11 },
+        { "col": 17, "row": 12 },
+        { "col": 17, "row": 13 },
+        { "col": 18, "row": 14 },
+        { "col": 18, "row": 15 },
+        { "col": 18, "row": 16 }
+      ],
+      "sourceRefs": [
+        "unesco_ahwar",
+        "unesco_nomination"
+      ]
+    },
+    {
+      "id": "lower_tigris_reconstruction",
+      "name": {
+        "key": "river.lower_tigris.name",
+        "ja": "チグリス下流（復元）"
+      },
+      "confidence": "inferred",
+      "points": [
+        { "col": 20, "row": 1 },
+        { "col": 21, "row": 2 },
+        { "col": 21, "row": 3 },
+        { "col": 22, "row": 4 },
+        { "col": 22, "row": 5 },
+        { "col": 23, "row": 6 },
+        { "col": 23, "row": 7 },
+        { "col": 24, "row": 8 },
+        { "col": 24, "row": 9 },
+        { "col": 25, "row": 10 },
+        { "col": 25, "row": 11 },
+        { "col": 26, "row": 12 },
+        { "col": 26, "row": 13 }
+      ],
+      "sourceRefs": [
+        "unesco_ahwar",
+        "unesco_nomination"
+      ]
+    }
+  ],
+  "factions": [
+    {
+      "id": "uruk_community",
+      "civilizationId": "sumer",
+      "name": {
+        "key": "faction.uruk_community.name",
+        "ja": "ウルク共同体"
+      },
+      "capitalName": {
+        "key": "settlement.uruk.name",
+        "ja": "ウルク"
+      },
+      "leaderTitle": {
+        "key": "leader.uruk_unknown_priest_ruler.name",
+        "ja": "氏名不詳の祭司王"
+      },
+      "confidence": "probable",
+      "human": true,
+      "startCol": 16,
+      "startRow": 10,
+      "initialPopulation": 3,
+      "colorHex": "C99735",
+      "aiArchetype": "urban_growth_trade",
+      "historicalNote": {
+        "key": "faction.uruk_community.note",
+        "ja": "紀元前4千年紀に急速な都市化を遂げたウルクを、初期段階では個人名の分からない共同体として表現する。"
+      },
+      "sourceRefs": [
+        "met_uruk_first_city",
+        "british_museum_uruk",
+        "unesco_ahwar"
+      ]
+    },
+    {
+      "id": "eridu_community",
+      "civilizationId": "sumer",
+      "name": {
+        "key": "faction.eridu_community.name",
+        "ja": "エリドゥ共同体"
+      },
+      "capitalName": {
+        "key": "settlement.eridu.name",
+        "ja": "エリドゥ"
+      },
+      "leaderTitle": {
+        "key": "leader.eridu_unknown_priest_ruler.name",
+        "ja": "氏名不詳の祭司王"
+      },
+      "confidence": "probable",
+      "human": false,
+      "startCol": 17,
+      "startRow": 14,
+      "initialPopulation": 2,
+      "colorHex": "4E9B86",
+      "aiArchetype": "wetland_temple",
+      "historicalNote": {
+        "key": "faction.eridu_community.note",
+        "ja": "湿地縁辺のエリドゥ遺丘を中心とする共同体。国家としての制度や境界は推定を含む。"
+      },
+      "sourceRefs": [
+        "unesco_ahwar",
+        "unesco_nomination"
+      ]
+    },
+    {
+      "id": "ur_community",
+      "civilizationId": "sumer",
+      "name": {
+        "key": "faction.ur_community.name",
+        "ja": "ウル共同体"
+      },
+      "capitalName": {
+        "key": "settlement.ur.name",
+        "ja": "ウル"
+      },
+      "leaderTitle": {
+        "key": "leader.ur_unknown_priest_ruler.name",
+        "ja": "氏名不詳の祭司王"
+      },
+      "confidence": "probable",
+      "human": false,
+      "startCol": 16,
+      "startRow": 15,
+      "initialPopulation": 2,
+      "colorHex": "5C78B8",
+      "aiArchetype": "marsh_trade",
+      "historicalNote": {
+        "key": "faction.ur_community.note",
+        "ja": "後世の大都市ウルへ連なる遺跡共同体。紀元前4000年時点の政治的範囲は確定できない。"
+      },
+      "sourceRefs": [
+        "unesco_ahwar",
+        "british_museum_uruk_bowl"
+      ]
+    },
+    {
+      "id": "lagash_region",
+      "civilizationId": "sumer",
+      "name": {
+        "key": "faction.lagash_region.name",
+        "ja": "ラガシュ地域集落"
+      },
+      "capitalName": {
+        "key": "settlement.lagash_region.name",
+        "ja": "ラガシュ地域"
+      },
+      "leaderTitle": {
+        "key": "leader.lagash_unknown_head.name",
+        "ja": "氏名不詳の集落長"
+      },
+      "confidence": "inferred",
+      "human": false,
+      "startCol": 23,
+      "startRow": 11,
+      "initialPopulation": 1,
+      "colorHex": "B85B4F",
+      "aiArchetype": "canal_border",
+      "historicalNote": {
+        "key": "faction.lagash_region.note",
+        "ja": "後世にラガシュ都市国家圏となる地域の集落をまとめた推定勢力であり、紀元前4000年の国家名ではない。"
+      },
+      "sourceRefs": [
+        "unesco_ahwar",
+        "unesco_nomination"
+      ]
+    },
+    {
+      "id": "nippur_community",
+      "civilizationId": "sumer",
+      "name": {
+        "key": "faction.nippur_community.name",
+        "ja": "ニップール共同体"
+      },
+      "capitalName": {
+        "key": "settlement.nippur.name",
+        "ja": "ニップール"
+      },
+      "leaderTitle": {
+        "key": "leader.nippur_unknown_head.name",
+        "ja": "氏名不詳の祭司長"
+      },
+      "confidence": "inferred",
+      "human": false,
+      "startCol": 13,
+      "startRow": 5,
+      "initialPopulation": 1,
+      "colorHex": "8E6AB3",
+      "aiArchetype": "ritual_center",
+      "historicalNote": {
+        "key": "faction.nippur_community.note",
+        "ja": "ニップール遺跡周辺の早期居住を抽象化した勢力。後世の宗教的地位をこの時点へそのまま遡及しない。"
+      },
+      "sourceRefs": [
+        "met_uruk_bowl",
+        "british_museum_uruk"
+      ]
+    },
+    {
+      "id": "kish_region",
+      "civilizationId": "sumer",
+      "name": {
+        "key": "faction.kish_region.name",
+        "ja": "キシュ地域集落"
+      },
+      "capitalName": {
+        "key": "settlement.kish_region.name",
+        "ja": "キシュ地域"
+      },
+      "leaderTitle": {
+        "key": "leader.kish_unknown_head.name",
+        "ja": "氏名不詳の集落長"
+      },
+      "confidence": "inferred",
+      "human": false,
+      "startCol": 12,
+      "startRow": 2,
+      "initialPopulation": 1,
+      "colorHex": "7F8452",
+      "aiArchetype": "northern_exchange",
+      "historicalNote": {
+        "key": "faction.kish_region.note",
+        "ja": "後世のキシュ都市圏に相当する北方地域を表す。紀元前4000年の統一国家としては扱わない。"
+      },
+      "sourceRefs": [
+        "british_museum_uruk",
+        "unesco_nomination"
+      ]
+    },
+    {
+      "id": "susiana_exchange",
+      "civilizationId": "persia",
+      "name": {
+        "key": "faction.susiana_exchange.name",
+        "ja": "スシアナ交易圏"
+      },
+      "capitalName": {
+        "key": "settlement.susiana.name",
+        "ja": "スシアナ拠点"
+      },
+      "leaderTitle": {
+        "key": "leader.susiana_unknown_head.name",
+        "ja": "氏名不詳の共同体指導者"
+      },
+      "confidence": "probable",
+      "human": false,
+      "startCol": 24,
+      "startRow": 8,
+      "initialPopulation": 2,
+      "colorHex": "B36A8B",
+      "aiArchetype": "eastern_exchange",
+      "historicalNote": {
+        "key": "faction.susiana_exchange.note",
+        "ja": "南西イラン側との交換関係を表す地域勢力。後世のペルシア国家とは別物として扱う。"
+      },
+      "sourceRefs": [
+        "british_museum_uruk",
+        "met_uruk_first_city"
+      ]
+    },
+    {
+      "id": "marsh_communities",
+      "civilizationId": "sumer",
+      "name": {
+        "key": "faction.marsh_communities.name",
+        "ja": "南部湿地共同体"
+      },
+      "capitalName": {
+        "key": "settlement.marsh_edge.name",
+        "ja": "湿地縁辺集落"
+      },
+      "leaderTitle": {
+        "key": "leader.marsh_unknown_head.name",
+        "ja": "氏名不詳の共同体指導者"
+      },
+      "confidence": "inferred",
+      "human": false,
+      "startCol": 22,
+      "startRow": 14,
+      "initialPopulation": 1,
+      "colorHex": "3B8792",
+      "aiArchetype": "reed_fish_transport",
+      "historicalNote": {
+        "key": "faction.marsh_communities.note",
+        "ja": "葦・漁撈・水上交通に依存した複数の湿地集落を一勢力へ抽象化した推定枠。"
+      },
+      "sourceRefs": [
+        "unesco_ahwar",
+        "unesco_nomination"
+      ]
+    }
+  ],
+  "goods": [
+    {
+      "id": "barley",
+      "name": {
+        "key": "good.barley.name",
+        "ja": "大麦"
+      },
+      "category": "food",
+      "confidence": "confirmed",
+      "historicalNote": {
+        "key": "good.barley.note",
+        "ja": "食料・配給・交換の基礎となる穀物。"
+      },
+      "sourceRefs": [
+        "met_uruk_first_city",
+        "british_museum_uruk_tablet"
+      ]
+    },
+    {
+      "id": "emmer_wheat",
+      "name": {
+        "key": "good.emmer_wheat.name",
+        "ja": "エンマー小麦"
+      },
+      "category": "food",
+      "confidence": "probable",
+      "historicalNote": {
+        "key": "good.emmer_wheat.note",
+        "ja": "南メソポタミア農業の穀物多様性を表す食料資源。"
+      },
+      "sourceRefs": [
+        "unesco_nomination"
+      ]
+    },
+    {
+      "id": "sheep_wool",
+      "name": {
+        "key": "good.sheep_wool.name",
+        "ja": "羊・羊毛"
+      },
+      "category": "pastoral",
+      "confidence": "confirmed",
+      "historicalNote": {
+        "key": "good.sheep_wool.note",
+        "ja": "牧畜・繊維生産・交易を結ぶ物資。"
+      },
+      "sourceRefs": [
+        "british_museum_uruk_trough",
+        "met_uruk_first_city"
+      ]
+    },
+    {
+      "id": "reeds",
+      "name": {
+        "key": "good.reeds.name",
+        "ja": "葦"
+      },
+      "category": "construction",
+      "confidence": "confirmed",
+      "historicalNote": {
+        "key": "good.reeds.note",
+        "ja": "湿地由来の建築・舟・容器素材。"
+      },
+      "sourceRefs": [
+        "unesco_ahwar",
+        "british_museum_uruk_trough"
+      ]
+    },
+    {
+      "id": "alluvial_clay",
+      "name": {
+        "key": "good.alluvial_clay.name",
+        "ja": "沖積粘土"
+      },
+      "category": "construction",
+      "confidence": "confirmed",
+      "historicalNote": {
+        "key": "good.alluvial_clay.note",
+        "ja": "日干し煉瓦・土器・記録媒体へ使う地域の基礎素材。"
+      },
+      "sourceRefs": [
+        "unesco_ahwar",
+        "met_uruk_first_city",
+        "british_museum_uruk_bowl"
+      ]
+    },
+    {
+      "id": "timber",
+      "name": {
+        "key": "good.timber.name",
+        "ja": "木材"
+      },
+      "category": "import",
+      "confidence": "probable",
+      "historicalNote": {
+        "key": "good.timber.note",
+        "ja": "沖積平野で不足しやすく、長距離交換の動機となる建築資材。"
+      },
+      "sourceRefs": [
+        "met_uruk_first_city",
+        "british_museum_uruk"
+      ]
+    },
+    {
+      "id": "building_stone",
+      "name": {
+        "key": "good.building_stone.name",
+        "ja": "石材"
+      },
+      "category": "import",
+      "confidence": "confirmed",
+      "historicalNote": {
+        "key": "good.building_stone.note",
+        "ja": "平野外から運び込まれる建築・祭祀・道具素材。"
+      },
+      "sourceRefs": [
+        "met_uruk_first_city",
+        "british_museum_uruk_trough"
+      ]
+    },
+    {
+      "id": "copper",
+      "name": {
+        "key": "good.copper.name",
+        "ja": "銅"
+      },
+      "category": "import",
+      "confidence": "probable",
+      "historicalNote": {
+        "key": "good.copper.note",
+        "ja": "地域外との交換を必要とする金属資源。年代別の普及度は研究進行で制限する。"
+      },
+      "sourceRefs": [
+        "met_arabia_chronology",
+        "british_museum_uruk"
+      ]
+    },
+    {
+      "id": "fish",
+      "name": {
+        "key": "good.fish.name",
+        "ja": "魚"
+      },
+      "category": "food",
+      "confidence": "confirmed",
+      "historicalNote": {
+        "key": "good.fish.note",
+        "ja": "河川・湿地環境から得る食料。"
+      },
+      "sourceRefs": [
+        "unesco_ahwar",
+        "unesco_nomination"
+      ]
+    }
+  ],
+  "sources": [
+    {
+      "id": "unesco_ahwar",
+      "publisher": "UNESCO World Heritage Centre",
+      "title": "The Ahwar of Southern Iraq: Refuge of Biodiversity and the Relict Landscape of the Mesopotamian Cities",
+      "url": "https://whc.unesco.org/en/list/1481/"
+    },
+    {
+      "id": "unesco_nomination",
+      "publisher": "UNESCO World Heritage Centre / Republic of Iraq",
+      "title": "The Ahwar of Southern Iraq — Nomination Text",
+      "url": "https://whc.unesco.org/en/documents/169032"
+    },
+    {
+      "id": "met_uruk_first_city",
+      "publisher": "The Metropolitan Museum of Art",
+      "title": "Uruk: The First City",
+      "url": "https://www.metmuseum.org/essays/uruk-the-first-city"
+    },
+    {
+      "id": "met_uruk_bowl",
+      "publisher": "The Metropolitan Museum of Art",
+      "title": "Bowl — Uruk period, 4th millennium BCE",
+      "url": "https://www.metmuseum.org/art/collection/search/325442"
+    },
+    {
+      "id": "met_arabia_chronology",
+      "publisher": "The Metropolitan Museum of Art",
+      "title": "Arabian Peninsula, 8000–2000 B.C.",
+      "url": "https://www.metmuseum.org/toah/ht/02/wap.html"
+    },
+    {
+      "id": "british_museum_uruk",
+      "publisher": "The British Museum",
+      "title": "Uruk — collection term and related objects",
+      "url": "https://www.britishmuseum.org/collection/term/x14664"
+    },
+    {
+      "id": "british_museum_uruk_trough",
+      "publisher": "The British Museum",
+      "title": "The Uruk Trough",
+      "url": "https://www.britishmuseum.org/collection/object/W_1928-0714-1"
+    },
+    {
+      "id": "british_museum_uruk_bowl",
+      "publisher": "The British Museum",
+      "title": "Bevelled rim bowl, Late Uruk",
+      "url": "https://www.britishmuseum.org/collection/object/W_1919-1011-513"
+    },
+    {
+      "id": "british_museum_uruk_tablet",
+      "publisher": "The British Museum",
+      "title": "Early Uruk numerical tablet",
+      "url": "https://www.britishmuseum.org/collection/object/W_1851-0101-217"
+    }
+  ]
+}
