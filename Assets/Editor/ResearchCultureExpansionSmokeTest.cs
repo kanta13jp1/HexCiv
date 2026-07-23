@@ -103,7 +103,7 @@ public static class ResearchCultureExpansionSmokeTest
 
     static void ValidateResearch()
     {
-        if (ResearchMilestoneCatalog.All.Count != 132 || TechnologyCatalog.All.Count != 144)
+        if (ResearchMilestoneCatalog.All.Count != 132 || TechnologyCatalog.All.Count != 146)
             throw new Exception("研究史または全技術件数が不正");
 
         for (int r = 0; r < Regions.Length; r++)
@@ -132,7 +132,7 @@ public static class ResearchCultureExpansionSmokeTest
                     throw new Exception("追加研究の接続が不正: " + technology.Id);
             }
         }
-        Debug.Log("[Expansion] 研究史132件・全144技術・6地域×第4弾追加2件 OK");
+        Debug.Log("[Expansion] 研究史132件・全146技術・6地域×第4弾追加2件 OK");
     }
 
     static void ValidateCulture()

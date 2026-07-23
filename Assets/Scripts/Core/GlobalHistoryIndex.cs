@@ -39,6 +39,7 @@ namespace HexCiv.Core
             var culture = CulturalTraditionCatalog.ForRegion(Filter(regionJa));
             var material = MaterialCultureCatalog.ForRegion(Filter(regionJa));
             var natural = NaturalFeatureCatalog.ForRegion(Filter(regionJa));
+            var vessels = HistoricVesselCatalog.ForRegion(Filter(regionJa));
             bool all = IsAll(regionJa);
 
             return new List<GlobalHistoryIndexEntry>
@@ -66,7 +67,7 @@ namespace HexCiv.Core
                 Entry("film", "映画", CountKind(works, MasterpieceKind.Film),
                     "無声・劇映画・実験映画・記録映画・共同製作を含む"),
                 Entry("research", "学問・科学技術", research.Count,
-                    all ? "史実マイルストーン132件を基礎12技術の先へ接続（研究対象計144）"
+                    all ? "史実マイルストーン132件を基礎14技術の先へ接続（研究対象計146）"
                         : "地域別の学術・技術・知識体系の史実マイルストーン"),
                 Entry("culture", "文化", culture.Count,
                     "言語・信仰・芸能・工芸・生活・社会制度を含む文化史台帳"),
@@ -80,6 +81,8 @@ namespace HexCiv.Core
                     "調理法・共食・移動・交流から捉える料理文化"),
                 MaterialEntry("ships", MaterialCultureKind.Ship, material,
                     "河川・海洋の移動、航海知識、造船技術"),
+                Entry("historic_vessels", "歴史船舶", vessels.Count,
+                    "河川舟・航海カヌー・交易帆船・軍船を地域と時代でたどる船舶史台帳"),
                 MaterialEntry("vehicles", MaterialCultureKind.Vehicle, material,
                     "陸上交通と産業・労働・都市の変化"),
                 MaterialEntry("aircraft", MaterialCultureKind.Aircraft, material,

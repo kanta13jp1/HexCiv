@@ -33,6 +33,8 @@ namespace HexCiv.Core
         public int RangedStrength;
         public int Range;
         public bool IsCivilian;
+        /// <summary>true なら水域だけを移動する艦船。false は従来どおり陸上ユニット。</summary>
+        public bool IsNaval;
         /// <summary>必要技術のId。null なら最初から生産可能。</summary>
         public string RequiresTech;
         public int Sight = 2;

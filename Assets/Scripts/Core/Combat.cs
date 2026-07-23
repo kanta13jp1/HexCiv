@@ -20,6 +20,10 @@ namespace HexCiv.Core
             bool enemyCity = target.City != null && target.City.PlayerId != attacker.PlayerId;
             bool enemyUnit = target.Unit != null && target.Unit.PlayerId != attacker.PlayerId;
             if (!enemyCity && !enemyUnit) return false;
+            // 最初の海戦モデルは同一領域だけで解決する。艦船は陸上都市を占領せず、
+            // 陸軍も海上艦を攻撃しない（将来の沿岸砲撃は遠隔艦として別契約で追加する）。
+            if (def.IsNaval && enemyCity) return false;
+            if (enemyUnit && target.Unit.Def.IsNaval != def.IsNaval) return false;
 
             int dist = attacker.Coord.DistanceTo(target.Coord);
             if (def.IsRanged) return dist >= 1 && dist <= def.Range;

@@ -109,7 +109,7 @@ namespace HexCiv.Core.AI
             // 0) 戦時は軍事を最優先(記念碑などより先)。2割で城壁に切り替えて守りを固める
             if (atWar)
             {
-                pick = BestMilitaryItem(s, p, avail);
+                pick = BestMilitaryItem(s, p, city, avail);
                 if (pick != null && s.Rng.Next(100) < WarWallsChance)
                 {
                     var walls = FindItem(avail, ProductionKind.Building, "walls");
@@ -127,7 +127,7 @@ namespace HexCiv.Core.AI
 
             // 3) 軍事:戦時または兵力不足
             if (pick == null && (atWar || CountMilitary(p) < p.Cities.Count + 1))
-                pick = BestMilitaryItem(s, p, avail);
+                pick = BestMilitaryItem(s, p, city, avail);
 
             // 4) ミックス:建物優先、たまにユニット
             if (pick == null)
@@ -143,7 +143,7 @@ namespace HexCiv.Core.AI
                     for (int i = 0; i < priority.Length && pick == null; i++)
                         pick = FindItem(avail, ProductionKind.Building, priority[i]);
                 }
-                if (pick == null) pick = BestMilitaryItem(s, p, avail);
+                if (pick == null) pick = BestMilitaryItem(s, p, city, avail);
                 if (pick == null) pick = avail[0];
             }
 
@@ -163,18 +163,25 @@ namespace HexCiv.Core.AI
         /// 遠隔ユニットを新たに作るのは近接が遠隔より多い時だけ。
         /// 近接が1種も生産できない場合のみ従来どおり全軍事から選ぶ(生産停止の防止)。
         /// </summary>
-        ProductionItem BestMilitaryItem(GameState s, Player p, List<ProductionItem> avail)
+        ProductionItem BestMilitaryItem(GameState s, Player p, City city, List<ProductionItem> avail)
         {
+            if (city != null && LogisticsSystem.HasHarbor(city) &&
+                CountNavalMilitary(p) < CountHarbors(p) && s.Rng.Next(100) < 40)
+            {
+                var navalPick = BestMilitaryItemCore(s, avail, false, 1);
+                if (navalPick != null) return navalPick;
+            }
             if (CountRangedMilitary(p) >= CountMeleeMilitary(p))
             {
-                var meleePick = BestMilitaryItemCore(s, avail, true);
+                var meleePick = BestMilitaryItemCore(s, avail, true, 0);
                 if (meleePick != null) return meleePick;
             }
-            return BestMilitaryItemCore(s, avail, false);
+            return BestMilitaryItemCore(s, avail, false, 0);
         }
 
-        /// <summary>生産可能な最強の軍事ユニット(meleeOnly なら近接のみ。同格なら低コスト優先)。2割で次点を選ぶ。</summary>
-        ProductionItem BestMilitaryItemCore(GameState s, List<ProductionItem> avail, bool meleeOnly)
+        /// <summary>生産可能な最強の軍事ユニット。domain: 0=陸、1=海、その他=不問。</summary>
+        ProductionItem BestMilitaryItemCore(GameState s, List<ProductionItem> avail,
+            bool meleeOnly, int domain)
         {
             ProductionItem best = null, second = null;
             for (int i = 0; i < avail.Count; i++)
@@ -184,6 +191,8 @@ namespace HexCiv.Core.AI
                 var def = GameRules.GetUnit(item.Id);
                 if (def == null || def.IsCivilian) continue;
                 if (meleeOnly && def.IsRanged) continue;
+                if (domain == 0 && def.IsNaval) continue;
+                if (domain == 1 && !def.IsNaval) continue;
 
                 if (best == null || CompareMilitary(item, best) < 0)
                 {
@@ -230,6 +239,25 @@ namespace HexCiv.Core.AI
                 var u = p.Units[i];
                 if (u != null && !u.IsDead && !u.Def.IsCivilian) n++;
             }
+            return n;
+        }
+
+        static int CountNavalMilitary(Player p)
+        {
+            int n = 0;
+            for (int i = 0; i < p.Units.Count; i++)
+            {
+                var u = p.Units[i];
+                if (u != null && !u.IsDead && !u.Def.IsCivilian && u.Def.IsNaval) n++;
+            }
+            return n;
+        }
+
+        static int CountHarbors(Player p)
+        {
+            int n = 0;
+            for (int i = 0; i < p.Cities.Count; i++)
+                if (LogisticsSystem.HasHarbor(p.Cities[i])) n++;
             return n;
         }
 
@@ -445,6 +473,7 @@ namespace HexCiv.Core.AI
                     if (u.DefId == "settler") HandleSettler(s, p, u);
                     else if (u.DefId == "scout") HandleScout(s, p, u);
                     else if (u.Def.IsCivilian) u.Fortified = true;   // その他の民間人は待機
+                    else if (u.Def.IsNaval) HandleNaval(s, p, u, atWar);
                     else HandleMilitary(s, p, u, atWar);
                 }
                 catch (Exception)
@@ -616,6 +645,143 @@ namespace HexCiv.Core.AI
         }
 
         // ---------------- 軍事ユニット ----------------
+
+        /// <summary>
+        /// 艦船AI。交戦中は敵艦を迎撃し、敵艦がいなければ敵港の沖へ進出して封鎖する。
+        /// 平時は最寄りの自国港沖へ戻る。候補は水域だけに限定する。
+        /// </summary>
+        void HandleNaval(GameState s, Player p, Unit u, bool atWar)
+        {
+            if (u.MovesLeft <= 0) { u.Fortified = true; return; }
+            if (atWar && TryAttackBest(s, p, u)) return;
+
+            if (atWar)
+            {
+                Unit target = NearestEnemyNaval(s, p, u);
+                if (target != null)
+                {
+                    var attackPath = Pathfinder.FindPath(s, u, target.Coord, true);
+                    if (attackPath != null)
+                    {
+                        u.OrderMove(s, attackPath);
+                        if (!u.IsDead) TryAttackBest(s, p, u);
+                        return;
+                    }
+                }
+
+                HexCoord? blockade = NearestEnemyHarborWater(s, p, u);
+                if (blockade.HasValue)
+                {
+                    if (u.Coord == blockade.Value) { u.Fortified = true; return; }
+                    var blockadePath = Pathfinder.FindPath(s, u, blockade.Value);
+                    if (blockadePath != null)
+                    {
+                        u.OrderMove(s, blockadePath);
+                        u.Fortified = true;
+                        return;
+                    }
+                }
+            }
+            else
+            {
+                HexCoord? home = NearestOwnHarborWater(s, p, u);
+                if (home.HasValue)
+                {
+                    if (u.Coord == home.Value) { u.Fortified = true; return; }
+                    var homePath = Pathfinder.FindPath(s, u, home.Value);
+                    if (homePath != null)
+                    {
+                        u.OrderMove(s, homePath);
+                        u.Fortified = true;
+                        return;
+                    }
+                }
+            }
+            WanderStep(s, u);
+        }
+
+        static Unit NearestEnemyNaval(GameState s, Player p, Unit u)
+        {
+            Unit best = null;
+            int bestKey = int.MaxValue;
+            for (int i = 0; i < s.Players.Count; i++)
+            {
+                Player rival = s.Players[i];
+                if (rival == p || rival.IsEliminated || !p.IsAtWarWith(rival.Id)) continue;
+                for (int j = 0; j < rival.Units.Count; j++)
+                {
+                    Unit candidate = rival.Units[j];
+                    if (candidate == null || candidate.IsDead || !candidate.Def.IsNaval) continue;
+                    int distance = u.Coord.DistanceTo(candidate.Coord);
+                    int key = p.Explored.Contains(candidate.Coord) ? distance : distance + 100;
+                    if (key < bestKey || (key == bestKey &&
+                        (best == null || candidate.Id < best.Id)))
+                    {
+                        bestKey = key;
+                        best = candidate;
+                    }
+                }
+            }
+            return best;
+        }
+
+        static HexCoord? NearestEnemyHarborWater(GameState s, Player p, Unit u)
+        {
+            HexCoord? best = null;
+            int bestDistance = int.MaxValue;
+            for (int i = 0; i < s.Players.Count; i++)
+            {
+                Player rival = s.Players[i];
+                if (rival == p || rival.IsEliminated || !p.IsAtWarWith(rival.Id)) continue;
+                for (int j = 0; j < rival.Cities.Count; j++)
+                {
+                    City city = rival.Cities[j];
+                    if (!LogisticsSystem.HasHarbor(city)) continue;
+                    foreach (Tile water in s.Map.NeighborsOf(city.Coord))
+                    {
+                        if (!water.IsWater || water.Unit != null || water.City != null) continue;
+                        int distance = u.Coord.DistanceTo(water.Coord);
+                        if (distance < bestDistance || (distance == bestDistance &&
+                            (!best.HasValue || CompareCoord(water.Coord, best.Value) < 0)))
+                        {
+                            bestDistance = distance;
+                            best = water.Coord;
+                        }
+                    }
+                }
+            }
+            return best;
+        }
+
+        static HexCoord? NearestOwnHarborWater(GameState s, Player p, Unit u)
+        {
+            HexCoord? best = null;
+            int bestDistance = int.MaxValue;
+            for (int i = 0; i < p.Cities.Count; i++)
+            {
+                City city = p.Cities[i];
+                if (!LogisticsSystem.HasHarbor(city)) continue;
+                foreach (Tile water in s.Map.NeighborsOf(city.Coord))
+                {
+                    if (!water.IsWater || (water.Unit != null && water.Unit != u) ||
+                        water.City != null) continue;
+                    int distance = u.Coord.DistanceTo(water.Coord);
+                    if (distance < bestDistance || (distance == bestDistance &&
+                        (!best.HasValue || CompareCoord(water.Coord, best.Value) < 0)))
+                    {
+                        bestDistance = distance;
+                        best = water.Coord;
+                    }
+                }
+            }
+            return best;
+        }
+
+        static int CompareCoord(HexCoord a, HexCoord b)
+        {
+            int comparison = a.r.CompareTo(b.r);
+            return comparison != 0 ? comparison : a.q.CompareTo(b.q);
+        }
 
         void HandleMilitary(GameState s, Player p, Unit u, bool atWar)
         {
@@ -1065,7 +1231,7 @@ namespace HexCiv.Core.AI
                 var options = new List<HexCoord>();
                 foreach (var t in s.Map.NeighborsOf(u.Coord))
                 {
-                    if (!t.IsPassable || t.Unit != null) continue;
+                    if (!GameRules.CanUnitEnter(u.Def, t) || t.Unit != null) continue;
                     if (t.City != null && t.City.PlayerId != u.PlayerId) continue;
                     options.Add(t.Coord);
                 }

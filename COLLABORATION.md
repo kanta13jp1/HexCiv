@@ -26,6 +26,17 @@ CodexとClaude Codeは、以後この `HexCiv` プロジェクトだけを更新
 
 ## 最新状況
 
+### 2026-07-23 Codex: 航海技術・艦船・海上戦・歴史船舶台帳 第9段階
+
+- `Core/GameRules.cs` / `Defs.cs` / `TechnologyCatalog.cs`: 基礎技術へ「帆走」「航海術」、海軍ユニットへ「ガレー船」「三段櫂船」を追加。港は帆走で解禁し、水辺都市＋港だけが艦船を建造できる。艦船は隣接水域へ進水し、陸上ユニットは陸、艦船は水だけを移動する。
+- `Unit.cs` / `Pathfinder.cs` / `NaturalGeographySystem.cs` / `Combat.cs`: プレイヤー、AI、経路探索、実移動を `GameRules.CanUnitEnter` の領域規則へ統一。艦船同士の海戦を可能にし、艦船による陸上都市占領と、陸上部隊による海上攻撃を禁止した。
+- `Core/LogisticsSystem.cs` / `AI/AIController.cs`: 敵艦は沿岸封鎖圧力2、沿岸の敵陸上部隊・敵港は1、味方艦の護衛は封鎖圧力を1相殺する。護送船団庁は航海術で解禁。AIは港湾都市数と艦隊数から建造を判断し、戦時は敵艦迎撃・敵港封鎖、平時は自港警備を行う。
+- `Rendering/EntityRenderer.cs`: 船体・帆・二筋の航跡を共有メッシュと文明色で手続き生成。外部モデルや画像を追加せず、既存の移動補間、体力、選択、軽量表示へ接続した。
+- `Core/HistoricVesselCatalog.cs`: アフリカ、西・南アジア、東・東南アジア、ヨーロッパ・地中海、アメリカ大陸、オセアニアから各6件、計36件の歴史船舶を安定ID台帳化。特定文明の固定所有物ではなく、地域・時代・船舶伝統・役割を記録する。全一覧・実装仕様・UNESCO等の調査入口は `MARITIME_HISTORY_AND_NAVAL_SYSTEM.md`。
+- `GlobalHistoryIndex.cs` / 各図鑑資料: 総合台帳を **32分類・1303件**、技術を **基礎14＋研究史132＝146件**へ更新。`AchievementPanel` の「古代の知恵」も基礎14技術へ追随。`SIMULATION_AND_GENERATION_CATALOG.md` 第9版はシミュレーション参照 **130→146系統**、生成技術 **81→89系統**へ増補した。
+- 検証: `NAVAL SYSTEM SMOKE OK`、`FLOOD BRIDGE CONVOY SMOKE OK`、`HISTORIC VESSEL CATALOG SMOKE OK`、`GLOBAL HISTORY INDEX SMOKE OK`、`RESEARCH TECH TREE SMOKE OK`、`RESEARCH CULTURE EXPANSION SMOKE OK`。150ターン総合は `SMOKE OK`（turn150 units=88 cities=18 techs=165 wars=3）、多文明・群島・難易度も合格。Windowsビルド `BUILD OK: 97846589 bytes, 49.3s`。`Build/HexCiv.exe`を20秒起動しUnity `6000.3.20f1`、例外・クラッシュ0。
+- 次候補は海上交易路・輸送船と上陸作戦・艦隊損耗／修理・風向／海流、または人物史（特性・任命・関係・継承）。
+
 ### 2026-07-23 Codex: 季節洪水・橋梁網・沿岸封鎖・護送船団 第8段階
 
 - `Core/NaturalGeographySystem.cs` / `City.cs`: 12ターン周期の増水2・肥沃3・平常7を決定論的に実装。増水中は氾濫原の食料-1・移動+1、肥沃期は食料+1。建築学だけでは渡河補正を消さず、河川圏都市の新建物「橋梁網」が都市労働圏の渡河移動・近接攻撃・増水移動を保護する。

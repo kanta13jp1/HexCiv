@@ -130,7 +130,7 @@ namespace HexCiv.Core
         /// </summary>
         static bool IsBlocked(Unit u, Tile t, bool isGoal, bool allowEnemyGoal)
         {
-            if (t == null || !t.IsPassable) return true;
+            if (!GameRules.CanUnitEnter(u != null ? u.Def : null, t)) return true;
             if (t.City != null && t.City.PlayerId != u.PlayerId)
                 return !(isGoal && allowEnemyGoal);
             if (t.Unit != null && t.Unit != u)

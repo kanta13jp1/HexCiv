@@ -96,11 +96,15 @@ namespace HexCiv.Core
             var list = new List<ProductionItem>();
             var owner = s.GetPlayer(PlayerId);
             if (owner == null) return list;
+            bool waterfront = NaturalGeographySystem.IsWaterfront(s.Map, Coord);
+            bool hasHarbor = LogisticsSystem.HasHarbor(this);
             foreach (var u in GameRules.Units)
-                if (owner.HasTech(u.RequiresTech)) list.Add(ProductionItem.FromUnit(u));
+                if (owner.HasTech(u.RequiresTech) &&
+                    (!u.IsNaval || (waterfront && hasHarbor)))
+                    list.Add(ProductionItem.FromUnit(u));
             foreach (var b in GameRules.Buildings)
                 if (owner.HasTech(b.RequiresTech) && !Buildings.Contains(b.Id) &&
-                    (b.Id != "harbor" || NaturalGeographySystem.IsWaterfront(s.Map, Coord)) &&
+                    (b.Id != "harbor" || waterfront) &&
                     (b.Id != "bridgeworks" || NaturalGeographySystem.HasRiverInRange(
                         s.Map, Coord, GameRules.CityWorkRadius)) &&
                     (b.Id != "convoy_office" || Buildings.Contains("harbor")))
@@ -175,7 +179,7 @@ namespace HexCiv.Core
                     }
                     else
                     {
-                        var spawn = FindSpawnTile(s);
+                        var spawn = FindSpawnTile(s, GameRules.GetUnit(CurrentProduction.Id));
                         if (spawn != null && owner != null)
                         {
                             s.CreateUnit(owner, CurrentProduction.Id, spawn.Coord);
@@ -206,9 +210,15 @@ namespace HexCiv.Core
             }
         }
 
-        /// <summary>生産ユニットの配置先:都市タイルが空いていれば都市、なければ最初の空き通行可能隣接タイル。</summary>
-        Tile FindSpawnTile(GameState s)
+        /// <summary>生産ユニットの配置先。艦船は隣接水域、陸軍は都市か隣接陸地へ置く。</summary>
+        Tile FindSpawnTile(GameState s, UnitDef unit)
         {
+            if (unit != null && unit.IsNaval)
+            {
+                foreach (var water in s.Map.NeighborsOf(Coord))
+                    if (water.IsWater && water.Unit == null && water.City == null) return water;
+                return null;
+            }
             var center = s.Map.Get(Coord);
             if (center != null && center.Unit == null) return center;
             foreach (var t in s.Map.NeighborsOf(Coord))

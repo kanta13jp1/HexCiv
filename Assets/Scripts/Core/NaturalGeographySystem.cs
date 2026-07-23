@@ -409,6 +409,8 @@ namespace HexCiv.Core
         public static int MovementCost(GameState state, Unit unit, HexCoord from, HexCoord to)
         {
             Tile destination = state != null && state.Map != null ? state.Map.Get(to) : null;
+            if (unit != null && unit.Def.IsNaval)
+                return destination != null && destination.IsWater ? 1 : GameRules.ImpassableCost;
             int cost = GameRules.MoveCostInto(destination);
             if (cost >= GameRules.ImpassableCost || unit == null || state == null) return cost;
             Player owner = state.GetPlayer(unit.PlayerId);
@@ -424,7 +426,7 @@ namespace HexCiv.Core
 
         public static float RiverCrossingAttackMultiplier(GameState state, Unit attacker, HexCoord target)
         {
-            if (state == null || attacker == null || attacker.Def.IsRanged) return 1f;
+            if (state == null || attacker == null || attacker.Def.IsRanged || attacker.Def.IsNaval) return 1f;
             Player owner = state.GetPlayer(attacker.PlayerId);
             return CrossesRiver(state.Map, attacker.Coord, target) &&
                 !HasBridgeCoverage(state, owner, attacker.Coord, target)

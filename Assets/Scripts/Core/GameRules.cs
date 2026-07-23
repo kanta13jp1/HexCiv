@@ -70,6 +70,8 @@ namespace HexCiv.Core
             new UnitDef { Id = "spearman",  NameJa = "槍兵",     Glyph = "槍", Cost = 56, Moves = 2, Strength = 11, RequiresTech = "bronze_working" },
             new UnitDef { Id = "swordsman", NameJa = "剣士",     Glyph = "剣", Cost = 75, Moves = 2, Strength = 14, RequiresTech = "iron_working" },
             new UnitDef { Id = "catapult",  NameJa = "カタパルト", Glyph = "投", Cost = 75, Moves = 2, Strength = 5,  RangedStrength = 11, Range = 2, RequiresTech = "mathematics" },
+            new UnitDef { Id = "galley",    NameJa = "ガレー船", Glyph = "舟", Cost = 70, Moves = 3, Strength = 11, RequiresTech = "sailing", IsNaval = true, Sight = 3 },
+            new UnitDef { Id = "trireme",   NameJa = "三段櫂船", Glyph = "艦", Cost = 95, Moves = 4, Strength = 16, RequiresTech = "navigation", IsNaval = true, Sight = 3 },
         };
 
         // ---- 建物 ----
@@ -79,9 +81,9 @@ namespace HexCiv.Core
             new BuildingDef { Id = "granary",  NameJa = "穀物庫", Cost = 60, RequiresTech = "pottery", Bonus = new Yields(2, 0, 0), DescJa = "食料+2" },
             new BuildingDef { Id = "library",  NameJa = "図書館", Cost = 80, RequiresTech = "writing", Bonus = new Yields(0, 0, 3), DescJa = "科学+3" },
             new BuildingDef { Id = "workshop", NameJa = "作業場", Cost = 80, RequiresTech = "construction", Bonus = new Yields(0, 2, 0), DescJa = "生産+2" },
-            new BuildingDef { Id = "harbor",   NameJa = "港",     Cost = 70, RequiresTech = "construction", Bonus = new Yields(1, 1, 0), DescJa = "食料+1 生産+1・海上補給" },
+            new BuildingDef { Id = "harbor",   NameJa = "港",     Cost = 70, RequiresTech = "sailing", Bonus = new Yields(1, 1, 0), DescJa = "食料+1 生産+1・海上補給・艦船建造" },
             new BuildingDef { Id = "bridgeworks", NameJa = "橋梁網", Cost = 90, RequiresTech = "construction", Bonus = new Yields(0, 1, 0), DescJa = "生産+1・都市圏の渡河を保護" },
-            new BuildingDef { Id = "convoy_office", NameJa = "護送船団庁", Cost = 95, RequiresTech = "construction", Bonus = new Yields(0, 1, 0), DescJa = "生産+1・単独の沿岸封鎖を突破" },
+            new BuildingDef { Id = "convoy_office", NameJa = "護送船団庁", Cost = 95, RequiresTech = "navigation", Bonus = new Yields(0, 1, 0), DescJa = "生産+1・海上護衛網を編成" },
             new BuildingDef { Id = "walls",    NameJa = "城壁",   Cost = 70, RequiresTech = "masonry", CityDefense = 6, DescJa = "都市防御+6" },
         };
 
@@ -99,7 +101,9 @@ namespace HexCiv.Core
             new TechDef { Id = "bronze_working",   NameJa = "青銅器", Cost = 55, Prereqs = new[] { "mining" },               DescJa = "槍兵を解禁" },
             new TechDef { Id = "iron_working",     NameJa = "鉄器",   Cost = 85, Prereqs = new[] { "bronze_working" },       DescJa = "剣士を解禁" },
             new TechDef { Id = "mathematics",      NameJa = "数学",   Cost = 85, Prereqs = new[] { "wheel" },                DescJa = "カタパルトを解禁" },
-            new TechDef { Id = "construction",     NameJa = "建築学", Cost = 85, Prereqs = new[] { "masonry" },              DescJa = "作業場・港・橋梁網・護送船団庁を解禁" },
+            new TechDef { Id = "construction",     NameJa = "建築学", Cost = 85, Prereqs = new[] { "masonry" },              DescJa = "作業場・橋梁網を解禁" },
+            new TechDef { Id = "sailing",          NameJa = "帆走",   Cost = 45, Prereqs = new[] { "pottery" },              DescJa = "港・ガレー船を解禁" },
+            new TechDef { Id = "navigation",       NameJa = "航海術", Cost = 95, Prereqs = new[] { "sailing", "mathematics" }, DescJa = "三段櫂船・護送船団庁を解禁" },
         };
 
         static Dictionary<string, UnitDef> unitsById;
@@ -134,6 +138,13 @@ namespace HexCiv.Core
             if (t.HasHill) cost += 1;
             if (t.HasForest) cost += 1;
             return cost < 1 ? 1 : cost;
+        }
+
+        /// <summary>ユニット領域に対して進入可能なタイルか。艦船は水域、その他は陸地だけ。</summary>
+        public static bool CanUnitEnter(UnitDef unit, Tile tile)
+        {
+            if (unit == null || tile == null) return false;
+            return unit.IsNaval ? tile.IsWater : tile.IsPassable;
         }
 
         /// <summary>タイルの防御ボーナス(乗算前の加算率)。</summary>

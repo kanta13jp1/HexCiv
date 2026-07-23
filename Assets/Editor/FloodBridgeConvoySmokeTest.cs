@@ -46,6 +46,8 @@ public static class FloodBridgeConvoySmokeTest
             CapitalCityId = 1,
         };
         player.KnownTechs.Add("construction");
+        player.KnownTechs.Add("sailing");
+        player.KnownTechs.Add("navigation");
         var city = new City
         {
             Id = 1,

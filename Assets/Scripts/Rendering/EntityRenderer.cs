@@ -6,7 +6,7 @@ namespace HexCiv.Render
 {
     /// <summary>
     /// ユニットと都市のビュー描画。Refresh() で状態と差分同期する(Id 単位で生成/破棄)。
-    /// ユニット = プレイヤー色の円盤 + グリフ TextMesh + HPバー(損傷時のみ)。
+    /// ユニット = プレイヤー色の円盤（艦船は手続き船体・帆・航跡）+ グリフ TextMesh + HPバー。
     /// 都市 = タイル上の灰色ブロック + プレイヤー色バナー + 「名前 (人口)」+ HPバー。
     /// HumanPlayer の視界外ユニットは非表示。探索済みの都市はゴースト表示(霧の下に残る)。
     /// HumanPlayer が null(観戦モード)なら全て表示。
@@ -390,6 +390,10 @@ namespace HexCiv.Render
         Mesh supplyIsolatedMesh;  // 補給孤立のひし形(内側=白・外周=暗色の二重。同上)
         Mesh pipMesh;             // 人口階層ピップ(内側=白・外周=暗色。色は共有カラーマテリアルで与える)
         Mesh moodMarkMesh;        // 不満マーカーのひし形(内側=白・外周=暗色。色はMaterialPropertyBlock)
+        Mesh navalOutlineMesh;    // 艦船の暗色船体輪郭
+        Mesh navalHullMesh;       // 文明色を受ける艦船船体
+        Mesh navalSailMesh;       // 白い帆
+        Mesh navalWakeMesh;       // 船尾の淡い航跡
 
         /// <summary>初期化。再呼び出し(リスタート)にも対応。</summary>
         public void Init(GameState state)
@@ -453,6 +457,11 @@ namespace HexCiv.Render
                 // 人口階層ピップ / 不満マーカー(2026-07-22 追加)。共有メッシュを全都市で使い回す。
                 pipMesh = BuildPipMesh();
                 moodMarkMesh = BuildMoodMarkMesh();
+                navalOutlineMesh = BuildNavalHull(0.42f, 0.62f,
+                    new Color(0.06f, 0.07f, 0.09f, 1f));
+                navalHullMesh = BuildNavalHull(0.32f, 0.53f, Color.white);
+                navalSailMesh = BuildNavalSail();
+                navalWakeMesh = BuildNavalWake();
             }
 
             SubscribeEvents(state);
@@ -1262,10 +1271,25 @@ namespace HexCiv.Render
             var owner = state.GetPlayer(u.PlayerId);
             var ownerColor = owner != null ? owner.Color : Color.gray;
 
-            RenderUtil.NewMeshChild(v.Root.transform, "Outline", outlineMesh, baseMat,
-                new Vector3(0f, UnitY, 0f), SortUnitOutline);
-            RenderUtil.NewMeshChild(v.Root.transform, "Disc", discMesh, GetColorMat(ownerColor),
-                new Vector3(0f, UnitY, 0f), SortUnitDisc);
+            if (u.Def.IsNaval)
+            {
+                RenderUtil.NewMeshChild(v.Root.transform, "Wake", navalWakeMesh, baseMat,
+                    new Vector3(0f, UnitY - 0.002f, 0f), SortUnitOutline);
+                RenderUtil.NewMeshChild(v.Root.transform, "HullOutline", navalOutlineMesh, baseMat,
+                    new Vector3(0f, UnitY, 0f), SortUnitOutline);
+                RenderUtil.NewMeshChild(v.Root.transform, "Hull", navalHullMesh,
+                    GetColorMat(ownerColor), new Vector3(0f, UnitY + 0.002f, 0f), SortUnitDisc);
+                RenderUtil.NewMeshChild(v.Root.transform, "Sail", navalSailMesh,
+                    GetColorMat(new Color(0.92f, 0.94f, 0.96f, 1f)),
+                    new Vector3(0f, UnitY + 0.004f, 0f), SortUnitGlyph);
+            }
+            else
+            {
+                RenderUtil.NewMeshChild(v.Root.transform, "Outline", outlineMesh, baseMat,
+                    new Vector3(0f, UnitY, 0f), SortUnitOutline);
+                RenderUtil.NewMeshChild(v.Root.transform, "Disc", discMesh, GetColorMat(ownerColor),
+                    new Vector3(0f, UnitY, 0f), SortUnitDisc);
+            }
 
             v.FortifyRing = RenderUtil.NewMeshChild(v.Root.transform, "Fortify", fortifyMesh, baseMat,
                 new Vector3(0f, UnitY, 0f), SortUnitOutline).gameObject;
@@ -1620,6 +1644,46 @@ namespace HexCiv.Render
             mb.AddQuad(new Vector3(-0.44f, 0.002f, 0.72f), new Vector3(0.44f, 0.002f, 0.72f),
                 new Vector3(0.44f, 0.002f, 0.92f), new Vector3(-0.44f, 0.002f, 0.92f), deck);
             mb.AddDiamond(new Vector3(0f, 0.004f, 1.03f), 0.13f, beacon);
+            return mb.Build(null);
+        }
+
+        /// <summary>上から見た五角形の船体。width=半幅、length=船首までの長さ。</summary>
+        static Mesh BuildNavalHull(float width, float length, Color color)
+        {
+            var mb = new MeshBuilder();
+            Vector3 center = new Vector3(0f, 0f, 0.02f);
+            Vector3 sternLeft = new Vector3(-width * 0.82f, 0f, -length * 0.64f);
+            Vector3 sternRight = new Vector3(width * 0.82f, 0f, -length * 0.64f);
+            Vector3 midRight = new Vector3(width, 0f, length * 0.08f);
+            Vector3 bow = new Vector3(0f, 0f, length);
+            Vector3 midLeft = new Vector3(-width, 0f, length * 0.08f);
+            mb.AddTriangle(center, sternLeft, sternRight, color);
+            mb.AddTriangle(center, sternRight, midRight, color);
+            mb.AddTriangle(center, midRight, bow, color);
+            mb.AddTriangle(center, bow, midLeft, color);
+            mb.AddTriangle(center, midLeft, sternLeft, color);
+            return mb.Build(null);
+        }
+
+        static Mesh BuildNavalSail()
+        {
+            var mb = new MeshBuilder();
+            mb.AddTriangle(new Vector3(-0.02f, 0f, -0.22f),
+                new Vector3(-0.02f, 0f, 0.30f),
+                new Vector3(0.24f, 0f, 0.06f), Color.white);
+            return mb.Build(null);
+        }
+
+        static Mesh BuildNavalWake()
+        {
+            var mb = new MeshBuilder();
+            Color wake = new Color(0.72f, 0.90f, 1f, 0.48f);
+            mb.AddTriangle(new Vector3(-0.10f, 0f, -0.40f),
+                new Vector3(-0.50f, 0f, -0.76f),
+                new Vector3(-0.18f, 0f, -0.54f), wake);
+            mb.AddTriangle(new Vector3(0.10f, 0f, -0.40f),
+                new Vector3(0.18f, 0f, -0.54f),
+                new Vector3(0.50f, 0f, -0.76f), wake);
             return mb.Build(null);
         }
 

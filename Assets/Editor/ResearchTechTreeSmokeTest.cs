@@ -5,7 +5,7 @@ using UnityEditor;
 using UnityEngine;
 using HexCiv.Core;
 
-/// <summary>基礎12技術と研究史132件を結ぶ拡張技術ツリーをヘッドレス検証する。</summary>
+/// <summary>基礎14技術と研究史132件を結ぶ拡張技術ツリーをヘッドレス検証する。</summary>
 public static class ResearchTechTreeSmokeTest
 {
     static readonly string[] Regions =
@@ -34,7 +34,7 @@ public static class ResearchTechTreeSmokeTest
     static void ValidateCatalog()
     {
         int expected = GameRules.Techs.Count + ResearchMilestoneCatalog.All.Count;
-        if (TechnologyCatalog.All.Count != expected || expected != 144)
+        if (TechnologyCatalog.All.Count != expected || expected != 146)
             throw new Exception("全技術件数が不正: " + TechnologyCatalog.All.Count);
 
         var ids = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -59,7 +59,7 @@ public static class ResearchTechTreeSmokeTest
             if (TechnologyCatalog.All[i] != GameRules.Techs[i])
                 throw new Exception("既存技術の順序・参照が変化: " + GameRules.Techs[i].Id);
 
-        Debug.Log("[ResearchTree] 全144技術・既存12技術互換OK");
+        Debug.Log("[ResearchTree] 全146技術・既存12技術と帆走2技術の互換OK");
     }
 
     static void ValidateBranches()

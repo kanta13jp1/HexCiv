@@ -80,11 +80,12 @@ namespace HexCiv.UI
             public bool Hidden;
         }
 
-        /// <summary>基礎12技術のId(GameRules.Techs と同一。古代の知恵の判定に使う)。</summary>
+        /// <summary>基礎14技術のId(GameRules.Techs と同一。古代の知恵の判定に使う)。</summary>
         static readonly string[] BaseTechIds =
         {
             "agriculture", "pottery", "animal_husbandry", "archery", "mining", "writing",
-            "wheel", "masonry", "bronze_working", "iron_working", "mathematics", "construction"
+            "wheel", "masonry", "bronze_working", "iron_working", "mathematics", "construction",
+            "sailing", "navigation"
         };
 
         /// <summary>全実績の定義(16件、一覧パネルの表示順)。</summary>
@@ -94,7 +95,7 @@ namespace HexCiv.UI
             new AchievementDef { Id = FiveCitiesId, NameJa = "開拓者魂", DescJa = "同時に5都市を保有した", IconKind = "city" },
             new AchievementDef { Id = FirstKillId, NameJa = "初勝利", DescJa = "敵ユニットを初めて撃破した", IconKind = "war" },
             new AchievementDef { Id = ConquerorId, NameJa = "征服者", DescJa = "敵の都市を初めて占領した", IconKind = "war" },
-            new AchievementDef { Id = AncientWisdomId, NameJa = "古代の知恵", DescJa = "基礎12技術をすべて研究した", IconKind = "tech" },
+            new AchievementDef { Id = AncientWisdomId, NameJa = "古代の知恵", DescJa = "基礎14技術をすべて研究した", IconKind = "tech" },
             new AchievementDef { Id = ScholarId, NameJa = "学究", DescJa = "技術を30件習得した", IconKind = "tech" },
             new AchievementDef { Id = CulturedId, NameJa = "文化人", DescJa = "初めて文化政策を採用した", IconKind = "culture" },
             new AchievementDef { Id = ThinkerId, NameJa = "思想家", DescJa = "文化政策を10件採用した", IconKind = "culture" },

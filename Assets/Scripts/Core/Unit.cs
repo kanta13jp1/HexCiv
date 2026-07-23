@@ -85,7 +85,7 @@ namespace HexCiv.Core
             if (IsDead || MovesLeft <= 0) return false;
             if (Coord.DistanceTo(next) != 1) return false;
             var t = s.Map.Get(next);
-            if (t == null || !t.IsPassable) return false;
+            if (!GameRules.CanUnitEnter(Def, t)) return false;
             if (t.Unit != null) return false;
             if (t.City != null && t.City.PlayerId != PlayerId) return false;
 

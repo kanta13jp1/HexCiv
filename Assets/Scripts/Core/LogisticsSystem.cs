@@ -228,31 +228,55 @@ namespace HexCiv.Core
         }
 
         /// <summary>
-        /// 水域に隣接する交戦中の敵戦闘ユニットまたは敵港湾都市を沿岸封鎖戦力とみなす。
-        /// 護送船団なしなら1戦力、ありなら2戦力で海上補給路を遮断する。
-        /// 現在の陸戦ユニット中心の盤面で、艦隊・沿岸砲台・私掠船を抽象化したモデル。
+        /// 水域周辺の封鎖圧力から味方艦船の護衛力を差し引く。
+        /// 敵艦船=2、敵陸上戦闘部隊/敵港=1、味方艦船=護衛1として決定的に集計する。
+        /// </summary>
+        public static int EffectiveBlockadePressure(GameState state, Player player, Tile water)
+        {
+            if (state == null || state.Map == null || player == null ||
+                water == null || !water.IsWater) return 0;
+
+            int pressure = HostileNavalPressure(player, water);
+            int escort = FriendlyEscortStrength(player, water);
+            foreach (Tile neighbor in state.Map.NeighborsOf(water.Coord))
+            {
+                pressure += HostileNavalPressure(player, neighbor);
+                escort += FriendlyEscortStrength(player, neighbor);
+
+                if (neighbor.Unit != null && !neighbor.Unit.Def.IsCivilian &&
+                    !neighbor.Unit.Def.IsNaval && neighbor.Unit.PlayerId != player.Id &&
+                    player.IsAtWarWith(neighbor.Unit.PlayerId))
+                    pressure++;
+                if (neighbor.City != null && neighbor.City.PlayerId != player.Id &&
+                    player.IsAtWarWith(neighbor.City.PlayerId) && HasHarbor(neighbor.City))
+                    pressure++;
+            }
+            return Math.Max(0, pressure - escort);
+        }
+
+        /// <summary>
+        /// 沿岸封鎖判定。護送船団庁は必要圧力を1から2へ上げ、実在する味方艦船は
+        /// さらに局地的な護衛力として敵圧力を相殺する。
         /// </summary>
         public static bool IsWaterBlockaded(GameState state, Player player, Tile water)
         {
             if (state == null || state.Map == null || player == null ||
                 water == null || !water.IsWater) return false;
-            int pressure = 0;
             int threshold = HasConvoyNetwork(player) ? 2 : 1;
-            foreach (Tile neighbor in state.Map.NeighborsOf(water.Coord))
-            {
-                bool hostile = false;
-                if (neighbor.Unit != null && !neighbor.Unit.Def.IsCivilian &&
-                    neighbor.Unit.PlayerId != player.Id &&
-                    player.IsAtWarWith(neighbor.Unit.PlayerId))
-                    hostile = true;
-                if (!hostile && neighbor.City != null &&
-                    neighbor.City.PlayerId != player.Id &&
-                    player.IsAtWarWith(neighbor.City.PlayerId) &&
-                    HasHarbor(neighbor.City))
-                    hostile = true;
-                if (hostile && ++pressure >= threshold) return true;
-            }
-            return false;
+            return EffectiveBlockadePressure(state, player, water) >= threshold;
+        }
+
+        static int HostileNavalPressure(Player player, Tile tile)
+        {
+            return tile != null && tile.Unit != null && !tile.Unit.Def.IsCivilian &&
+                tile.Unit.Def.IsNaval && tile.Unit.PlayerId != player.Id &&
+                player.IsAtWarWith(tile.Unit.PlayerId) ? 2 : 0;
+        }
+
+        static int FriendlyEscortStrength(Player player, Tile tile)
+        {
+            return tile != null && tile.Unit != null && !tile.Unit.Def.IsCivilian &&
+                tile.Unit.Def.IsNaval && tile.Unit.PlayerId == player.Id ? 1 : 0;
         }
 
         /// <summary>
