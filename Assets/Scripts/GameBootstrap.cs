@@ -35,6 +35,11 @@ namespace HexCiv
         /// <summary>難易度設定の PlayerPrefs キー(0=やさしい,1=普通,2=むずかしい。2026-07-20 追加)。
         /// キーと値の規約は UIManager のゲーム設定画面と同一に保つこと。</summary>
         const string DifficultyKey = "HexCiv.Difficulty";
+        /// <summary>ゲーム長設定の PlayerPrefs キー(0=標準250ターン,1=短期100ターン。2026-07-23 追加)。
+        /// キーと値の規約は UIManager のゲーム設定画面と同一に保つこと。
+        /// 未設定(新規インストール)の既定は「短期」= GameSpeedRules.ShortLength(1)。
+        /// 1ゲームを一度の着席で終えられることを優先した製品判断で、UIManager 側の既定値と一致させる。</summary>
+        const string GameLengthKey = "HexCiv.GameLength";
         /// <summary>フルスクリーン設定の PlayerPrefs キー(0=ウィンドウ,1=フルスクリーン。2026-07-21 追加)。
         /// 値の読み書きと実際の画面切替は本クラスが担い、UIManager はトグル要求とラベル表示のみを行う。</summary>
         const string FullscreenKey = "HexCiv.Fullscreen";
@@ -563,8 +568,14 @@ namespace HexCiv
         }
 
         /// <summary>
-        /// PlayerPrefs のゲーム設定(マップサイズ・文明数・マップ種別・難易度)から GameConfig を作る(2026-07-20 Claude Code 追加)。
+        /// PlayerPrefs のゲーム設定(マップサイズ・文明数・マップ種別・難易度・ゲーム長)から
+        /// GameConfig を作る(2026-07-20 Claude Code 追加、2026-07-23 ゲーム長を追加)。
         /// 設定が無い・不正な場合は従来既定(44×26・4文明・大陸・普通)に丸める。Seed は 0(BuildNewGame がランダム化)。
+        ///
+        /// 新規ゲームの全経路(ゲーム設定画面の開始・観戦開始・文明変更・指導者変更・リスタート・
+        /// 起動直後の初回)はこの1か所を通るため、ここでゲーム長と MaxTurns を確定させれば
+        /// すべての経路が一致する。ロードは SaveLoad が保存済みの GameLength / MaxTurns を復元するため
+        /// この関数を通らない(セーブ時のゲーム長がそのまま継続する)。
         /// </summary>
         static GameConfig CreateConfigFromSettings()
         {
@@ -575,6 +586,12 @@ namespace HexCiv
             config.NumPlayers = Mathf.Clamp(PlayerPrefs.GetInt(NumPlayersKey, config.NumPlayers), 2, 8);
             config.MapType = Mathf.Clamp(PlayerPrefs.GetInt(MapTypeKey, 0), 0, 2);
             config.Difficulty = Mathf.Clamp(PlayerPrefs.GetInt(DifficultyKey, 1), 0, 2);
+            // ゲーム長(2026-07-23 追加)。未設定の既定は短期(1)。MaxTurns は GameConfig の既定値250を
+            // 書き換えずにここで確定させる(GameLength==0 なら 250 のままで従来と完全に同一)。
+            config.GameLength = Mathf.Clamp(
+                PlayerPrefs.GetInt(GameLengthKey, GameSpeedRules.ShortLength),
+                GameSpeedRules.StandardLength, GameSpeedRules.ShortLength);
+            config.MaxTurns = GameSpeedRules.MaxTurnsFor(config.GameLength);
             return config;
         }
 

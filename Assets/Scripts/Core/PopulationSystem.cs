@@ -259,7 +259,10 @@ namespace HexCiv.Core
 
         static void TryMigration(GameState state, Player player)
         {
-            if (player.Cities.Count < 2 || state.TurnNumber % MigrationInterval != player.Id % MigrationInterval)
+            // 短期ゲームでは移住周期も 0.4倍に縮める(標準では 4 のまま。2026-07-23 追加)。
+            // 都市成長が2.5倍になるため、再配分の周期も合わせないと分布が追随しない。
+            int interval = GameSpeedRules.ScaleInterval(state.Config, MigrationInterval);
+            if (player.Cities.Count < 2 || state.TurnNumber % interval != player.Id % interval)
                 return;
 
             City source = null;

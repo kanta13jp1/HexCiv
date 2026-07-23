@@ -30,6 +30,10 @@ public static class SmokeTest
                 MapWidth = 40,
                 MapHeight = 24,
                 NumPlayers = 4,
+                // 基準値の固定(2026-07-23 追加)。既定値と同じ0だが、将来 GameConfig.GameLength の
+                // 既定値が変わっても、この seed42 の基準トレースが黙って動かないよう明示する。
+                // MaxTurns も既定の250のまま(150ターン走行中にターン上限判定へ入らないため)。
+                GameLength = 0,          // 標準(250ターン)
             };
 
             var state = GameBootstrap.BuildNewGame(config);
@@ -81,6 +85,16 @@ public static class SmokeTest
             // ---- 難易度「むずかしい」(Difficulty=2)の健全性ミニ検証(2026-07-20 Claude Code 追加) ----
             RunDifficultySmoke();
 
+            // ---- ゲーム長「短期(100ターン)」(GameLength=1)の実効性検証(2026-07-23 Claude Code 追加) ----
+            // 既存ランの後ろに置く(前に挿入すると静的バインドの順序が変わり得るため)。
+            string shortModeFailure = RunShortGameSmoke();
+            if (shortModeFailure != null)
+            {
+                Debug.Log("SMOKE FAIL: short mode " + shortModeFailure);
+                EditorApplication.Exit(1);
+                return;
+            }
+
             Debug.Log("SMOKE OK");
             EditorApplication.Exit(0);
         }
@@ -116,6 +130,7 @@ public static class SmokeTest
             MapWidth = 20,
             MapHeight = 12,
             NumPlayers = 1,
+            GameLength = 0,          // 標準(既定値と同じ。基準値固定のため明示)
         }, new[] { "maori" });
         if (custom.HumanPlayer == null || custom.HumanPlayer.CivilizationId != "maori" ||
             custom.HumanPlayer.NameJa != "マオリ" || custom.HumanPlayer.NextCityName(custom) != "ワイタンギ")
@@ -159,6 +174,7 @@ public static class SmokeTest
             MapWidth = 20,
             MapHeight = 12,
             NumPlayers = 1,
+            GameLength = 0,          // 標準(既定値と同じ。基準値固定のため明示)
         }, new[] { "maori" }, new[] { "te_rauparaha" });
         if (custom.HumanPlayer == null || custom.HumanPlayer.LeaderId != "te_rauparaha" ||
             custom.HumanPlayer.LeaderNameJa != "テ・ラウパラハ")
@@ -186,6 +202,7 @@ public static class SmokeTest
             MapWidth = 52,
             MapHeight = 30,
             NumPlayers = 6,
+            GameLength = 0,          // 標準(既定値と同じ。基準値固定のため明示)
         };
 
         var state = GameBootstrap.BuildNewGame(config);
@@ -224,6 +241,7 @@ public static class SmokeTest
             MapHeight = 26,
             NumPlayers = 4,
             MapType = 2,             // 群島
+            GameLength = 0,          // 標準(既定値と同じ。基準値固定のため明示)
         };
 
         var state = GameBootstrap.BuildNewGame(config);
@@ -257,6 +275,7 @@ public static class SmokeTest
             MapHeight = 26,
             NumPlayers = 4,
             Difficulty = 2,          // むずかしい
+            GameLength = 0,          // 標準(既定値と同じ。基準値固定のため明示)
         };
 
         var state = GameBootstrap.BuildNewGame(config);
@@ -266,6 +285,90 @@ public static class SmokeTest
             turnManager.RunHeadlessTurn();
 
         Debug.Log($"SMOKE DIFFICULTY OK (turn={state.TurnNumber} units={state.AllUnits.Count()} cities={state.AllCities.Count()})");
+    }
+
+    /// <summary>
+    /// ゲーム長「短期(100ターン)」プリセット(GameLength=1)の実効性検証(2026-07-23 Claude Code 追加)。
+    /// 「歴史圧縮」(産出2.5倍・ターン依存定数0.4倍、GameSpeedRules 参照)が本当に効いていることを、
+    /// 100ターンを走り切ったあとの拡張・研究・戦争で確認する。単に落ちないことではなく、
+    /// 標準250ターンと同じ密度の歴史が100ターンで起きたかを見るのが目的。
+    ///
+    /// 判定(いずれも「40%のターン数で起きたか」の下限であって、上限は課さない):
+    /// ・例外なく最後まで進行する
+    /// ・全文明合計の都市が8以上(拡張が実際に進んだ)
+    /// ・全文明合計の技術が60以上(研究が追随した)
+    /// ・戦争が最低1回発生した(短期でも軍事が動く)
+    ///
+    /// 標準モードには一切触れないため、seed42 の本編スモークと既存ミニランの出力は不変。
+    /// 戻り値は失敗理由(成功なら null)。出力は呼び出し側が "SMOKE FAIL: short mode ..." で行う。
+    /// </summary>
+    static string RunShortGameSmoke()
+    {
+        var config = new GameConfig
+        {
+            Seed = 21,
+            HumanPlayerIndex = -1,   // 全員AI
+            MapWidth = 44,
+            MapHeight = 26,          // 標準マップ(既定サイズ・既定の大陸)
+            NumPlayers = 4,
+            GameLength = 1,                              // 短期(100ターン)
+            MaxTurns = GameSpeedRules.MaxTurnsFor(1),    // = 100(ブートストラップと同じ導出)
+        };
+
+        if (config.MaxTurns != GameSpeedRules.ShortMaxTurns)
+            return $"GameSpeedRules.MaxTurnsFor(1) が{GameSpeedRules.ShortMaxTurns}ではない: {config.MaxTurns}";
+
+        var state = GameBootstrap.BuildNewGame(config);
+        var turnManager = new TurnManager(state, new AIController());
+        turnManager.BeginGame();
+
+        // 戦争は和平で AtWarWith から消えるため、本編と同じ累積ペア方式で「一度でも起きたか」を見る。
+        var warPairsEver = new HashSet<int>();
+        var peacePairsEver = new HashSet<int>();
+        var activeWarPairs = new HashSet<int>();
+
+        // 自然終了(勝利決着、またはターン上限100の到達)まで走らせる。
+        for (int i = 0; i < config.MaxTurns && !state.IsGameOver; i++)
+        {
+            turnManager.RunHeadlessTurn();
+            RecordWarAndPeacePairs(state, warPairsEver, peacePairsEver, activeWarPairs);
+        }
+
+        int units = state.AllUnits.Count();
+        int cities = state.AllCities.Count();
+        int techs = 0;
+        int bestCulture = 0;
+        int bestPolicies = 0;
+        for (int p = 0; p < state.Players.Count; p++)
+        {
+            var player = state.Players[p];
+            techs += player.KnownTechs.Count;
+            if (player.TotalCulture > bestCulture) bestCulture = player.TotalCulture;
+            if (player.KnownCulturePolicies.Count > bestPolicies)
+                bestPolicies = player.KnownCulturePolicies.Count;
+        }
+        int wars = warPairsEver.Count;
+
+        // 文化勝利の到達度診断。短期の成立条件は「ターン60以降・政策14件・文化1500・全相手へ影響力」
+        // (CultureSystem.VictoryTurnFor / VictoryMinimumPolicies / VictoryMinimumCulture)。
+        // このseedで実際に成立しなくても失敗にはせず、人間が射程を判断できるよう数値だけ残す。
+        Debug.Log($"SMOKE SHORT CULTURE: best={bestCulture} policies={bestPolicies}");
+
+        // 失敗時の原因切り分け用の素の数値(判定には使わない)。
+        var powers = string.Join("/", state.Players.Select(pl => pl.MilitaryPower().ToString()));
+        var cityCounts = string.Join("/", state.Players.Select(pl => pl.Cities.Count.ToString()));
+        Debug.Log($"SMOKE SHORT DIAG: turn={state.TurnNumber} over={state.IsGameOver} " +
+            $"powers={powers} cities={cityCounts} peace={peacePairsEver.Count}");
+
+        if (cities < 8)
+            return $"100ターンで都市が不足: cities={cities} (>=8 必要, turn={state.TurnNumber})";
+        if (techs < 60)
+            return $"100ターンで研究が不足: techs={techs} (>=60 必要, turn={state.TurnNumber})";
+        if (wars < 1)
+            return $"100ターンで戦争が一度も起きていない: wars={wars} (>=1 必要, turn={state.TurnNumber})";
+
+        Debug.Log($"SMOKE SHORT OK (turn={state.TurnNumber} units={units} cities={cities} techs={techs} wars={wars})");
+        return null;
     }
 
     /// <summary>指定ターン数だけヘッドレス進行し、統計ログと基本健全性チェックを行う。</summary>

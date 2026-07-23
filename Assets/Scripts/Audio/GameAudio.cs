@@ -189,6 +189,10 @@ namespace HexCiv.Audio
         //   曲A(Dawn) ターン100以下 / 曲B(Golden Age) 101〜180 / 曲C(Twilight) 181〜。
         // 新規ゲーム/リスタート/ロード(Init)では常に曲Aへ戻す。ヘッドレス/エディタ
         // バッチ構成ではこのコンポーネント自体が生成されないため従来どおり無音安全。
+        //
+        // 2026-07-23 Claude Code: 下の2定数は「標準(250ターン)基準」の値。実際の切替点は
+        // GameSpeedRules.ScaleTurn で現在のゲーム長へ換算する(短期100ターンでは 40 / 72)。
+        // 標準モード(GameLength==0)では ScaleTurn が恒等写像のため従来と完全に同一。
         const int EraBTurnThreshold = 100;
         const int EraCTurnThreshold = 180;
         const float EraCrossfadeSeconds = 2f;
@@ -720,7 +724,7 @@ namespace HexCiv.Audio
 
         /// <summary>
         /// 時代BGMのクロスフェード進行(2026-07-21 Claude Code 追加。同日、終盤曲Cへ拡張)。
-        /// ターン数に応じた目標曲(A: 100以下 / B: 101〜180 / C: 181〜)へ、曲ごとの音量比を
+        /// ターン数に応じた目標曲(標準 A: 100以下 / B: 101〜180 / C: 181〜、短期は40/72が境界)へ、曲ごとの音量比を
         /// 約2秒で寄せる。曲別の重み方式のため、超高速観戦でA→Bのフェード完了前に目標がCへ
         /// 変わっても段差なく追従する。
         /// 観戦モードの倍速(Time.timeScale)に影響されないよう非スケール時間で進める。
@@ -737,8 +741,11 @@ namespace HexCiv.Audio
             int desired = 0;
             if (state != null)
             {
-                if (state.TurnNumber > EraCTurnThreshold) desired = 2;
-                else if (state.TurnNumber > EraBTurnThreshold) desired = 1;
+                // 切替点はゲーム長へ換算する(標準=100/180、短期=40/72。2026-07-23 追加)。
+                // 標準モードでは ScaleTurn が恒等写像のため、比較値も分岐順序も従来と同一。
+                var config = state.Config;
+                if (state.TurnNumber > GameSpeedRules.ScaleTurn(config, EraCTurnThreshold)) desired = 2;
+                else if (state.TurnNumber > GameSpeedRules.ScaleTurn(config, EraBTurnThreshold)) desired = 1;
             }
 
             float step = Time.unscaledDeltaTime / EraCrossfadeSeconds;

@@ -9,6 +9,8 @@ namespace HexCiv.Core
     /// </summary>
     public static class CultureSystem
     {
+        /// <summary>文化勝利が成立し始める標準基準のターン。短期ゲームでは
+        /// GameSpeedRules.ScaleTurn により60ターンへ圧縮される(定数自体は標準基準のまま)。</summary>
         public const int VictoryMinimumTurn = 150;
         public const int VictoryMinimumPolicies = 14;
         public const int VictoryMinimumCulture = 1500;
@@ -47,7 +49,21 @@ namespace HexCiv.Core
             total += PoliticalSystem.CultureBonus(player);
             total += MarketSystem.CultureBonus(player);
             total += NaturalGeographySystem.CultureBonus(state, player);
-            return AdministrationSystem.ScaleOutput(player, Math.Max(0, total));
+            int output = AdministrationSystem.ScaleOutput(player, Math.Max(0, total));
+            // 短期ゲームは毎ターン文化を2.5倍にする(標準では恒等。2026-07-23 追加)。
+            // 政策コストと勝利しきい値(政策14件・文化1500)は据え置くため、
+            // 100ターンでの累計文化・採用政策数は標準250ターンとほぼ同じになる。
+            // AdvanceExchange の影響力もこの出力から導出されるため自動的に追随する。
+            return GameSpeedRules.ScaleOutput(state != null ? state.Config : null, output);
+        }
+
+        /// <summary>
+        /// 現モードで文化勝利が成立し始めるターン(2026-07-23 追加)。
+        /// 標準250ターンでは150、短期100ターンでは60。UI表示にも使える。
+        /// </summary>
+        public static int VictoryTurnFor(GameState state)
+        {
+            return GameSpeedRules.ScaleTurn(state != null ? state.Config : null, VictoryMinimumTurn);
         }
 
         public static int ScaleScience(Player player, int amount)
@@ -131,8 +147,17 @@ namespace HexCiv.Core
                 if (source.IsEliminated || source.Cities.Count == 0) continue;
 
                 int output = CulturePerTurn(state, source);
-                int gain = 1 + output / 4 + source.KnownCulturePolicies.Count / 8;
-                gain += CulturePolicyCatalog.EffectTotal(source, CulturePolicyEffect.Influence);
+                // 影響力のうち、文化産出に比例しない定数項(基礎1・政策数・政策効果)は
+                // CulturePerTurn の2.5倍が効かない。短期ゲームではこの定数項だけを別途2.5倍にして、
+                // 影響力の蓄積速度を文化と完全に揃える(2026-07-23 追加)。
+                // 文化勝利のしきい値 VictoryThreshold = 220 + 相手TotalCulture/4 のうち、
+                // TotalCulture 由来の項は自動で相殺されるが、定数220は経過ターン数で稼ぐしかないため、
+                // ここを揃えないと短期ゲームでは文化勝利が事実上成立しなくなる。
+                // 標準モードでは加算順の入れ替えだけで、整数結果は従来と完全に同一。
+                int flatGain = 1 + source.KnownCulturePolicies.Count / 8
+                    + CulturePolicyCatalog.EffectTotal(source, CulturePolicyEffect.Influence);
+                int gain = output / 4 +
+                    GameSpeedRules.ScaleOutput(state.Config, flatGain);
                 gain = Math.Max(1, gain);
 
                 for (int j = 0; j < state.Players.Count; j++)
@@ -181,7 +206,7 @@ namespace HexCiv.Core
         /// <summary>全生存文明へ十分な影響力を持つ文化首位文明を勝者にする。</summary>
         public static bool CheckCulturalVictory(GameState state)
         {
-            if (state == null || state.IsGameOver || state.TurnNumber < VictoryMinimumTurn)
+            if (state == null || state.IsGameOver || state.TurnNumber < VictoryTurnFor(state))
                 return false;
 
             Player winner = null;

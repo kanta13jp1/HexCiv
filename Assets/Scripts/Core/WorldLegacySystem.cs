@@ -214,7 +214,11 @@ namespace HexCiv.Core
         public static HeritageReward GetHeritageReward(GameState state, Player player,
             HeritageSiteDef site)
         {
-            int turn = state != null ? state.TurnNumber : 1;
+            // 短期ゲームでは現ターンを標準基準へ戻してから報酬式に入れる(標準では恒等。
+            // 2026-07-23 追加)。短期の40ターン目は標準の100ターン目と同じ報酬になる。
+            int turn = state != null
+                ? GameSpeedRules.StandardTurn(state.Config, state.TurnNumber)
+                : 1;
             int affinity = AffinityPercent(player, site != null ? site.RelatedCivilizationId : "",
                 site != null ? site.RegionJa : "");
             int cultureBase = 28 + turn / 6;
@@ -238,7 +242,7 @@ namespace HexCiv.Core
             for (int i = 0; i < player.Cities.Count; i++)
                 CheckDiscoveryAt(state, player, player.Cities[i].Coord);
 
-            int gained = GreatPersonPointsPerTurn(player);
+            int gained = GreatPersonPointsPerTurn(state, player);
             player.GreatPersonPoints += gained;
             player.TotalGreatPersonPoints += gained;
 
@@ -254,6 +258,17 @@ namespace HexCiv.Core
         {
             if (player == null || player.IsEliminated) return 0;
             return 1 + player.Cities.Count * 2 + player.KnownCulturePolicies.Count / 4;
+        }
+
+        /// <summary>
+        /// 現モードでの毎ターン偉人ポイント(2026-07-23 追加)。短期ゲームは2.5倍。
+        /// 登用費(BaseGreatPersonCost + 登用数×Step)は据え置くため、100ターンでの累計偉人ポイントと
+        /// 登用人数は標準250ターンとほぼ同じになる。標準モードでは既存の単項版と完全に同値。
+        /// </summary>
+        public static int GreatPersonPointsPerTurn(GameState state, Player player)
+        {
+            return GameSpeedRules.ScaleOutput(state != null ? state.Config : null,
+                GreatPersonPointsPerTurn(player));
         }
 
         public static List<GreatPersonDef> AvailableGreatPeople(GameState state, Player player)
@@ -315,7 +330,8 @@ namespace HexCiv.Core
 
         static string ApplyGreatPersonEffect(GameState state, Player player, GreatPersonDef person)
         {
-            int amount = 90 + state.TurnNumber / 2;
+            // 短期ゲームでは現ターンを標準基準へ戻す(標準では恒等。2026-07-23 追加)
+            int amount = 90 + GameSpeedRules.StandardTurn(state.Config, state.TurnNumber) / 2;
             switch (EffectKind(person))
             {
                 case GreatPersonEffectKind.Culture:

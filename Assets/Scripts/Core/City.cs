@@ -117,13 +117,36 @@ namespace HexCiv.Core
             CurrentProduction = item;
         }
 
+        /// <summary>
+        /// 現モードでの生産コスト(2026-07-23 追加)。短期ゲームでは生産産出を2.5倍にするため
+        /// コスト側は据え置き、標準モードと同じ値をそのまま返す恒等関数として働く。
+        /// UI・AIが同じ値を参照できるよう公開する。
+        /// </summary>
+        public static int ProductionCostFor(GameState s, ProductionItem item)
+        {
+            return item == null ? 0 : item.Cost;
+        }
+
+        /// <summary>
+        /// 現モードでの成長必要食料(2026-07-23 追加)。短期ゲームだけ 0.4倍になる。
+        /// 食料は「産出 − 人口維持費」の差分が小さい整数のため、産出側を2.5倍すると
+        /// 丸め誤差と均衡人口の移動が起きる。累積しきい値側を縮めると均衡人口を保ったまま
+        /// 成長曲線の時間軸だけを圧縮できる。標準モードでは GameRules と完全に同値。
+        /// </summary>
+        public static int GrowthFoodRequired(GameState s, int pop)
+        {
+            return GameSpeedRules.ScaleCost(s != null ? s.Config : null,
+                GameRules.GrowthFoodNeeded(pop));
+        }
+
         /// <summary>現在の生産が完了するまでのターン数。完了しないなら99。</summary>
         public int TurnsToComplete(GameState s)
         {
             if (CurrentProduction == null) return 99;
             int prod = ComputeYields(s).Production;
             if (prod <= 0) return 99;
-            int remaining = CurrentProduction.Cost - ProductionStored;
+            prod = GameSpeedRules.ScaleOutput(s != null ? s.Config : null, prod);
+            int remaining = ProductionCostFor(s, CurrentProduction) - ProductionStored;
             if (remaining <= 0) return 1;
             return Math.Min(99, (remaining + prod - 1) / prod);
         }
@@ -133,7 +156,7 @@ namespace HexCiv.Core
         {
             int surplus = ComputeYields(s).Food - Population * GameRules.FoodPerPop;
             if (surplus <= 0) return 99;
-            int remaining = GameRules.GrowthFoodNeeded(Population) - FoodStored;
+            int remaining = GrowthFoodRequired(s, Population) - FoodStored;
             if (remaining <= 0) return 1;
             return Math.Min(99, (remaining + surplus - 1) / surplus);
         }
@@ -148,9 +171,9 @@ namespace HexCiv.Core
             int surplus = y.Food - Population * GameRules.FoodPerPop;
             FoodStored += surplus;
             int guard = 0;
-            while (FoodStored >= GameRules.GrowthFoodNeeded(Population) && guard++ < 10)
+            while (FoodStored >= GrowthFoodRequired(s, Population) && guard++ < 10)
             {
-                FoodStored -= GameRules.GrowthFoodNeeded(Population);
+                FoodStored -= GrowthFoodRequired(s, Population);
                 Population++;
             }
             if (FoodStored < 0)
@@ -167,13 +190,16 @@ namespace HexCiv.Core
                 int marketProduction = MarketSystem.ScaleProduction(owner, culturalProduction);
                 int administrativeProduction = AdministrationSystem.ScaleOutput(owner, marketProduction);
                 // AI都市は難易度に応じて生産蓄積を補正(普通=100%で無変換。2026-07-20 追加)
-                ProductionStored += DifficultyRules.ScaleForAI(s, owner, administrativeProduction, DifficultyRules.AIProductionPercent);
-                if (ProductionStored >= CurrentProduction.Cost)
+                int difficultyProduction = DifficultyRules.ScaleForAI(s, owner, administrativeProduction, DifficultyRules.AIProductionPercent);
+                // 短期ゲームは毎ターン産出を2.5倍にする(標準では恒等。2026-07-23 追加)
+                ProductionStored += GameSpeedRules.ScaleOutput(s != null ? s.Config : null, difficultyProduction);
+                int productionCost = ProductionCostFor(s, CurrentProduction);
+                if (ProductionStored >= productionCost)
                 {
                     if (CurrentProduction.Kind == ProductionKind.Building)
                     {
                         if (!Buildings.Contains(CurrentProduction.Id)) Buildings.Add(CurrentProduction.Id);
-                        ProductionStored -= CurrentProduction.Cost;
+                        ProductionStored -= productionCost;
                         s.EmitLog($"「{NameJa}」で{CurrentProduction.NameJa}が完成した");
                         CurrentProduction = null;
                     }
@@ -183,7 +209,7 @@ namespace HexCiv.Core
                         if (spawn != null && owner != null)
                         {
                             s.CreateUnit(owner, CurrentProduction.Id, spawn.Coord);
-                            ProductionStored -= CurrentProduction.Cost;
+                            ProductionStored -= productionCost;
                             s.EmitLog($"「{NameJa}」で{CurrentProduction.NameJa}が完成した");
                             CurrentProduction = null;
                         }

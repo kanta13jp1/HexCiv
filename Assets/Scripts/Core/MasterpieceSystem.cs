@@ -26,6 +26,17 @@ namespace HexCiv.Core
                 + player.RecruitedGreatPeople.Count / 2;
         }
 
+        /// <summary>
+        /// 現モードでの毎ターン作品ポイント(2026-07-23 追加)。短期ゲームは2.5倍。
+        /// 収蔵費(BaseCollectionCost + 収蔵数×Step)は据え置くため、100ターンでの累計作品ポイントと
+        /// 収蔵件数は標準250ターンとほぼ同じになる。標準モードでは既存の単項版と完全に同値。
+        /// </summary>
+        public static int PointsPerTurn(GameState state, Player player)
+        {
+            return GameSpeedRules.ScaleOutput(state != null ? state.Config : null,
+                PointsPerTurn(player));
+        }
+
         public static int CulturePerTurnBonus(Player player)
         {
             if (player == null) return 0;
@@ -58,7 +69,7 @@ namespace HexCiv.Core
         public static void AdvancePlayer(GameState state, Player player)
         {
             if (state == null || player == null || player.IsEliminated) return;
-            int gained = PointsPerTurn(player);
+            int gained = PointsPerTurn(state, player);
             player.MasterpiecePoints += gained;
             player.TotalMasterpiecePoints += gained;
 
@@ -164,7 +175,10 @@ namespace HexCiv.Core
             switch (work.Kind)
             {
                 case MasterpieceKind.Book:
-                    player.ScienceStored += 70 + Math.Max(0, state.TurnNumber) / 3;
+                    // 短期ゲームでは現ターンを標準基準へ戻す(標準では恒等。2026-07-23 追加)
+                    player.ScienceStored += 70 + Math.Max(0,
+                        GameSpeedRules.StandardTurn(state != null ? state.Config : null,
+                            state != null ? state.TurnNumber : 0)) / 3;
                     player.CultureStored += 20;
                     player.TotalCulture += 20;
                     break;

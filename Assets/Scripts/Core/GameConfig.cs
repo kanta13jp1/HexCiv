@@ -17,6 +17,11 @@ namespace HexCiv.Core
         /// <summary>難易度(2026-07-20 追加)。0=やさしい 1=普通(既定) 2=むずかしい。
         /// AIへの補正テーブルは DifficultyRules 参照。普通は補正なしで従来と完全に同一挙動。</summary>
         public int Difficulty = 1;
+        /// <summary>ゲーム長(2026-07-23 追加)。0=標準(250ターン・既定) 1=短期(100ターン)。
+        /// 換算規則は GameSpeedRules 参照。0 では全ての換算が恒等写像になり従来と完全に同一挙動。
+        /// MaxTurns はこのフィールドから自動更新されない(新規ゲーム開始時にブートストラップが
+        /// GameSpeedRules.MaxTurnsFor で設定する)。既定値250はスモークテストの基準として不変。</summary>
+        public int GameLength = 0;
 
         public static readonly string[] CivNames = { "アテネ", "ローマ", "エジプト", "バビロン" };
 

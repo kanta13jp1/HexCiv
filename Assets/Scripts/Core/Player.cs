@@ -110,6 +110,13 @@ namespace HexCiv.Core
         /// </summary>
         public Dictionary<int, int> WarStartTurns = new Dictionary<int, int>();
 
+        /// <summary>
+        /// 短期ゲーム(GameLength≠0)専用のAI開戦圧力(%の累積。2026-07-23 追加)。
+        /// 標準モードでは一切参照されず、値も動かない。AIの内部状態でありセーブには含めない
+        /// (ロード直後は0から再蓄積する。宣戦条件が続いていれば数ターンで復帰する)。
+        /// </summary>
+        public int AiWarPressure;
+
         public bool IsAtWarWith(int playerId) => AtWarWith.Contains(playerId);
 
         /// <summary>宣戦布告(相互)。開戦ターンを両者に記録する。</summary>
@@ -165,7 +172,10 @@ namespace HexCiv.Core
             total = CultureSystem.ScaleScience(this, total);
             total = AdministrationSystem.ScaleOutput(this, total);
             // AI文明は難易度に応じて科学産出を補正(普通=100%で無変換。2026-07-20 追加)
-            return DifficultyRules.ScaleForAI(s, this, total, DifficultyRules.AISciencePercent);
+            total = DifficultyRules.ScaleForAI(s, this, total, DifficultyRules.AISciencePercent);
+            // 短期ゲームは毎ターン産出を2.5倍にする(標準では恒等。2026-07-23 追加)。
+            // 技術コスト表は据え置くため、100ターンでの累計科学は標準250ターンとほぼ同じになる。
+            return GameSpeedRules.ScaleOutput(s != null ? s.Config : null, total);
         }
 
         /// <summary>研究可能な技術(前提を満たし、未習得)。</summary>

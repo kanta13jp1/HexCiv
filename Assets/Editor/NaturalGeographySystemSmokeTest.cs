@@ -20,7 +20,7 @@ public static class NaturalGeographySystemSmokeTest
             ValidateCatalog();
             GameState state = ValidateGenerationAndDeterminism();
             ValidateYieldsAndEffects(state);
-            ValidateSaveVersion16AndMigration(state);
+            ValidateSaveVersion17AndMigration(state);
             Debug.Log("NATURAL GEOGRAPHY SYSTEM SMOKE OK");
             EditorApplication.Exit(0);
         }
@@ -172,12 +172,12 @@ public static class NaturalGeographySystemSmokeTest
         return state;
     }
 
-    static void ValidateSaveVersion16AndMigration(GameState state)
+    static void ValidateSaveVersion17AndMigration(GameState state)
     {
         string json1 = SaveLoad.Serialize(state);
-        if (!json1.Contains("\"version\":16") || !json1.Contains("\"hasRiver\":") ||
+        if (!json1.Contains("\"version\":17") || !json1.Contains("\"hasRiver\":") ||
             !json1.Contains("\"riverOutflowDirection\":") || !json1.Contains("\"hasFloodplain\":"))
-            throw new Exception("セーブv16の河川・流向・氾濫原配列がない");
+            throw new Exception("セーブv17の河川・流向・氾濫原配列がない");
         GameState restored = SaveLoad.Deserialize(json1);
         string json2 = SaveLoad.Serialize(restored);
         string json3 = SaveLoad.Serialize(SaveLoad.Deserialize(json2));

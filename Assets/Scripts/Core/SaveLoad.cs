@@ -10,7 +10,7 @@ namespace HexCiv.Core
     // Serialize(Deserialize(json)) == json が成立する(スモークテストで検証)。
     // ======================================================================
 
-    /// <summary>セーブファイル全体(バージョン16)。</summary>
+    /// <summary>セーブファイル全体(バージョン17)。</summary>
     [Serializable]
     public class SaveData
     {
@@ -37,6 +37,10 @@ namespace HexCiv.Core
         /// 旧セーブはこのフィールドを持たず、JsonUtility が既定コンストラクタ値を保つため
         /// フィールド初期化子 1(普通=補正なし)がそのまま使われる。</summary>
         public int difficulty = 1;
+        /// <summary>ゲーム長(バージョン17追加。0=標準250ターン/1=短期100ターン)。
+        /// バージョン16以前のセーブはこのフィールドを持たず、JsonUtility が既定値を保つため
+        /// フィールド初期化子 0(標準=換算なし)がそのまま使われる。</summary>
+        public int gameLength;
 
         // ---- GameState ----
         public int turnNumber;
@@ -216,17 +220,37 @@ namespace HexCiv.Core
         // 10: 国庫・税制・安定度・戦争疲弊追加 / 11: ユニット補給状態・孤立ターン追加 /
         // 12: 社会重点・人口階層・需要・教育・満足度・移住追加 / 13: 政治・法律追加 /
         // 14: 市場方針・5財・価格・交易実績・地域産業追加 / 15: 河川タイル追加 /
-        // 16: 河川流向・氾濫原追加。
+        // 16: 河川流向・氾濫原追加 / 17: ゲーム長(GameLength、短期100ターンプリセット)追加。
         // 旧バージョンのセーブも FromData で読み込める(欠落フィールドは既定値になる)。
-        public const int CurrentVersion = 16;
+        // バージョン16以前のセーブは gameLength を持たないため常に 0(標準250ターン)になる。
+        public const int CurrentVersion = 17;
 
         // ================= 公開API =================
 
-        /// <summary>状態をJSON文字列に直列化する(決定的:同一状態からは常に同一文字列)。</summary>
+        /// <summary>
+        /// 標準モードのJSONから取り除く、ゲーム長フィールドの既定値表現。
+        /// JsonUtility は public フィールドを条件付きで省略できないため、直列化後に除去する。
+        /// </summary>
+        const string StandardGameLengthToken = ",\"gameLength\":0";
+
+        /// <summary>
+        /// 状態をJSON文字列に直列化する(決定的:同一状態からは常に同一文字列)。
+        ///
+        /// 標準モード(GameLength=0)では追加フィールド gameLength を出力しない。
+        /// 欠落時の復元値は 0(標準)であり意味は同じで、標準モードのセーブは
+        /// バージョン16以前とバイト単位で同一のままになる(短期プリセット追加による無回帰の保証)。
+        /// </summary>
         public static string Serialize(GameState s)
         {
             if (s == null) throw new ArgumentNullException(nameof(s));
-            return JsonUtility.ToJson(ToData(s));
+            var data = ToData(s);
+            string json = JsonUtility.ToJson(data);
+            if (data.gameLength == 0)
+            {
+                int at = json.IndexOf(StandardGameLengthToken, StringComparison.Ordinal);
+                if (at >= 0) json = json.Remove(at, StandardGameLengthToken.Length);
+            }
+            return json;
         }
 
         /// <summary>JSON文字列から状態を完全再構築する。不正なデータは例外を投げる。</summary>
@@ -319,6 +343,7 @@ namespace HexCiv.Core
                 humanPlayerIndex = s.Config != null ? s.Config.HumanPlayerIndex : -1,
                 mapType = s.Config != null ? s.Config.MapType : 0,
                 difficulty = s.Config != null ? s.Config.Difficulty : 1,
+                gameLength = s.Config != null ? s.Config.GameLength : 0,
                 turnNumber = s.TurnNumber,
                 isGameOver = s.IsGameOver,
                 gameOverMessageJa = s.GameOverMessageJa ?? "",
@@ -564,6 +589,10 @@ namespace HexCiv.Core
                 // ここでは丸めず素通しする(Serialize(Deserialize(json))==json の不変条件を守る。
                 // 範囲外の値は DifficultyRules 側が使用時に 0..2 へ丸めるため無害)
                 Difficulty = d.difficulty,
+                // バージョン16以前のセーブは gameLength を持たない → 既定値 0(標準250ターン)。
+                // ここでも丸めず素通しする(Serialize(Deserialize(json))==json の不変条件を守る。
+                // GameSpeedRules 側が 0 以外をすべて短期として扱うため無害)
+                GameLength = d.gameLength,
             };
 
             var s = new GameState

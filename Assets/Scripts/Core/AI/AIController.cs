@@ -12,6 +12,15 @@ namespace HexCiv.Core.AI
     public class AIController : IAIController
     {
         // ---- 調整用定数 ----
+        // ターン系の定数はすべて「標準250ターン基準」の値。実際の判定では
+        // GameSpeedRules.ScaleTurn を通すため、短期100ターンでは 0.4倍になる
+        // (EarlyMonumentTurn 40→16、WarMinTurn 25→10、
+        //  PeaceStalemateMinTurns 25→10、PeaceLosingMinTurns 15→6)。
+        // 「%/ターン」の確率定数は GameSpeedRules.ScaleChance を通すため 2.5倍になる
+        // (WarProximityChance 12→30、WarFrictionChance 6→15、WarOpportunismChance 8→20、
+        //  PeaceStalemateChance 15→38、PeaceLosingChance 25→63)。ターン数が0.4倍でも
+        // ゲーム全体での宣戦・和平の期待回数を標準と揃えるための換算。
+        // 標準モードでは ScaleTurn / ScaleChance が恒等写像なので従来と完全に同一の挙動になる。
         const int EarlyMonumentTurn = 40;     // このターンまでは記念碑を優先
         const int WarMinTurn = 25;            // これ以前は宣戦しない
         const int WarProximityDistance = 8;   // 近接とみなす自都市〜既知の敵都市/敵兵の距離
@@ -118,7 +127,8 @@ namespace HexCiv.Core.AI
             }
 
             // 1) 序盤は記念碑(未建設なら)
-            if (pick == null && s.TurnNumber <= EarlyMonumentTurn && !city.Buildings.Contains("monument"))
+            if (pick == null && s.TurnNumber <= GameSpeedRules.ScaleTurn(s.Config, EarlyMonumentTurn) &&
+                !city.Buildings.Contains("monument"))
                 pick = FindItem(avail, ProductionKind.Building, "monument");
 
             // 2) 開拓者:都市4未満・生存開拓者なし・平時
@@ -309,11 +319,14 @@ namespace HexCiv.Core.AI
                 if (!p.WarStartTurns.TryGetValue(rival.Id, out start)) start = s.TurnNumber;
                 int duration = s.TurnNumber - start;
                 int theirPower = rival.MilitaryPower();
+                // 短期ゲームでは戦争継続ターンのしきい値も 0.4倍にする(標準では恒等。2026-07-23 追加)
+                int losingMinTurns = GameSpeedRules.ScaleTurn(s.Config, PeaceLosingMinTurns);
+                int stalemateMinTurns = GameSpeedRules.ScaleTurn(s.Config, PeaceStalemateMinTurns);
 
                 // 劣勢:大敗が続くなら和平を嘆願する(自動成立。人間相手にも適用)
-                if (duration >= PeaceLosingMinTurns && myPower < PeaceLosingPowerRatio * theirPower)
+                if (duration >= losingMinTurns && myPower < PeaceLosingPowerRatio * theirPower)
                 {
-                    if (s.Rng.Next(100) < PeaceLosingChance)
+                    if (s.Rng.Next(100) < GameSpeedRules.ScaleChance(s.Config, PeaceLosingChance))
                     {
                         s.EmitLog($"「{p.NameJa}」が「{rival.NameJa}」に和平を嘆願した");
                         p.MakePeaceWith(s, rival);
@@ -323,11 +336,11 @@ namespace HexCiv.Core.AI
                 }
 
                 // 膠着:長期戦かつ戦力拮抗なら和平する(小さいId側だけが判定)
-                if (p.Id < rival.Id && duration >= PeaceStalemateMinTurns &&
+                if (p.Id < rival.Id && duration >= stalemateMinTurns &&
                     myPower >= PeaceStalemateRatioLow * theirPower &&
                     myPower <= PeaceStalemateRatioHigh * theirPower)
                 {
-                    if (s.Rng.Next(100) < PeaceStalemateChance)
+                    if (s.Rng.Next(100) < GameSpeedRules.ScaleChance(s.Config, PeaceStalemateChance))
                     {
                         p.MakePeaceWith(s, rival);
                         made = true;
@@ -345,10 +358,14 @@ namespace HexCiv.Core.AI
         /// ・近接: 自都市が既知の敵都市/敵兵から8タイル以内 かつ 軍事力1.15倍超 → +12
         /// ・国境摩擦: 既知の敵都市が自首都から5タイル以内 かつ 軍事力0.95倍超 → +6
         /// ・便乗: 相手が既知の最弱文明 かつ 都市数が自分未満 かつ 自軍事ユニット数 > 自都市数+2 → +8
+        ///
+        /// 短期ゲーム(GameLength≠0)では確率を2.5倍にしたうえで、乱数判定ではなく
+        /// Player.AiWarPressure への累積で判定する(期待待ちターン数は同じ、結果は決定的)。
+        /// 標準モードの経路と乱数消費は一切変更していない。
         /// </summary>
         void ConsiderWarDeclarations(GameState s, Player p)
         {
-            if (s.TurnNumber < WarMinTurn) return;
+            if (s.TurnNumber < GameSpeedRules.ScaleTurn(s.Config, WarMinTurn)) return;
             if (p.Cities.Count == 0) return;
             if (AnyActiveWar(s, p)) return;   // 交戦中は新たな宣戦をしない(多方面戦争による自滅の回避)
 
@@ -367,20 +384,38 @@ namespace HexCiv.Core.AI
 
                 // 近接:自都市が既知の敵都市/敵兵の8タイル以内 かつ 軍事力が1.15倍超
                 if (myPower > WarProximityPowerRatio * theirPower && HasRivalProximity(p, rival))
-                    chance += WarProximityChance;
+                    chance += GameSpeedRules.ScaleChance(s.Config, WarProximityChance);
 
                 // 国境摩擦:既知の敵都市が自首都の5タイル以内 かつ 軍事力が0.95倍超
                 if (capital != null && myPower > WarFrictionPowerRatio * theirPower &&
                     HasCapitalFriction(p, rival, capital))
-                    chance += WarFrictionChance;
+                    chance += GameSpeedRules.ScaleChance(s.Config, WarFrictionChance);
 
                 // 便乗:相手が既知の最弱文明で、都市数が自分より少なく、自軍に余剰兵力がある
                 if (rival == weakest && rival.Cities.Count < p.Cities.Count &&
                     myMilitary > p.Cities.Count + 2)
-                    chance += WarOpportunismChance;
+                    chance += GameSpeedRules.ScaleChance(s.Config, WarOpportunismChance);
 
-                if (chance > 0 && s.Rng.Next(100) < chance)
+                if (chance <= 0) continue;
+
+                // 標準モード: 従来どおり毎ターンの確率判定(乱数の消費位置も含めて不変)。
+                // 短期モード: 判定機会そのものが少ない(接触の成立が移動速度律速で圧縮できない)ため、
+                //   確率の裾を引くと100ターン通して戦争が一度も起きない盤面が出る。
+                //   期待待ちターン数(100/chance)は保ったまま、確率を蓄積して100%到達で宣戦する。
+                bool declare;
+                if (GameSpeedRules.IsCompressed(s.Config))
                 {
+                    p.AiWarPressure += chance;
+                    declare = p.AiWarPressure >= 100;
+                }
+                else
+                {
+                    declare = s.Rng.Next(100) < chance;
+                }
+
+                if (declare)
+                {
+                    p.AiWarPressure = 0;
                     p.DeclareWarOn(s, rival);
                     return;   // 宣戦は1ターン1件まで(以降は交戦中となり冒頭のガードで弾かれる)
                 }

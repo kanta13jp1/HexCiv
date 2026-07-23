@@ -149,9 +149,22 @@ namespace HexCiv.UI
         /// <summary>難易度設定の PlayerPrefs キー(0=やさしい,1=普通,2=むずかしい。2026-07-20 追加)。
         /// キーと値の規約は GameBootstrap.CreateConfigFromSettings と同一に保つこと。</summary>
         const string DifficultyKey = "HexCiv.Difficulty";
+        /// <summary>ゲーム長設定の PlayerPrefs キー(0=標準250ターン,1=短期100ターン。2026-07-23 追加)。
+        /// キーと値の規約は GameBootstrap.CreateConfigFromSettings と同一に保つこと。
+        /// 未設定(新規インストール)の既定は短期(1) — 1ゲームを一度の着席で終えられることを
+        /// 優先した製品判断で、GameBootstrap 側の既定値と一致させる。</summary>
+        const string GameLengthKey = "HexCiv.GameLength";
         static readonly string[] MapSizeLabelsJa = { "小 (40×24)", "標準 (44×26)", "大 (56×34)" };
         static readonly string[] MapTypeLabelsJa = { "大陸", "パンゲア", "群島" };
         static readonly string[] DifficultyLabelsJa = { "やさしい", "普通", "むずかしい" };
+        /// <summary>ゲーム長の選択肢ラベル(index = GameConfig.GameLength)。</summary>
+        static readonly string[] GameLengthLabelsJa = { "標準(250ターン)", "短期(100ターン・約30〜50分)" };
+        /// <summary>ゲーム長の選択中サマリー(index = GameConfig.GameLength)。</summary>
+        static readonly string[] GameLengthNotesJa =
+        {
+            "じっくり遊ぶ従来の長さ",
+            "歴史圧縮で最後まで遊べる長さ",
+        };
         static readonly int[] NumPlayersChoices = { 2, 3, 4, 6, 8 };
         GameObject settingsPanel;
         Button settingsButton;
@@ -159,6 +172,10 @@ namespace HexCiv.UI
         readonly Button[] mapTypeButtons = new Button[3];
         readonly Button[] difficultyButtons = new Button[3];
         readonly Button[] numPlayersButtons = new Button[5];
+        /// <summary>ゲーム長の選択ボタン(0=標準/1=短期。2026-07-23 追加)。</summary>
+        readonly Button[] gameLengthButtons = new Button[2];
+        /// <summary>ゲーム長の選択中表示(他の設定行と同じくパネル内で現在値が読めるようにする)。</summary>
+        Text gameLengthNoteText;
         InputField seedInput;
 
         // ---- 演出モード(2026-07-22 Claude Code 追加) ----
@@ -172,6 +189,8 @@ namespace HexCiv.UI
         int settingsMapType = 0;
         int settingsDifficulty = 1;
         int settingsNumPlayers = 4;
+        /// <summary>ゲーム長の選択(0=標準/1=短期)。新規インストールの初期選択は短期(1)。</summary>
+        int settingsGameLength = GameSpeedRules.ShortLength;
 
         /// <summary>ゲーム設定画面の開始ボタンのコールバック。シード(0=ランダム)を受け取り、
         /// PlayerPrefs に保存済みのマップサイズ・文明数で新しいゲームを開始する(GameBootstrap が配線)。</summary>
@@ -219,6 +238,12 @@ namespace HexCiv.UI
         int eraShownIndex = -1;
         /// <summary>時代名(閾値は GameAudio のBGM3楽章と同じ: ターン1〜100/101〜180/181〜)。</summary>
         static readonly string[] EraNamesJa = { "古代", "中世", "近代" };
+        /// <summary>時代境界の「標準(250ターン)基準」のターン数(2026-07-23 Claude Code 追加)。
+        /// 実際の境界は GameSpeedRules.ScaleTurn でゲーム長へ換算する(短期100ターンでは 40 / 72)。
+        /// 標準モード(GameLength==0)では恒等写像のため従来と完全に同一。GameAudio の
+        /// EraBTurnThreshold / EraCTurnThreshold と同じ値を保つこと(BGM3楽章と時代表示を同期させる)。</summary>
+        const int EraMedievalStandardTurn = 100;
+        const int EraModernStandardTurn = 180;
         /// <summary>時代色(古代=ブロンズ/中世=シルバー/近代=ゴールド)。</summary>
         static readonly Color[] EraTints =
         {
@@ -274,8 +299,15 @@ namespace HexCiv.UI
         /// 減税を勧告する条件(`player.Stability &lt;= 25`)と同じ値を参照して用いる(表示・警告専用)。
         /// </summary>
         const int LowStabilityThreshold = 25;
-        /// <summary>同種の警告を再通知するまでの最短ターン数(長期戦での連呼を防ぐ)。</summary>
+        /// <summary>同種の警告を再通知するまでの最短ターン数(長期戦での連呼を防ぐ)。
+        /// 標準(250ターン)基準の値。実際の間隔は WarningCooldown で現在のゲーム長へ換算する。</summary>
         const int WarningCooldownTurns = 12;
+        /// <summary>現在のゲーム長へ換算した警告の再通知間隔(標準=12ターン、短期=5ターン。
+        /// 2026-07-23 Claude Code 追加)。短期では1ターンの重みが増すため、体感の間隔を標準へ揃える。
+        /// state / Config が null(構築直後・ヘッドレス)でも ScaleTurn は恒等写像で安全。
+        /// 標準モード(GameLength==0)では従来と完全に同じ 12 になる。</summary>
+        int WarningCooldown =>
+            GameSpeedRules.ScaleTurn(state != null ? state.Config : null, WarningCooldownTurns);
         /// <summary>各警告の「発生中」ラッチ(条件が解消されるまで再発火しない=エッジ検出)。</summary>
         bool warnDeficitLatched;
         bool warnStabilityLatched;
@@ -944,7 +976,9 @@ namespace HexCiv.UI
             // 高さは「シミュレーション観戦で開始」ボタン追加分(+40)と
             // 「マップ種別」行(+76)・「難易度」行(+76)の追加分を含む(2026-07-20 Claude Code 変更)。
             // さらに「画面表示(フルスクリーン)」行の追加分(+60)を含む(2026-07-21 Claude Code 変更)。
-            // 「演出」行の追加で 664→700(基準解像度720の上下に10px余白。2026-07-22 Claude Code 変更)
+            // 「演出」行の追加で 664→700(基準解像度720の上下に10px余白。2026-07-22 Claude Code 変更)。
+            // 「ゲームの長さ」行(2026-07-23 Claude Code 追加)は高さを700のまま維持するため、
+            // 下3行(シード・画面表示・演出)の行間を詰め、演出トグルを画面表示行へ同居させて吸収した
             settingsPanel = UIStyle.CreatePanel(canvas.transform, "GameSettingsPanel",
                 new Color(0.07f, 0.09f, 0.13f, 0.98f));
             UIStyle.SetRect(settingsPanel, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
@@ -1029,52 +1063,75 @@ namespace HexCiv.UI
                 difficultyButtons[i] = b;
             }
 
+            // ゲームの長さ(標準250ターン/短期100ターン)の選択行(2026-07-23 Claude Code 追加)。
+            // 短期は「歴史圧縮」— 同じ密度の歴史を40%の手数で展開するため、一度の着席で最後まで
+            // 遊べる。値は PlayerPrefs "HexCiv.GameLength" へ保存し、GameBootstrap が新規ゲームの
+            // GameConfig.GameLength と MaxTurns(GameSpeedRules.MaxTurnsFor)へ反映する。
+            var gameLengthHeader = UIStyle.CreateText(settingsPanel.transform, "GameLengthHeader",
+                "ゲームの長さ", 15, TextAnchor.MiddleLeft, UIStyle.TextMain);
+            UIStyle.SetRect(gameLengthHeader.gameObject, new Vector2(0f, 1f), new Vector2(0f, 1f),
+                new Vector2(0f, 1f), new Vector2(24f, -386f), new Vector2(150f, 22f));
+
+            // 選択中のゲーム長をパネル内に表示する(他の設定行の強調表示に加えて文字でも読める)
+            gameLengthNoteText = UIStyle.CreateText(settingsPanel.transform, "GameLengthNote",
+                "", 12, TextAnchor.MiddleLeft, UIStyle.TextDim);
+            UIStyle.SetRect(gameLengthNoteText.gameObject, new Vector2(0f, 1f), new Vector2(0f, 1f),
+                new Vector2(0f, 1f), new Vector2(178f, -386f), new Vector2(358f, 22f));
+
+            for (int i = 0; i < gameLengthButtons.Length; i++)
+            {
+                int index = i;   // ラムダ用にローカルへ束縛
+                var b = UIStyle.CreateButton(settingsPanel.transform, "GameLength" + i,
+                    GameLengthLabelsJa[i], 13, () => OnGameLengthClicked(index));
+                UIStyle.SetRect(b.gameObject, new Vector2(0f, 1f), new Vector2(0f, 1f),
+                    new Vector2(0f, 1f), new Vector2(24f + i * 262f, -412f), new Vector2(250f, 34f));
+                gameLengthButtons[i] = b;
+            }
+
+            // 以下3行(シード・画面表示・演出)は「ゲームの長さ」行の挿入に合わせて上へ詰めた
+            // (2026-07-23 Claude Code)。パネル高さ700は変えず、演出トグルは画面表示行へ同居させた。
             var seedHeader = UIStyle.CreateText(settingsPanel.transform, "SeedHeader",
                 "シード値", 15, TextAnchor.MiddleLeft, UIStyle.TextMain);
             UIStyle.SetRect(seedHeader.gameObject, new Vector2(0f, 1f), new Vector2(0f, 1f),
-                new Vector2(0f, 1f), new Vector2(24f, -386f), new Vector2(240f, 22f));
+                new Vector2(0f, 1f), new Vector2(24f, -456f), new Vector2(240f, 22f));
 
             seedInput = CreateSeedInput(settingsPanel.transform);
             UIStyle.SetRect(seedInput.gameObject, new Vector2(0f, 1f), new Vector2(0f, 1f),
-                new Vector2(0f, 1f), new Vector2(24f, -412f), new Vector2(200f, 34f));
+                new Vector2(0f, 1f), new Vector2(24f, -478f), new Vector2(200f, 34f));
 
             var seedNote = UIStyle.CreateText(settingsPanel.transform, "SeedNote",
                 "空欄 = ランダム(同じシードは同じマップ)", 13, TextAnchor.MiddleLeft, UIStyle.TextDim);
             UIStyle.SetRect(seedNote.gameObject, new Vector2(0f, 1f), new Vector2(0f, 1f),
-                new Vector2(0f, 1f), new Vector2(236f, -418f), new Vector2(300f, 22f));
+                new Vector2(0f, 1f), new Vector2(236f, -484f), new Vector2(300f, 22f));
 
             // 画面表示(フルスクリーン)行(2026-07-21 Claude Code 追加)。実切替・保存は
             // GameBootstrap(OnFullscreenToggled)が行い、ラベルは SetFullscreenState で更新される
             var displayHeader = UIStyle.CreateText(settingsPanel.transform, "DisplayHeader",
-                "画面表示", 15, TextAnchor.MiddleLeft, UIStyle.TextMain);
+                "画面表示・演出", 15, TextAnchor.MiddleLeft, UIStyle.TextMain);
             UIStyle.SetRect(displayHeader.gameObject, new Vector2(0f, 1f), new Vector2(0f, 1f),
-                new Vector2(0f, 1f), new Vector2(24f, -462f), new Vector2(240f, 22f));
+                new Vector2(0f, 1f), new Vector2(24f, -522f), new Vector2(150f, 22f));
+
+            var displayNote = UIStyle.CreateText(settingsPanel.transform, "DisplayNote",
+                "F11でも切替 / 軽量は雲影・水面・揺れ・数字を省略", 12,
+                TextAnchor.MiddleLeft, UIStyle.TextDim);
+            UIStyle.SetRect(displayNote.gameObject, new Vector2(0f, 1f), new Vector2(0f, 1f),
+                new Vector2(0f, 1f), new Vector2(178f, -522f), new Vector2(358f, 22f));
 
             fullscreenButton = UIStyle.CreateButton(settingsPanel.transform, "FullscreenToggle",
                 "フルスクリーン: OFF", 14, () => OnFullscreenToggled?.Invoke());
             UIStyle.SetRect(fullscreenButton.gameObject, new Vector2(0f, 1f), new Vector2(0f, 1f),
-                new Vector2(0f, 1f), new Vector2(24f, -488f), new Vector2(220f, 34f));
+                new Vector2(0f, 1f), new Vector2(24f, -544f), new Vector2(220f, 34f));
             fullscreenLabel = UIStyle.ButtonLabel(fullscreenButton);
-
-            var fullscreenNote = UIStyle.CreateText(settingsPanel.transform, "FullscreenNote",
-                "F11キーでも切り替えできます", 13, TextAnchor.MiddleLeft, UIStyle.TextDim);
-            UIStyle.SetRect(fullscreenNote.gameObject, new Vector2(0f, 1f), new Vector2(0f, 1f),
-                new Vector2(0f, 1f), new Vector2(256f, -494f), new Vector2(280f, 22f));
 
             SetFullscreenState(fullscreenOn);   // 再Init(リスタート等)後もラベルを現在状態へ復元
 
-            // 演出モード(標準/軽量)行(2026-07-22 Claude Code 追加)。値は PlayerPrefs "HexCiv.FxLight" に
+            // 演出モード(標準/軽量)トグル(2026-07-22 Claude Code 追加)。値は PlayerPrefs "HexCiv.FxLight" に
             // 保存し、各レンダラーが Rendering/VisualQuality 経由で参照する(表示のみ・シミュレーション不変)
             fxQualityButton = UIStyle.CreateButton(settingsPanel.transform, "FxQualityToggle",
                 "演出: 標準", 14, OnFxQualityClicked);
             UIStyle.SetRect(fxQualityButton.gameObject, new Vector2(0f, 1f), new Vector2(0f, 1f),
-                new Vector2(0f, 1f), new Vector2(24f, -530f), new Vector2(220f, 34f));
+                new Vector2(0f, 1f), new Vector2(256f, -544f), new Vector2(220f, 34f));
             fxQualityLabel = UIStyle.ButtonLabel(fxQualityButton);
-
-            var fxNote = UIStyle.CreateText(settingsPanel.transform, "FxQualityNote",
-                "軽量: 雲影・水面・待機揺れ・ダメージ数字を省略", 13, TextAnchor.MiddleLeft, UIStyle.TextDim);
-            UIStyle.SetRect(fxNote.gameObject, new Vector2(0f, 1f), new Vector2(0f, 1f),
-                new Vector2(0f, 1f), new Vector2(256f, -536f), new Vector2(296f, 22f));
 
             RefreshFxQualityLabel();   // 再Init後もラベルを保存値へ復元
 
@@ -1084,7 +1141,7 @@ namespace HexCiv.UI
                 new Vector2(0.5f, 0f), new Vector2(0f, 18f), new Vector2(500f, 46f));
 
             // シミュレーション観戦(全文明AI・自動進行)での開始(2026-07-20 Claude Code 追加)。
-            // 通常開始ボタンの一段上に置く(シード行 -446 との間に余白あり)
+            // 通常開始ボタンの一段上に置く(最下段の設定行 -578 との間に余白あり)
             var simStart = UIStyle.CreateButton(settingsPanel.transform, "SimulationStartButton",
                 "シミュレーション観戦で開始(全文明AI・自動進行)", 14, OnStartSimulationClicked);
             UIStyle.SetRect(simStart.gameObject, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f),
@@ -1201,7 +1258,7 @@ namespace HexCiv.UI
         /// <summary>
         /// 時代インジケーター。トップバー二段目の空き(通常: ログ約38%幅の右 x614〜700、
         /// 観戦: 観戦バー x340〜940 を避けた左端 x12〜98)に、現在の時代
-        /// (ターン1〜100=古代/101〜180=中世/181〜=近代 — GameAudio のBGM3楽章と同じ閾値)を
+        /// (標準: ターン1〜100=古代/101〜180=中世/181〜=近代、短期は40/72が境界 — GameAudio のBGM3楽章と同じ閾値)を
         /// 小アイコン+ラベルで表示する。表示専用(raycast無効)でクリックを一切遮らず、
         /// シミュレーションには影響しない。更新はターン変化時(RefreshTopBar 経由)のみ。
         /// </summary>
@@ -1237,7 +1294,12 @@ namespace HexCiv.UI
         void RefreshEraIndicator()
         {
             if (eraLabelText == null || eraIconImage == null || state == null) return;
-            int era = state.TurnNumber <= 100 ? 0 : (state.TurnNumber <= 180 ? 1 : 2);
+            // 境界はゲーム長へ換算する(標準=100/180、短期=40/72。2026-07-23 Claude Code 追加)。
+            // 標準モードでは ScaleTurn が恒等写像のため、比較値も判定順序も従来と同一。
+            var speedConfig = state.Config;
+            int medievalTurn = GameSpeedRules.ScaleTurn(speedConfig, EraMedievalStandardTurn);
+            int modernTurn = GameSpeedRules.ScaleTurn(speedConfig, EraModernStandardTurn);
+            int era = state.TurnNumber <= medievalTurn ? 0 : (state.TurnNumber <= modernTurn ? 1 : 2);
             if (era == eraShownIndex) return;
             int prev = eraShownIndex;
             eraShownIndex = era;
@@ -1598,7 +1660,7 @@ namespace HexCiv.UI
             else if (!warnDeficitLatched)
             {
                 warnDeficitLatched = true;
-                if (turn - lastDeficitWarnTurn >= WarningCooldownTurns)
+                if (turn - lastDeficitWarnTurn >= WarningCooldown)
                 {
                     lastDeficitWarnTurn = turn;
                     ShowAdministrationWarning("⚠ 国庫が赤字になった");
@@ -1611,7 +1673,7 @@ namespace HexCiv.UI
             else if (!warnStabilityLatched)
             {
                 warnStabilityLatched = true;
-                if (turn - lastStabilityWarnTurn >= WarningCooldownTurns)
+                if (turn - lastStabilityWarnTurn >= WarningCooldown)
                 {
                     lastStabilityWarnTurn = turn;
                     ShowAdministrationWarning("⚠ 国内が不安定になっている");
@@ -1624,7 +1686,7 @@ namespace HexCiv.UI
             else if (!warnIsolationLatched)
             {
                 warnIsolationLatched = true;
-                if (turn - lastIsolationWarnTurn >= WarningCooldownTurns)
+                if (turn - lastIsolationWarnTurn >= WarningCooldown)
                 {
                     lastIsolationWarnTurn = turn;
                     ShowAdministrationWarning("⚠ 部隊が補給から孤立した");
@@ -1641,7 +1703,7 @@ namespace HexCiv.UI
             else if (!warnUnrestLatched)
             {
                 warnUnrestLatched = true;
-                if (turn - lastUnrestWarnTurn >= WarningCooldownTurns)
+                if (turn - lastUnrestWarnTurn >= WarningCooldown)
                 {
                     lastUnrestWarnTurn = turn;
                     ShowUnrestWarning();
@@ -1813,7 +1875,7 @@ namespace HexCiv.UI
             else if (!warnLegitimacyLatched)
             {
                 warnLegitimacyLatched = true;
-                if (turn - lastLegitimacyWarnTurn >= WarningCooldownTurns)
+                if (turn - lastLegitimacyWarnTurn >= WarningCooldown)
                 {
                     lastLegitimacyWarnTurn = turn;
                     ShowAdministrationWarning("⚠ 正統性が揺らいでいる");
@@ -3330,6 +3392,11 @@ namespace HexCiv.UI
             settingsMapSizeIndex = Mathf.Clamp(PlayerPrefs.GetInt(MapSizeKey, 1), 0, mapSizeButtons.Length - 1);
             settingsMapType = Mathf.Clamp(PlayerPrefs.GetInt(MapTypeKey, 0), 0, mapTypeButtons.Length - 1);
             settingsDifficulty = Mathf.Clamp(PlayerPrefs.GetInt(DifficultyKey, 1), 0, difficultyButtons.Length - 1);
+            // ゲーム長の既定は短期(1)。新規インストールでも1ゲームを最後まで遊べる長さから始める
+            // (2026-07-23 Claude Code。GameBootstrap.CreateConfigFromSettings の既定と一致)
+            settingsGameLength = Mathf.Clamp(
+                PlayerPrefs.GetInt(GameLengthKey, GameSpeedRules.ShortLength),
+                0, gameLengthButtons.Length - 1);
             int saved = PlayerPrefs.GetInt(NumPlayersKey, 4);
             settingsNumPlayers = 4;
             for (int i = 0; i < NumPlayersChoices.Length; i++)
@@ -3361,6 +3428,18 @@ namespace HexCiv.UI
         {
             settingsDifficulty = Mathf.Clamp(index, 0, difficultyButtons.Length - 1);
             PlayerPrefs.SetInt(DifficultyKey, settingsDifficulty);
+            PlayerPrefs.Save();
+            RefreshGameSettingsPanel();
+        }
+
+        /// <summary>ゲームの長さ選択(選択と同時に PlayerPrefs へ保存し、以後の新規ゲームに適用)。
+        /// 2026-07-23 Claude Code 追加。0=標準(250ターン)/1=短期(100ターン)。
+        /// 実際の MaxTurns は GameBootstrap が GameSpeedRules.MaxTurnsFor で決める。
+        /// 進行中のゲームには影響しない(他の設定行と同じく次の新規ゲームから有効)。</summary>
+        void OnGameLengthClicked(int index)
+        {
+            settingsGameLength = Mathf.Clamp(index, 0, gameLengthButtons.Length - 1);
+            PlayerPrefs.SetInt(GameLengthKey, settingsGameLength);
             PlayerPrefs.Save();
             RefreshGameSettingsPanel();
         }
@@ -3410,6 +3489,15 @@ namespace HexCiv.UI
                 SetChoiceHighlight(difficultyButtons[i], i == settingsDifficulty);
             for (int i = 0; i < numPlayersButtons.Length; i++)
                 SetChoiceHighlight(numPlayersButtons[i], NumPlayersChoices[i] == settingsNumPlayers);
+            // ゲームの長さ(2026-07-23 Claude Code 追加)。強調表示に加え、選択中の内容を文字でも示す
+            for (int i = 0; i < gameLengthButtons.Length; i++)
+                SetChoiceHighlight(gameLengthButtons[i], i == settingsGameLength);
+            if (gameLengthNoteText != null)
+            {
+                int lengthIndex = Mathf.Clamp(settingsGameLength, 0, GameLengthNotesJa.Length - 1);
+                gameLengthNoteText.text =
+                    $"選択中: {GameSpeedRules.GameLengthNameJa(lengthIndex)} — {GameLengthNotesJa[lengthIndex]}";
+            }
         }
 
         /// <summary>選択中の選択肢ボタンをアクセント色で強調する(文明一覧の選択表示と同じ方式)。</summary>

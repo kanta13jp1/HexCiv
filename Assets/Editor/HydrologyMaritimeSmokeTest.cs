@@ -171,7 +171,7 @@ public static class HydrologyMaritimeSmokeTest
         landing.RiverOutflowDirection = DirectionIndex(landingCoord, HexCoord.FromOffset(4, 1));
         landing.HasFloodplain = true;
         string json = SaveLoad.Serialize(state);
-        Require(json.Contains("\"version\":16"), "セーブversionが16ではない");
+        Require(json.Contains("\"version\":17"), "セーブversionが17ではない");
         GameState loaded = SaveLoad.Deserialize(json);
         Tile loadedLanding = loaded.Map.Get(landingCoord);
         Require(loadedLanding.HasRiver && loadedLanding.HasFloodplain &&
@@ -181,7 +181,7 @@ public static class HydrologyMaritimeSmokeTest
         // 1回目のロードで正規化される。正規化後の決定性を既存テストと同じ形で検証する。
         string normalized = SaveLoad.Serialize(loaded);
         Require(normalized == SaveLoad.Serialize(SaveLoad.Deserialize(normalized)),
-            "version 16セーブが正規化後に決定的に往復しない");
+            "version 17セーブが正規化後に決定的に往復しない");
     }
 
     static HexMap LandMap(int width, int height)

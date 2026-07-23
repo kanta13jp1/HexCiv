@@ -393,8 +393,12 @@ namespace HexCiv.Core
         {
             if (player == null) return;
             bool first = player.DevelopedMaterialCultures.Count == 0;
-            if (!first && state.TurnNumber % IndustryDevelopmentInterval !=
-                Math.Abs(player.Id * 3) % IndustryDevelopmentInterval) return;
+            // 短期ゲームでは地域産業の発展周期も 0.4倍にする(標準では 8 のまま。2026-07-23 追加)。
+            // 技術が2.5倍で進むため、周期を揃えないと1ゲーム中に発展する生活技術が4割に減る。
+            int interval = GameSpeedRules.ScaleInterval(
+                state != null ? state.Config : null, IndustryDevelopmentInterval);
+            if (!first && state.TurnNumber % interval !=
+                Math.Abs(player.Id * 3) % interval) return;
 
             string region = player.RegionJa;
             if (string.IsNullOrEmpty(region))
