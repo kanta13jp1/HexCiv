@@ -89,6 +89,8 @@ namespace HexCiv.Core
                 candidate.HasHill = false;
                 candidate.HasForest = false;
                 candidate.HasRiver = false;
+                candidate.RiverOutflowDirection = -1;
+                candidate.HasFloodplain = false;
                 candidate.Resource = ResourceType.None;
                 selected.Add(candidate.Coord);
             }
@@ -102,7 +104,12 @@ namespace HexCiv.Core
         public static int GenerateRivers(HexMap map)
         {
             if (map == null) return 0;
-            foreach (Tile tile in map.AllTiles) tile.HasRiver = false;
+            foreach (Tile tile in map.AllTiles)
+            {
+                tile.HasRiver = false;
+                tile.RiverOutflowDirection = -1;
+                tile.HasFloodplain = false;
+            }
 
             var sources = new List<Tile>();
             foreach (Tile tile in map.AllTiles)
@@ -132,6 +139,7 @@ namespace HexCiv.Core
                 riverTiles += added;
                 usedSources.Add(source.Coord);
             }
+            GenerateFloodplains(map);
             return riverTiles;
         }
 
@@ -174,21 +182,192 @@ namespace HexCiv.Core
             }
             if (!found) return 0;
 
-            int added = 0;
+            var path = new List<HexCoord>();
             HexCoord cursor = endpoint;
             while (true)
             {
-                Tile tile = map.Get(cursor);
-                if (tile != null && tile.IsPassable && !tile.HasRiver)
-                {
-                    tile.HasRiver = true;
-                    added++;
-                }
+                path.Add(cursor);
                 HexCoord parent;
                 if (!previous.TryGetValue(cursor, out parent)) break;
                 cursor = parent;
             }
+            path.Reverse();
+
+            int added = 0;
+            for (int i = 0; i < path.Count; i++)
+            {
+                Tile tile = map.Get(path[i]);
+                if (tile == null || !tile.IsPassable) continue;
+                bool joinedExistingRiver = tile.HasRiver;
+                if (!joinedExistingRiver)
+                {
+                    tile.HasRiver = true;
+                    added++;
+                }
+
+                // 既存河川へ合流した末端は、その河川が既に持つ流向を保つ。
+                if (joinedExistingRiver && i == path.Count - 1) continue;
+                if (i + 1 < path.Count)
+                    tile.RiverOutflowDirection = DirectionIndex(path[i], path[i + 1]);
+                else
+                    tile.RiverOutflowDirection = DirectionToFirstWater(map, tile.Coord);
+            }
             return added;
+        }
+
+        /// <summary>
+        /// version 15以前の保存データなど、河道だけがある地図へ決定的な流向と氾濫原を補う。
+        /// 河口から河川グラフを逆向きに幅優先探索し、各タイルを一つ下流の隣接タイルへ向ける。
+        /// </summary>
+        public static void RebuildRiverMetadata(HexMap map)
+        {
+            if (map == null) return;
+            var distance = new Dictionary<HexCoord, int>();
+            var queue = new Queue<HexCoord>();
+            foreach (Tile tile in map.AllTiles)
+            {
+                tile.RiverOutflowDirection = -1;
+                tile.HasFloodplain = false;
+                if (!tile.HasRiver) continue;
+                int waterDirection = DirectionToFirstWater(map, tile.Coord);
+                if (waterDirection < 0) continue;
+                tile.RiverOutflowDirection = waterDirection;
+                distance[tile.Coord] = 0;
+                queue.Enqueue(tile.Coord);
+            }
+
+            while (queue.Count > 0)
+            {
+                HexCoord current = queue.Dequeue();
+                int nextDistance = distance[current] + 1;
+                var neighbors = SortedNeighbors(map, current);
+                for (int i = 0; i < neighbors.Count; i++)
+                {
+                    Tile neighbor = neighbors[i];
+                    if (!neighbor.HasRiver || distance.ContainsKey(neighbor.Coord)) continue;
+                    distance[neighbor.Coord] = nextDistance;
+                    queue.Enqueue(neighbor.Coord);
+                }
+            }
+
+            foreach (Tile tile in map.AllTiles)
+            {
+                if (!tile.HasRiver || tile.RiverOutflowDirection >= 0) continue;
+                if (!distance.TryGetValue(tile.Coord, out int currentDistance)) continue;
+                var neighbors = SortedNeighbors(map, tile.Coord);
+                for (int i = 0; i < neighbors.Count; i++)
+                {
+                    Tile neighbor = neighbors[i];
+                    if (neighbor.HasRiver && distance.TryGetValue(neighbor.Coord, out int d) &&
+                        d == currentDistance - 1)
+                    {
+                        tile.RiverOutflowDirection = DirectionIndex(tile.Coord, neighbor.Coord);
+                        break;
+                    }
+                }
+            }
+            GenerateFloodplains(map);
+        }
+
+        /// <summary>丘陵・森林を除く平原と砂漠の河道を肥沃な氾濫原として扱う。</summary>
+        public static int GenerateFloodplains(HexMap map)
+        {
+            if (map == null) return 0;
+            int count = 0;
+            foreach (Tile tile in map.AllTiles)
+            {
+                tile.HasFloodplain = tile.HasRiver && !tile.HasHill && !tile.HasForest &&
+                    (tile.Terrain == TerrainType.Plains || tile.Terrain == TerrainType.Desert);
+                if (tile.HasFloodplain) count++;
+            }
+            return count;
+        }
+
+        public static Tile RiverDestination(HexMap map, Tile tile)
+        {
+            if (map == null || tile == null || !tile.HasRiver ||
+                tile.RiverOutflowDirection < 0 || tile.RiverOutflowDirection >= 6) return null;
+            return map.Get(tile.Coord.Neighbor(tile.RiverOutflowDirection));
+        }
+
+        public static bool IsRiverSegment(HexMap map, HexCoord a, HexCoord b)
+        {
+            if (map == null || a.DistanceTo(b) != 1) return false;
+            Tile first = map.Get(a);
+            Tile second = map.Get(b);
+            if (first == null || second == null || !first.HasRiver || !second.HasRiver) return false;
+            Tile firstDownstream = RiverDestination(map, first);
+            Tile secondDownstream = RiverDestination(map, second);
+            return (firstDownstream != null && firstDownstream.Coord == b) ||
+                (secondDownstream != null && secondDownstream.Coord == a);
+        }
+
+        /// <summary>
+        /// 河道タイルへ出入りするが、河川の流路そのものに沿わない一歩を渡河とみなす。
+        /// タイル中心線で河川を表す現在の地図モデルに合わせた抽象化。
+        /// </summary>
+        public static bool CrossesRiver(HexMap map, HexCoord from, HexCoord to)
+        {
+            if (map == null || from.DistanceTo(to) != 1) return false;
+            Tile a = map.Get(from);
+            Tile b = map.Get(to);
+            if (a == null || b == null || (!a.HasRiver && !b.HasRiver)) return false;
+            return !IsRiverSegment(map, from, to);
+        }
+
+        public static int MovementCost(GameState state, Unit unit, HexCoord from, HexCoord to)
+        {
+            Tile destination = state != null && state.Map != null ? state.Map.Get(to) : null;
+            int cost = GameRules.MoveCostInto(destination);
+            if (cost >= GameRules.ImpassableCost || unit == null || state == null) return cost;
+            Player owner = state.GetPlayer(unit.PlayerId);
+            if (CrossesRiver(state.Map, from, to) && (owner == null || !owner.HasTech("construction")))
+                cost += GameRules.RiverCrossingMovePenalty;
+            return cost;
+        }
+
+        public static float RiverCrossingAttackMultiplier(GameState state, Unit attacker, HexCoord target)
+        {
+            if (state == null || attacker == null || attacker.Def.IsRanged) return 1f;
+            Player owner = state.GetPlayer(attacker.PlayerId);
+            return CrossesRiver(state.Map, attacker.Coord, target) &&
+                (owner == null || !owner.HasTech("construction"))
+                ? GameRules.RiverCrossingAttackMultiplier
+                : 1f;
+        }
+
+        public static bool IsWaterfront(HexMap map, HexCoord coord)
+        {
+            if (map == null) return false;
+            foreach (Tile neighbor in map.NeighborsOf(coord))
+                if (neighbor.IsWater) return true;
+            return false;
+        }
+
+        public static Tile FirstAdjacentWater(HexMap map, HexCoord coord)
+        {
+            if (map == null) return null;
+            var neighbors = SortedNeighbors(map, coord);
+            for (int i = 0; i < neighbors.Count; i++)
+                if (neighbors[i].IsWater) return neighbors[i];
+            return null;
+        }
+
+        static int DirectionToFirstWater(HexMap map, HexCoord coord)
+        {
+            for (int direction = 0; direction < 6; direction++)
+            {
+                Tile tile = map.Get(coord.Neighbor(direction));
+                if (tile != null && tile.IsWater) return direction;
+            }
+            return -1;
+        }
+
+        static int DirectionIndex(HexCoord from, HexCoord to)
+        {
+            for (int direction = 0; direction < 6; direction++)
+                if (from.Neighbor(direction) == to) return direction;
+            return -1;
         }
 
         static bool AdjacentToWater(HexMap map, HexCoord coord)
@@ -292,6 +471,7 @@ namespace HexCiv.Core
                 }
                 if (river) bonus += 2;
                 if (water) bonus += 2;
+                if (LogisticsSystem.HasHarbor(player.Cities[i])) bonus += 2;
             }
             return Math.Min(10, bonus);
         }

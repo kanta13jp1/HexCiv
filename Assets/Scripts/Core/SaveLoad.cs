@@ -10,7 +10,7 @@ namespace HexCiv.Core
     // Serialize(Deserialize(json)) == json が成立する(スモークテストで検証)。
     // ======================================================================
 
-    /// <summary>セーブファイル全体(バージョン15)。</summary>
+    /// <summary>セーブファイル全体(バージョン16)。</summary>
     [Serializable]
     public class SaveData
     {
@@ -51,6 +51,8 @@ namespace HexCiv.Core
         public bool[] hasHill;
         public bool[] hasForest;
         public bool[] hasRiver;
+        public int[] riverOutflowDirection;
+        public bool[] hasFloodplain;
         public int[] resource;
         public int[] ownerPlayerId;
         public int[] ownerCityId;
@@ -213,9 +215,10 @@ namespace HexCiv.Core
         // 8: 遺産配置・発見と偉人ポイント・登用追加 / 9: 作品ポイント・収蔵追加 /
         // 10: 国庫・税制・安定度・戦争疲弊追加 / 11: ユニット補給状態・孤立ターン追加 /
         // 12: 社会重点・人口階層・需要・教育・満足度・移住追加 / 13: 政治・法律追加 /
-        // 14: 市場方針・5財・価格・交易実績・地域産業追加 / 15: 河川タイル追加。
+        // 14: 市場方針・5財・価格・交易実績・地域産業追加 / 15: 河川タイル追加 /
+        // 16: 河川流向・氾濫原追加。
         // 旧バージョンのセーブも FromData で読み込める(欠落フィールドは既定値になる)。
-        public const int CurrentVersion = 15;
+        public const int CurrentVersion = 16;
 
         // ================= 公開API =================
 
@@ -330,6 +333,8 @@ namespace HexCiv.Core
             d.hasHill = new bool[n];
             d.hasForest = new bool[n];
             d.hasRiver = new bool[n];
+            d.riverOutflowDirection = new int[n];
+            d.hasFloodplain = new bool[n];
             d.resource = new int[n];
             d.ownerPlayerId = new int[n];
             d.ownerCityId = new int[n];
@@ -343,6 +348,8 @@ namespace HexCiv.Core
                     d.hasHill[idx] = t.HasHill;
                     d.hasForest[idx] = t.HasForest;
                     d.hasRiver[idx] = t.HasRiver;
+                    d.riverOutflowDirection[idx] = t.RiverOutflowDirection;
+                    d.hasFloodplain[idx] = t.HasFloodplain;
                     d.resource[idx] = (int)t.Resource;
                     d.ownerPlayerId[idx] = t.OwnerPlayerId;
                     d.ownerCityId[idx] = t.OwnerCityId;
@@ -533,6 +540,9 @@ namespace HexCiv.Core
                 || d.hasHill == null || d.hasHill.Length != n
                 || d.hasForest == null || d.hasForest.Length != n
                 || (d.version >= 15 && (d.hasRiver == null || d.hasRiver.Length != n))
+                || (d.version >= 16 && (d.riverOutflowDirection == null ||
+                    d.riverOutflowDirection.Length != n || d.hasFloodplain == null ||
+                    d.hasFloodplain.Length != n))
                 || d.resource == null || d.resource.Length != n
                 || d.ownerPlayerId == null || d.ownerPlayerId.Length != n
                 || d.ownerCityId == null || d.ownerCityId.Length != n)
@@ -581,6 +591,12 @@ namespace HexCiv.Core
                     t.HasHill = d.hasHill[idx];
                     t.HasForest = d.hasForest[idx];
                     t.HasRiver = d.version >= 15 && d.hasRiver != null && d.hasRiver[idx];
+                    t.RiverOutflowDirection = d.version >= 16 && d.riverOutflowDirection != null &&
+                        d.riverOutflowDirection[idx] >= -1 && d.riverOutflowDirection[idx] < 6
+                        ? d.riverOutflowDirection[idx]
+                        : -1;
+                    t.HasFloodplain = d.version >= 16 && d.hasFloodplain != null &&
+                        d.hasFloodplain[idx];
                     t.Resource = (ResourceType)d.resource[idx];
                     t.OwnerPlayerId = d.ownerPlayerId[idx];
                     t.OwnerCityId = d.ownerCityId[idx];
@@ -589,6 +605,7 @@ namespace HexCiv.Core
             }
             // version 14以前には河川配列がない。保存済み地形から決定論的に補完する。
             if (d.version <= 14) NaturalGeographySystem.GenerateRivers(s.Map);
+            else if (d.version == 15) NaturalGeographySystem.RebuildRiverMetadata(s.Map);
 
             // ---- プレイヤー ----
             for (int i = 0; i < d.players.Count; i++)

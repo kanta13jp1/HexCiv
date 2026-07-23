@@ -21,6 +21,8 @@ namespace HexCiv.Core
         public const int WheelRangeBonus = 2;
         public const int ConstructionRangeBonus = 1;
         public const int GranarySourceBonus = 2;
+        public const int HarborSourceBonus = 1;
+        public const int MaritimeStepCost = 1;
         public const int StrainedMargin = 4;
         public const int AttritionGraceTurns = 1;
         public const int AttritionDamage = 5;
@@ -52,9 +54,10 @@ namespace HexCiv.Core
             {
                 City city = player.Cities[i];
                 if (city == null || state.Map.Get(city.Coord) == null) continue;
-                int sourceCost = city.Buildings != null && city.Buildings.Contains("granary")
-                    ? -GranarySourceBonus
-                    : 0;
+                int sourceCost = 0;
+                if (city.Buildings != null && city.Buildings.Contains("granary"))
+                    sourceCost -= GranarySourceBonus;
+                if (HasHarbor(city)) sourceCost -= HarborSourceBonus;
                 if (!costs.TryGetValue(city.Coord, out int old) || sourceCost < old)
                 {
                     costs[city.Coord] = sourceCost;
@@ -69,9 +72,10 @@ namespace HexCiv.Core
                 if (!costs.TryGetValue(current, out int currentCost) || currentCost != node.Cost)
                     continue; // より短い経路が後から登録された旧ノード
 
+                Tile currentTile = state.Map.Get(current);
                 foreach (Tile tile in state.Map.NeighborsOf(current))
                 {
-                    if (tile == null || !tile.IsPassable || BlocksSupply(player, tile)) continue;
+                    if (!CanTraverseSupplyEdge(player, currentTile, tile)) continue;
                     int candidate = currentCost + StepCost(player, tile);
                     if (costs.TryGetValue(tile.Coord, out int known) && known <= candidate) continue;
                     costs[tile.Coord] = candidate;
@@ -206,8 +210,35 @@ namespace HexCiv.Core
             return false;
         }
 
+        public static bool HasHarbor(City city)
+        {
+            return city != null && city.Buildings != null && city.Buildings.Contains("harbor");
+        }
+
+        /// <summary>
+        /// 陸上補給は従来どおり。港のある自都市からのみ水域へ入り、水上からは自領沿岸へ
+        /// 荷揚げできる。これにより敵の港を通り抜けず、島嶼・半島へ海上補給を延ばせる。
+        /// </summary>
+        static bool CanTraverseSupplyEdge(Player player, Tile current, Tile next)
+        {
+            if (player == null || current == null || next == null || BlocksSupply(player, next))
+                return false;
+
+            if (next.IsWater)
+            {
+                if (current.IsWater) return true;
+                return current.City != null && current.City.PlayerId == player.Id &&
+                    HasHarbor(current.City);
+            }
+
+            if (!next.IsPassable) return false;
+            if (current.IsWater) return next.OwnerPlayerId == player.Id;
+            return true;
+        }
+
         static int StepCost(Player player, Tile tile)
         {
+            if (tile.IsWater) return MaritimeStepCost;
             int cost = 1;
             if (tile.HasHill || tile.HasForest) cost++;
 

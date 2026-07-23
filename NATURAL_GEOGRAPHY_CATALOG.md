@@ -1,4 +1,4 @@
-# 自然地理台帳 — 山・川・海・湖・森・砂漠 第1弾
+# 自然地理台帳 — 山・川・海・湖・森・砂漠 第2弾
 
 最終更新: 2026-07-23 / 72件
 
@@ -27,9 +27,13 @@
 - 山麓（山がない特殊地形では丘陵）から最寄り水域へ1〜4本の河川を生成する。
 - 同じ設定・seedなら地形、湖、河川、開始位置が一致し、追加の乱数を消費しない。
 - 河川タイルは食料+1。河川・海・湖に接する都市は市場アクセスを得る。
+- 各河川タイルは下流方向を保持し、河口まで循環せず到達する。地図上では下流へだけ流路を結び、流向矢印を表示する。
+- 平地・砂漠の河川には氾濫原を形成し、追加で食料+1。明るい堆積帯を手続き描画する。
+- 河道に沿わない渡河は移動コスト+1・近接攻撃力80%。建築学で橋梁・土木技術を抽象化し、ペナルティを無効化する。
+- 水域隣接都市は「港」を建設できる。港は市場アクセスと都市産出を増やし、海上補給を水域経由で自領沿岸へ運ぶ。
 - 文明圏が接する山・川・海・湖・森・砂漠の多様性により、科学は最大+2、文化は最大+2。
-- 河川は水色の細い流路として地図上に描画する。図鑑の自然地理アイコンは山・樹木・水流から実行時生成する。
-- SaveLoad version 15で河川配列を保存し、version 14以前は保存済み地形から決定論的に河川を補完する。
+- 河川・氾濫原・流向矢印・港の桟橋は外部画像を使わず実行時生成する。図鑑の自然地理アイコンも山・樹木・水流から生成する。
+- SaveLoad version 16で河川・流向・氾濫原を保存する。version 15は河川配列から流向と氾濫原を再構築し、version 14以前は保存済み地形から河川も決定論的に補完する。
 
 ## 調査とデータ導入の入口
 
@@ -38,6 +42,9 @@
 - [Natural Earth 50m Physical Vectors](https://www.naturalearthdata.com/downloads/50m-physical-vectors/) — 河川、湖、海、地形ラベルの小縮尺ベクタ。
 - [Natural Earth Features](https://www.naturalearthdata.com/features/) — データの分類と制作方針。
 - [HydroRIVERS technical documentation](https://data.hydrosheds.org/file/technical-documentation/HydroRIVERS_TechDoc_v10.pdf) — 全球河川ネットワークの技術資料。
+- [FEMA Floodplain Management Requirements Study Guide](https://www.fema.gov/pdf/floodplain/nfip_sg_unit_1.pdf) — 氾濫原の貯留・通水・土地利用を扱う基礎資料。
+- [U.S. Army Tactical River Crossings](https://www.armyupress.army.mil/Journals/Military-Review/English-Edition-Archives/March-April-2026/Tactical-River-Crossings/) — 渡河作戦の複雑性と架橋・工兵資産を扱う資料。
+- [UNCTAD Port Interface](https://resilientmaritimelogistics.unctad.org/guidebook/31-port-interface) — 港と後背地・海運ネットワークの接続を扱う資料。
 - [FAO Global Forest Resources Assessment 2025](https://www.fao.org/forest-resources-assessment/past-assessments/fra-2025/en) — 森林資源評価の現在版。
 - [JRC World Atlas of Desertification](https://wad.jrc.ec.europa.eu/) — 乾燥地と土地劣化を単純な砂地だけに還元しない資料。
 - [GEBCO gridded bathymetry data](https://www.gebco.net/data-products-gridded-bathymetry-data) — 海底地形と陸上標高を統合した全球グリッド。
@@ -45,6 +52,6 @@
 ## 次の増補
 
 1. 各地域へ高原、湿地、氷河、島嶼、洞窟、珊瑚礁、草原を追加する。
-2. 河川の分岐・流向・渡河コスト、氾濫原、港、海上補給を導入する。
+2. 河川の分流・流量、季節氾濫、橋の建設・破壊、港封鎖、船団護衛を導入する。
 3. 気候と植生の長期変化、災害、環境利用と保全を事件として実装する。
 4. 実世界地図モードを追加する場合は、ゲーム用の単純化と史実名称の層を明確に分離する。

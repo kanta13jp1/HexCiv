@@ -283,6 +283,7 @@ namespace HexCiv.Render
             public GameObject Cluster;    // ブロック群+城壁リングのルート
             public int ClusterTier = -1;  // 構築済みの人口段階(-1 = 未構築)
             public bool ClusterWalls;     // 構築済みの城壁有無
+            public bool ClusterHarbor;    // 構築済みの港マーカー有無
             // ---- 炎上(占領)エフェクト(2026-07-21 追加) ----
             public GameObject BurnRoot;        // 煙+残り火のルート(都市Rootの子。鎮火時に破棄)
             public MeshRenderer[] BurnPuffs;   // 煙クアッド(ループ再利用)
@@ -379,6 +380,7 @@ namespace HexCiv.Render
         Mesh[] cityBlockMeshes;   // 都市クラスタの小ブロック(灰色を微妙に変えた3種)
         Mesh cityTallBlockMesh;   // 都市クラスタの中央高層ブロック(人口5以上)
         Mesh cityWallMesh;        // 城壁("walls")建設済み都市の六角壁リング(暗石色)
+        Mesh cityHarborMesh;      // 港("harbor")建設済み都市の桟橋マーカー
         Mesh bannerMesh;    // 都市バナー
         Mesh foundParticleMesh;   // 都市誕生パーティクルの小さな矩形
         Mesh fortifyGlowMesh;     // 防御態勢グロー用の白リング(色はMaterialPropertyBlockで着色)
@@ -434,6 +436,7 @@ namespace HexCiv.Render
                     new Color(0.75f, 0.75f, 0.78f, 1f), new Color(0.50f, 0.50f, 0.54f, 1f));
                 cityWallMesh = BuildHexWallRing(0.54f, 0.64f, 0.13f,
                     new Color(0.42f, 0.41f, 0.38f, 1f), new Color(0.30f, 0.29f, 0.27f, 1f));
+                cityHarborMesh = BuildHarborMark();
                 bannerMesh = RenderUtil.BuildQuadXZ(2.2f, 0.5f, Color.white, false);
                 foundParticleMesh = RenderUtil.BuildQuadXZ(0.14f, 0.14f, Color.white, false);
                 // 待機アニメ用グローリング(2026-07-21 追加): 頂点色は白で作り、
@@ -1518,11 +1521,14 @@ namespace HexCiv.Render
         {
             int tier = CityPopTier(c.Population);
             bool walls = c.Buildings != null && c.Buildings.Contains("walls");
-            if (v.Cluster != null && v.ClusterTier == tier && v.ClusterWalls == walls) return;
+            bool harbor = LogisticsSystem.HasHarbor(c);
+            if (v.Cluster != null && v.ClusterTier == tier && v.ClusterWalls == walls &&
+                v.ClusterHarbor == harbor) return;
 
             if (v.Cluster != null) Destroy(v.Cluster);
             v.ClusterTier = tier;
             v.ClusterWalls = walls;
+            v.ClusterHarbor = harbor;
 
             v.Cluster = new GameObject("Cluster");
             v.Cluster.transform.SetParent(v.Root.transform, false);
@@ -1557,6 +1563,19 @@ namespace HexCiv.Render
             if (walls)
                 RenderUtil.NewMeshChild(parent, "Walls", cityWallMesh, baseMat,
                     Vector3.zero, SortCityBlock);
+
+            if (harbor)
+            {
+                Tile water = NaturalGeographySystem.FirstAdjacentWater(state.Map, c.Coord);
+                if (water != null)
+                {
+                    var marker = RenderUtil.NewMeshChild(parent, "Harbor", cityHarborMesh, baseMat,
+                        new Vector3(0f, 0.02f, 0f), SortCityBlock);
+                    Vector3 direction = water.Coord.ToWorld() - c.Coord.ToWorld();
+                    marker.transform.localRotation = Quaternion.Euler(0f,
+                        Mathf.Atan2(direction.x, direction.z) * Mathf.Rad2Deg, 0f);
+                }
+            }
         }
 
         /// <summary>クラスタへブロックを1個追加する(灰色の種類はIdハッシュとindexから決定的に選ぶ)。</summary>
@@ -1587,6 +1606,20 @@ namespace HexCiv.Render
                 mb.AddQuad(o0 + up, o1 + up, o1, o0, sideColor);            // 外側面
                 mb.AddQuad(n1 + up, n0 + up, n0, n1, sideColor);            // 内側面
             }
+            return mb.Build(null);
+        }
+
+        static Mesh BuildHarborMark()
+        {
+            var mb = new MeshBuilder();
+            Color wood = new Color(0.40f, 0.25f, 0.12f, 1f);
+            Color deck = new Color(0.68f, 0.48f, 0.22f, 1f);
+            Color beacon = new Color(0.42f, 0.92f, 1f, 1f);
+            mb.AddQuad(new Vector3(-0.11f, 0f, 0.22f), new Vector3(0.11f, 0f, 0.22f),
+                new Vector3(0.11f, 0f, 1.02f), new Vector3(-0.11f, 0f, 1.02f), wood);
+            mb.AddQuad(new Vector3(-0.44f, 0.002f, 0.72f), new Vector3(0.44f, 0.002f, 0.72f),
+                new Vector3(0.44f, 0.002f, 0.92f), new Vector3(-0.44f, 0.002f, 0.92f), deck);
+            mb.AddDiamond(new Vector3(0f, 0.004f, 1.03f), 0.13f, beacon);
             return mb.Build(null);
         }
 

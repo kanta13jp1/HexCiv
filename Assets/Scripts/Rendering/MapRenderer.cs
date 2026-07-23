@@ -560,6 +560,8 @@ namespace HexCiv.Render
                 // 丘陵タイル上のデコレーション(内側ヘクス・森・資源)は持ち上げに追従する
                 var c = t.Coord.ToWorld(); c.y = DecoY + RenderUtil.TileVisualHeight(t);
 
+                if (t.HasFloodplain) AddFloodplain(c);
+
                 if (t.Terrain == TerrainType.Mountain)
                 {
                     AddMountain(c);
@@ -582,28 +584,41 @@ namespace HexCiv.Render
         void AddRiver(Tile tile, Vector3 center)
         {
             var blue = new Color(0.18f, 0.64f, 0.88f, 0.96f);
-            center.y += 0.004f; // 森林・丘陵の面と同一深度にならないよう少し持ち上げる
+            center.y += 0.004f;
             builder.AddHex(center, 0.13f, blue);
 
-            foreach (var neighbor in state.Map.NeighborsOf(tile.Coord))
-            {
-                bool joinsRiver = neighbor.HasRiver && CompareCoord(tile.Coord, neighbor.Coord) < 0;
-                bool reachesWater = neighbor.IsWater;
-                if (!joinsRiver && !reachesWater) continue;
+            Tile downstream = NaturalGeographySystem.RiverDestination(state.Map, tile);
+            if (downstream == null || (!downstream.HasRiver && !downstream.IsWater)) return;
 
-                Vector3 end = neighbor.Coord.ToWorld();
-                end.y = DecoY + RenderUtil.TileVisualHeight(neighbor) + 0.004f;
-                if (reachesWater) end = Vector3.Lerp(center, end, 0.68f);
-                Vector3 direction = end - center;
-                Vector3 side = new Vector3(-direction.z, 0f, direction.x).normalized * 0.065f;
-                builder.AddQuad(center + side, end + side, end - side, center - side, blue);
-            }
+            Vector3 end = downstream.Coord.ToWorld();
+            end.y = DecoY + RenderUtil.TileVisualHeight(downstream) + 0.004f;
+            if (downstream.IsWater) end = Vector3.Lerp(center, end, 0.68f);
+            Vector3 direction = end - center;
+            if (direction.sqrMagnitude < 0.001f) return;
+            Vector3 side = new Vector3(-direction.z, 0f, direction.x).normalized * 0.065f;
+            builder.AddQuad(center + side, end + side, end - side, center - side, blue);
+
+            Vector3 tip = Vector3.Lerp(center, end, 0.74f);
+            Vector3 tail = Vector3.Lerp(center, end, 0.56f);
+            Color arrow = new Color(0.66f, 0.92f, 1f, 0.98f);
+            builder.AddTriangle(tip, tail + side * 1.65f, tail - side * 1.65f, arrow);
         }
 
-        static int CompareCoord(HexCoord a, HexCoord b)
+        void AddFloodplain(Vector3 center)
         {
-            int cmp = a.r.CompareTo(b.r);
-            return cmp != 0 ? cmp : a.q.CompareTo(b.q);
+            center.y += 0.002f;
+            Color silt = new Color(0.48f, 0.68f, 0.28f, 0.48f);
+            Color wet = new Color(0.30f, 0.58f, 0.30f, 0.62f);
+            builder.AddQuad(
+                center + new Vector3(-0.58f, 0f, -0.34f),
+                center + new Vector3(0.58f, 0f, -0.34f),
+                center + new Vector3(0.52f, 0f, -0.12f),
+                center + new Vector3(-0.52f, 0f, -0.12f), silt);
+            builder.AddQuad(
+                center + new Vector3(-0.52f, 0f, 0.10f),
+                center + new Vector3(0.52f, 0f, 0.10f),
+                center + new Vector3(0.42f, 0f, 0.29f),
+                center + new Vector3(-0.42f, 0f, 0.29f), wet);
         }
 
         void AddHill(Vector3 c, Tile t)

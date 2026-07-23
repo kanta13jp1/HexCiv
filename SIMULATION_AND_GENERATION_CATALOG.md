@@ -1,6 +1,6 @@
 # シミュレーションゲーム要素・生成技術台帳
 
-最終更新: 2026-07-23 / 第6版
+最終更新: 2026-07-23 / 第7版
 
 ## この台帳の役割
 
@@ -146,16 +146,39 @@
 | 経営 | Against the Storm | 生態帯、資源、住民需要、周期災害 | 需要・地域産業済み、周期災害候補 |
 | 経営 | Terra Nil | 水系、植生回復、生態多様性、土地再生 | 自然多様性済み、回復・保全候補 |
 
+## シミュレーションゲーム設計参照索引（第6群）
+
+第6群では河川流域、渡河、港湾、海上輸送を中心に16系統を追加し、累計114系統とした。水辺を単なる産出ボーナスにせず、移動・戦闘・都市立地・補給を結ぶネットワークとして比較する。
+
+| 系統 | 代表的な参照作品 | 抽出する設計要素 | HexCivでの状態 |
+|---|---|---|---|
+| 歴史 | Pharaoh: A New Era | 河川氾濫、肥沃化、農業周期、都市物流 | **氾濫原の食料効果を第7実装**、周期氾濫は候補 |
+| 歴史 | Sumerians | 灌漑、水路、河川都市、農業余剰 | 河川都市・氾濫原済み、灌漑網候補 |
+| 歴史 | Grand Ages: Rome | 道路、港、海上交易、属州都市 | **港と海上補給を第7実装**、道路網は候補 |
+| 歴史 | Oriental Empires | 河川流域、交易、都市圏、軍の移動 | 流向・渡河・都市圏済み |
+| 軍事 | Order of Battle: World War II | 河川、橋、補給、海上輸送 | **渡河ペナルティ・橋梁抽象化・海上補給を第7実装** |
+| 軍事 | WarPlan | 港、船団、補給、戦域間輸送 | 港湾補給済み、船団・封鎖候補 |
+| 軍事 | Strategic Mind: Blitzkrieg | 渡河、橋、地形目標、作戦テンポ | 渡河と建築学による橋梁抽象化済み |
+| 軍事 | Campaign Series | ヘクス地形、河川、橋梁、補給 | ヘクス・河川・補給済み、橋破壊は候補 |
+| 政治 | Balance of Power | 危機段階、影響圏、外交的抑制 | 宣戦・和平済み、段階的危機候補 |
+| 政治 | Ostalgie | 政治派閥、経済指標、外交圏、改革 | 支持・市場・外交済み、改革事件候補 |
+| 政治 | China: Mao's Legacy | 政策選択、派閥、国家指標、改革 | 法律・支持済み、事件連鎖候補 |
+| 政治 | Precipice | 地域影響、危機管理、代理対立 | 文化影響済み、外交危機候補 |
+| 経営 | Captain of Industry | バルク物流、港湾、輸送容量、生産連鎖 | 港・抽象5財済み、多段加工候補 |
+| 経営 | Highrise City | 資源網、輸送、都市需要、地域物流 | 需要・輸送財済み、明示物流網候補 |
+| 経営 | SeaOrama: World of Shipping | 船隊、港、航路、契約、市況 | 港・市場済み、船隊・契約候補 |
+| 経営 | Port Royale 4 | 港市、船団、価格差、護衛、海戦 | 港・価格差交易・海上補給済み、護衛・封鎖候補 |
+
 ### 機構実装ロードマップ
 
 | 段階 | 機構 | 内容 | 状態 |
 |---|---|---|---|
 | 1 | 国家運営 | 国庫、税制、人口・都市収入、都市・軍事維持費、安定度、戦争疲弊、AI税制 | 実装済み |
-| 2 | 兵站 | 都市からの補給到達、地形コスト、敵遮断、孤立、補給切れ、技術・穀物庫 | **実装済み**（道路タイル・港は次拡張） |
+| 2 | 兵站 | 都市からの補給到達、地形コスト、敵遮断、孤立、補給切れ、技術・穀物庫 | **陸上網・港湾拠点・海上補給を実装済み**（道路タイル・船団・封鎖は次拡張） |
 | 3 | 人口社会 | 人口階層、職業、需要、教育、満足度、移住、AI社会重点 | **実装済み** |
 | 4 | 政治 | 派閥、支持、法令、評議会、事件選択 | **派閥・支持・法律・正統性を実装済み**（事件・選挙は次拡張） |
-| 5 | 市場 | 資源在庫、交易路、価格、生産連鎖 | **5財・需要・在庫・価格・自動交易・地域産業を実装済み**（明示路線・港・多段加工は次拡張） |
-| 6 | 自然地理 | 山・川・海・湖・森・砂漠、河川、自然多様性、立地効果 | **72件台帳・内陸湖・河川・食料・科学・文化・市場接続を実装済み**（流向・氾濫・気候は次拡張） |
+| 5 | 市場 | 資源在庫、交易路、価格、生産連鎖 | **5財・需要・在庫・価格・自動交易・地域産業・港湾市場を実装済み**（明示路線・多段加工は次拡張） |
+| 6 | 自然地理 | 山・川・海・湖・森・砂漠、河川、自然多様性、立地効果 | **72件台帳・内陸湖・流向河川・氾濫原・渡河を実装済み**（分流・気候・災害は次拡張） |
 | 7 | 人物史 | 特性、任命、関係、継承、家系 | 設計候補 |
 
 ## 第1実装: 国家運営
@@ -211,11 +234,27 @@
 - **地域産業**: 生活技術72件を各地域12件の発展候補へ接続する。歌・踊り・武術を交換可能な物品とみなさず、知識・文化への継承効果として扱う。
 - **他システム**: 需要充足は満足、製品は生産、知識と交通技術は科学、料理・踊り・歌は文化、輸送在庫は補給、交易収支は国庫へ接続する。
 - **UI・演出**: 右側「市場」またはF4。5財、需給、価格、交易、地域産業、4方針を表示し、実行時生成の木箱・双方向矢印アイコンと0.18秒スライドフェードを使う。
-- **セーブ**: 市場値はversion 14から保存。現行version 15でも互換を維持し、version 13以前は均衡市場、各在庫3、市場アクセス50、需要充足75、地域産業なしへ移行する。
+- **セーブ**: 市場値はversion 14から保存。現行version 16でも互換を維持し、version 13以前は均衡市場、各在庫3、市場アクセス50、需要充足75、地域産業なしへ移行する。
+
+## 第6実装: 自然地理台帳・決定河川
+
+- **地理台帳**: 山・川・海・湖・森・砂漠／乾燥地を6地域×12件、計72件収録する。実在地名は図鑑に置き、生成世界へ無作為に流用しない。
+- **水系生成**: 地形生成後、局所低地へ湖を置き、山麓から最寄り水域へ決定的な河道を生成する。
+- **接続効果**: 河川の食料、水辺都市の市場アクセス、自然環境の多様性による科学・文化を小さく接続する。
+
+## 第7実装: 河川流向・氾濫原・港湾海上補給
+
+- **流向**: 各河川タイルは0〜5の下流方向を保持し、河口まで循環せず到達する。分岐を描かず、合流時は既存下流を尊重する。
+- **氾濫原**: 平地または砂漠の河川沿いに決定的に形成し、河川食料+1に加えて食料+1を得る。専用の明色帯を手続き描画する。
+- **渡河**: 河道に沿わず河川タイルへ出入りする移動はコスト+1、近接攻撃力80%。建築学を得ると橋梁・土木技術の抽象表現として両ペナルティを無効化する。
+- **港**: 水域へ隣接する都市だけが建設できる。港は食料・生産・市場アクセスを増やし、都市模型には水側を向く桟橋と標識を実行時生成する。
+- **海上補給**: 自文明の港から水域へ補給が入り、海上を低コストで進み、自領沿岸へ荷揚げされる。敵部隊・敵都市による遮断規則は陸上と共通。
+- **表示**: 河道は下流方向だけを結び、河川上に小さな流向矢印を生成する。補給オーバーレイは海上経路も同じ色規則で表示する。
+- **セーブ**: version 16で流向と氾濫原を保存。version 15は保存済み河川から流向・氾濫原を再構築し、version 14以前は河川自体を決定的に補完する。
 
 ## 画像・動画・音楽・音声生成技術の分類台帳
 
-「生成」は手続き生成、シミュレーション、制作支援、機械学習による合成を含みます。製品名の網羅ではなく、技術系譜を追跡します。第6版は8系統を増補し、累計65技術系譜です。
+「生成」は手続き生成、シミュレーション、制作支援、機械学習による合成を含みます。製品名の網羅ではなく、技術系譜を追跡します。第7版は8系統を増補し、累計73技術系譜です。
 
 | 媒体 | 技術系譜 | 代表的な方式 | HexCiv方針・状態 |
 |---|---|---|---|
@@ -284,6 +323,14 @@
 | 動画 | 流線・ベクトル場アニメーション | spline flow、vector field、particle advection | 河川・風・海流の軽量演出候補 |
 | 音楽 | 環境音景の規則合成 | layered ambience、stochastic event、biome parameter | 外部録音に依存しない森林・河川・沿岸音景の候補 |
 | 画像 | 地理空間基盤モデル | multimodal embedding、segmentation、remote-sensing synthesis | 事前調査支援のみ。出典不明の地理画像をゲームへ自動投入しない |
+| 画像 | 位相制約付き河道記号 | directed graph、topology validation、flow arrow synthesis | **下流方向だけを結ぶ河道と流向矢印を第7実装** |
+| 画像 | 氾濫原マスク合成 | terrain predicate、river adjacency、strip tessellation | **平地・砂漠河川の氾濫原帯を第7実装** |
+| 画像 | 港湾構造物の規則合成 | waterfront orientation、pier primitive、beacon marker | **水側を向く桟橋・標識を第7実装** |
+| 画像 | ネットワーク状態可視化 | shortest-path field、cost band、categorical overlay | **陸海を連続表示する補給オーバーレイを第7実装** |
+| 動画 | 流向パルス | path phase、directional pulse、speed mapping | 河川流速・季節変化の軽量演出候補 |
+| 動画 | 港湾活動パーティクル | berth event、cargo particle、schedule-driven motion | 建設・交易・補給イベントの候補 |
+| 音楽 | 地理状態ソニフィケーション | hydrology parameter、port activity、adaptive motif | 河川量・港湾繁栄を自作BGMへ反映する候補 |
+| 音声 | 水辺環境音の手続き合成 | filtered noise、stochastic splash、harbor event grammar | 外部録音なしの河川・港環境音候補 |
 
 ### 導入規則
 
@@ -313,6 +360,10 @@
 - [Shadow Empire — Official Game Manual (Matrix Games)](https://www.matrixgames.com/amazon/PDF/SE/Shadow_Empire_manual_EBOOK.pdf)
 - [Natural Earth — 50m Physical Vectors](https://www.naturalearthdata.com/downloads/50m-physical-vectors/)
 - [HydroRIVERS — Technical Documentation](https://data.hydrosheds.org/file/technical-documentation/HydroRIVERS_TechDoc_v10.pdf)
+- [FEMA — Floodplain Management Requirements Study Guide](https://www.fema.gov/pdf/floodplain/nfip_sg_unit_1.pdf)
+- [U.S. Army — Tactical River Crossings](https://www.armyupress.army.mil/Journals/Military-Review/English-Edition-Archives/March-April-2026/Tactical-River-Crossings/)
+- [UNCTAD — Port Interface](https://resilientmaritimelogistics.unctad.org/guidebook/31-port-interface)
+- [UNCTAD — Resilient Ports as a Key Pillar of a Resilient Maritime Supply Chain](https://resilientmaritimelogistics.unctad.org/guidebook/2-resilient-ports-key-resilient-maritime-supply-chain)
 - [FAO — Global Forest Resources Assessment 2025](https://www.fao.org/forest-resources-assessment/past-assessments/fra-2025/en)
 - [JRC — World Atlas of Desertification](https://wad.jrc.ec.europa.eu/)
 - [GEBCO — Gridded Bathymetry Data](https://www.gebco.net/data-products-gridded-bathymetry-data)

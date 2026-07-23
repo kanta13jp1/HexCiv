@@ -89,7 +89,7 @@ namespace HexCiv.Core
             if (t.Unit != null) return false;
             if (t.City != null && t.City.PlayerId != PlayerId) return false;
 
-            int cost = GameRules.MoveCostInto(t);
+            int cost = NaturalGeographySystem.MovementCost(s, this, Coord, next);
             var cur = s.Map.Get(Coord);
             if (cur != null && cur.Unit == this) cur.Unit = null;
             t.Unit = this;

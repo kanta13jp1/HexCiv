@@ -99,7 +99,9 @@ namespace HexCiv.Core
             foreach (var u in GameRules.Units)
                 if (owner.HasTech(u.RequiresTech)) list.Add(ProductionItem.FromUnit(u));
             foreach (var b in GameRules.Buildings)
-                if (owner.HasTech(b.RequiresTech) && !Buildings.Contains(b.Id)) list.Add(ProductionItem.FromBuilding(b));
+                if (owner.HasTech(b.RequiresTech) && !Buildings.Contains(b.Id) &&
+                    (b.Id != "harbor" || NaturalGeographySystem.IsWaterfront(s.Map, Coord)))
+                    list.Add(ProductionItem.FromBuilding(b));
             return list;
         }
 

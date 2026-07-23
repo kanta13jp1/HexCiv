@@ -65,6 +65,7 @@ namespace HexCiv.Core
             int atkBase = ranged ? attacker.Def.RangedStrength : attacker.Def.Strength;
             float atkEff = GameRules.HealthScaledStrength(atkBase, attacker.Hp, GameRules.UnitMaxHp);
             atkEff = LogisticsSystem.ScaleCombat(attacker, atkEff);
+            atkEff *= NaturalGeographySystem.RiverCrossingAttackMultiplier(s, attacker, target.Coord);
             // AI攻撃側は難易度に応じて実効戦闘力を補正(普通=±0で無変換。2026-07-20 追加)
             atkEff = DifficultyRules.ScaleCombatForAI(s, attacker.PlayerId, atkEff);
 

@@ -135,7 +135,7 @@ namespace HexCiv.Core.AI
                 bool wantUnit = s.Rng.Next(100) < 30;
                 if (!wantUnit)
                 {
-                    string[] priority = { "library", "granary", "workshop", "walls", "monument" };
+                    string[] priority = { "library", "granary", "harbor", "workshop", "walls", "monument" };
                     for (int i = 0; i < priority.Length && pick == null; i++)
                         pick = FindItem(avail, ProductionKind.Building, priority[i]);
                 }
@@ -702,6 +702,8 @@ namespace HexCiv.Core.AI
             {
                 var t = s.Map.Get(targets[i]);
                 if (t == null) continue;
+                float targetAtkEff = atkEff *
+                    NaturalGeographySystem.RiverCrossingAttackMultiplier(s, u, t.Coord);
 
                 float score;
                 if (t.City != null && t.City.PlayerId != u.PlayerId)
@@ -709,7 +711,7 @@ namespace HexCiv.Core.AI
                     if (!p.IsAtWarWith(t.City.PlayerId)) continue;   // 和平中は攻撃しない
                     var city = t.City;
                     float defEff = GameRules.HealthScaledStrength(city.DefenseStrength(s), city.Hp, city.MaxHp);
-                    int dmg = EstimateDamage(atkEff, defEff);
+                    int dmg = EstimateDamage(targetAtkEff, defEff);
                     if (melee && city.Hp - dmg <= 1)
                     {
                         score = 10000f;   // 占領確実
@@ -719,7 +721,7 @@ namespace HexCiv.Core.AI
                         score = 300f + dmg;
                         if (melee)
                         {
-                            int back = EstimateDamage(defEff, atkEff);
+                            int back = EstimateDamage(defEff, targetAtkEff);
                             score -= back;
                             if (back >= u.Hp) score -= 6000f;   // 自滅回避
                             // 城壁付き・無傷の都市への単独近接攻撃は消耗するだけなので、
@@ -741,12 +743,12 @@ namespace HexCiv.Core.AI
                     else
                     {
                         float defEff = Combat.EffectiveDefense(s, t);
-                        int dmg = EstimateDamage(atkEff, defEff);
+                        int dmg = EstimateDamage(targetAtkEff, defEff);
                         bool kill = dmg >= e.Hp;
                         score = kill ? 2000f + e.Def.Strength + e.Def.RangedStrength : dmg * 2f;
                         if (melee)
                         {
-                            int back = EstimateDamage(defEff, atkEff);
+                            int back = EstimateDamage(defEff, targetAtkEff);
                             score -= back;
                             if (!kill && back >= u.Hp) score -= 6000f;   // 自滅回避
                         }

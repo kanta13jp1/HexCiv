@@ -161,7 +161,7 @@ public static class MasterpieceSystemSmokeTest
         player.TotalMasterpiecePoints = 654;
         state.LastSavedAtIso = "2026-07-21T15:00:00";
         string json1 = SaveLoad.Serialize(state);
-        if (!json1.Contains("\"version\":15")) throw new Exception("セーブversion 15ではない");
+        if (!json1.Contains("\"version\":16")) throw new Exception("セーブversion 16ではない");
         var restored = SaveLoad.Deserialize(json1);
         string json2 = SaveLoad.Serialize(restored);
         if (json1 != json2) throw new Exception("作品収蔵を含むセーブ往復が非決定的");
@@ -171,7 +171,7 @@ public static class MasterpieceSystemSmokeTest
             !restoredPlayer.CollectedMasterpieces.Contains("great_wave"))
             throw new Exception("作品進行の復元に失敗");
 
-        string oldVersion = json1.Replace("\"version\":15", "\"version\":8");
+        string oldVersion = json1.Replace("\"version\":16", "\"version\":8");
         if (SaveLoad.Deserialize(oldVersion) == null)
             throw new Exception("version 8セーブを読み込めない");
 

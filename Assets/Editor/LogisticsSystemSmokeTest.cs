@@ -105,8 +105,8 @@ public static class LogisticsSystemSmokeTest
         state.LastSavedAtIso = "2026-07-22T18:00:00";
 
         string json1 = SaveLoad.Serialize(state);
-        if (!json1.Contains("\"version\":15"))
-            throw new Exception("セーブversion 15ではない");
+        if (!json1.Contains("\"version\":16"))
+            throw new Exception("セーブversion 16ではない");
         GameState restored = SaveLoad.Deserialize(json1);
         string json2 = SaveLoad.Serialize(restored);
         string json3 = SaveLoad.Serialize(SaveLoad.Deserialize(json2));
@@ -116,7 +116,7 @@ public static class LogisticsSystemSmokeTest
             restoredUnit.TurnsOutOfSupply != 3)
             throw new Exception("補給状態の復元に失敗");
 
-        string old = json1.Replace("\"version\":15", "\"version\":10");
+        string old = json1.Replace("\"version\":16", "\"version\":10");
         old = Regex.Replace(old, ",\"supplyLevel\":-?[0-9]+", "");
         old = Regex.Replace(old, ",\"turnsOutOfSupply\":-?[0-9]+", "");
         GameState migrated = SaveLoad.Deserialize(old);

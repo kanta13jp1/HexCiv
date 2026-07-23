@@ -11,6 +11,10 @@ namespace HexCiv.Core
         public bool HasForest;
         /// <summary>手続き生成された河道。川は陸上タイルだけに置かれる。</summary>
         public bool HasRiver;
+        /// <summary>河川の下流方向（HexCoord.Directions の0～5）。河口は隣接水域を指し、未設定は-1。</summary>
+        public int RiverOutflowDirection = -1;
+        /// <summary>河川沿いの低平地。肥沃な堆積土を抽象化した追加食料地形。</summary>
+        public bool HasFloodplain;
         public ResourceType Resource = ResourceType.None;
 
         /// <summary>領有プレイヤーId(-1 = 無所属)</summary>
@@ -37,6 +41,7 @@ namespace HexCiv.Core
             if (HasHill) y += new Yields(0, 1);
             if (HasForest) y += new Yields(0, 1);
             if (HasRiver && IsPassable) y += new Yields(1, 0);
+            if (HasFloodplain && IsPassable) y += new Yields(1, 0);
             if (Resource != ResourceType.None) y += GameRules.Resources[Resource].Bonus;
             if (City != null)
             {

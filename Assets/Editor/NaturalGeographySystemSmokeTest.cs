@@ -4,7 +4,7 @@ using HexCiv.Core;
 using UnityEditor;
 using UnityEngine;
 
-/// <summary>自然地理72件、湖・河川生成、産出・文明効果、セーブv15を検証する。</summary>
+/// <summary>自然地理72件、湖・流向付き河川・氾濫原、産出・文明効果、セーブv16を検証する。</summary>
 public static class NaturalGeographySystemSmokeTest
 {
     static readonly string[] Regions =
@@ -20,7 +20,7 @@ public static class NaturalGeographySystemSmokeTest
             ValidateCatalog();
             GameState state = ValidateGenerationAndDeterminism();
             ValidateYieldsAndEffects(state);
-            ValidateSaveVersion15AndMigration(state);
+            ValidateSaveVersion16AndMigration(state);
             Debug.Log("NATURAL GEOGRAPHY SYSTEM SMOKE OK");
             EditorApplication.Exit(0);
         }
@@ -74,6 +74,8 @@ public static class NaturalGeographySystemSmokeTest
             Tile other = b.Get(tile.Coord);
             if (other == null || tile.Terrain != other.Terrain || tile.HasHill != other.HasHill ||
                 tile.HasForest != other.HasForest || tile.HasRiver != other.HasRiver ||
+                tile.RiverOutflowDirection != other.RiverOutflowDirection ||
+                tile.HasFloodplain != other.HasFloodplain ||
                 tile.Resource != other.Resource)
                 throw new Exception("同seedの自然地理が不一致: " + tile.Coord);
             if (tile.HasRiver)
@@ -170,26 +172,40 @@ public static class NaturalGeographySystemSmokeTest
         return state;
     }
 
-    static void ValidateSaveVersion15AndMigration(GameState state)
+    static void ValidateSaveVersion16AndMigration(GameState state)
     {
         string json1 = SaveLoad.Serialize(state);
-        if (!json1.Contains("\"version\":15") || !json1.Contains("\"hasRiver\":"))
-            throw new Exception("セーブv15の河川配列がない");
+        if (!json1.Contains("\"version\":16") || !json1.Contains("\"hasRiver\":") ||
+            !json1.Contains("\"riverOutflowDirection\":") || !json1.Contains("\"hasFloodplain\":"))
+            throw new Exception("セーブv16の河川・流向・氾濫原配列がない");
         GameState restored = SaveLoad.Deserialize(json1);
         string json2 = SaveLoad.Serialize(restored);
         string json3 = SaveLoad.Serialize(SaveLoad.Deserialize(json2));
         if (json2 != json3) throw new Exception("自然地理を含むセーブ往復が非決定的");
         foreach (Tile tile in state.Map.AllTiles)
-            if (tile.HasRiver != restored.Map.Get(tile.Coord).HasRiver)
+            if (tile.HasRiver != restored.Map.Get(tile.Coord).HasRiver ||
+                tile.RiverOutflowDirection != restored.Map.Get(tile.Coord).RiverOutflowDirection ||
+                tile.HasFloodplain != restored.Map.Get(tile.Coord).HasFloodplain)
                 throw new Exception("河川復元が不一致: " + tile.Coord);
+
+        SaveData previous = JsonUtility.FromJson<SaveData>(json1);
+        previous.version = 15;
+        previous.riverOutflowDirection = null;
+        previous.hasFloodplain = null;
+        GameState upgraded = SaveLoad.Deserialize(JsonUtility.ToJson(previous));
+        foreach (Tile tile in upgraded.Map.AllTiles)
+            if (tile.HasRiver && tile.RiverOutflowDirection < 0)
+                throw new Exception("v15セーブから河川流向を補完できない: " + tile.Coord);
 
         SaveData legacy = JsonUtility.FromJson<SaveData>(json1);
         legacy.version = 14;
         legacy.hasRiver = null;
+        legacy.riverOutflowDirection = null;
+        legacy.hasFloodplain = null;
         GameState migrated = SaveLoad.Deserialize(JsonUtility.ToJson(legacy));
         int regenerated = 0;
         foreach (Tile tile in migrated.Map.AllTiles) if (tile.HasRiver) regenerated++;
         if (regenerated <= 0) throw new Exception("v14セーブから河川を補完できない");
-        Debug.Log("[NaturalGeography] セーブv15決定往復・v14河川補完 OK");
+        Debug.Log("[NaturalGeography] セーブv16決定往復・v15流向補完・v14河川補完 OK");
     }
 }

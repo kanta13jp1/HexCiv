@@ -51,7 +51,7 @@ namespace HexCiv.Core
                     if (closed.Contains(n)) continue;
                     bool isGoal = n == goal;
                     if (IsBlocked(u, t, isGoal, allowEnemyGoal)) continue;
-                    int stepCost = GameRules.MoveCostInto(t);
+                    int stepCost = NaturalGeographySystem.MovementCost(s, u, cur, n);
                     if (stepCost >= GameRules.ImpassableCost) continue;
 
                     int ng = g[cur] + stepCost;
@@ -94,7 +94,7 @@ namespace HexCiv.Core
                 foreach (var t in s.Map.NeighborsOf(cur))
                 {
                     if (IsBlocked(u, t, false, false)) continue;
-                    int cost = curCost + GameRules.MoveCostInto(t);
+                    int cost = curCost + NaturalGeographySystem.MovementCost(s, u, cur, t.Coord);
                     if (best.TryGetValue(t.Coord, out int old) && old <= cost) continue;
                     best[t.Coord] = cost;
                     if (!frontier.Contains(t.Coord)) frontier.Add(t.Coord);

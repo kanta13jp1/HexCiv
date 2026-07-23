@@ -31,6 +31,8 @@ namespace HexCiv.Core
         public const float FortifyDefenseBonus = 0.25f;
         public const float HillDefenseBonus = 0.25f;
         public const float ForestDefenseBonus = 0.25f;
+        public const int RiverCrossingMovePenalty = 1;
+        public const float RiverCrossingAttackMultiplier = 0.80f;
         public const int ImpassableCost = 9999;
         public const string StartingTech = "agriculture";
 
@@ -76,6 +78,7 @@ namespace HexCiv.Core
             new BuildingDef { Id = "granary",  NameJa = "穀物庫", Cost = 60, RequiresTech = "pottery", Bonus = new Yields(2, 0, 0), DescJa = "食料+2" },
             new BuildingDef { Id = "library",  NameJa = "図書館", Cost = 80, RequiresTech = "writing", Bonus = new Yields(0, 0, 3), DescJa = "科学+3" },
             new BuildingDef { Id = "workshop", NameJa = "作業場", Cost = 80, RequiresTech = "construction", Bonus = new Yields(0, 2, 0), DescJa = "生産+2" },
+            new BuildingDef { Id = "harbor",   NameJa = "港",     Cost = 70, RequiresTech = "construction", Bonus = new Yields(1, 1, 0), DescJa = "食料+1 生産+1・海上補給" },
             new BuildingDef { Id = "walls",    NameJa = "城壁",   Cost = 70, RequiresTech = "masonry", CityDefense = 6, DescJa = "都市防御+6" },
         };
 

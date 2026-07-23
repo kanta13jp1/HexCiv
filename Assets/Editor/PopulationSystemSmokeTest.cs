@@ -90,7 +90,7 @@ public static class PopulationSystemSmokeTest
 
         PopulationSystem.SetFocus(state, player, SocialFocus.Learning, false);
         string json1 = SaveLoad.Serialize(state);
-        if (!json1.Contains("\"version\":15")) throw new Exception("セーブversion 15ではない");
+        if (!json1.Contains("\"version\":16")) throw new Exception("セーブversion 16ではない");
         GameState restored = SaveLoad.Deserialize(json1);
         string json2 = SaveLoad.Serialize(restored);
         string json3 = SaveLoad.Serialize(SaveLoad.Deserialize(json2));
@@ -100,7 +100,7 @@ public static class PopulationSystemSmokeTest
             throw new Exception("人口社会値の復元に失敗");
         AssertPopulationInvariant(restoredPlayer.Cities[0]);
 
-        string old = json1.Replace("\"version\":15", "\"version\":11");
+        string old = json1.Replace("\"version\":16", "\"version\":11");
         string[] fields = { "socialFocus", "farmers", "artisans", "scholars", "education",
             "satisfaction", "foodNeedFulfillment", "housingNeedFulfillment",
             "serviceNeedFulfillment", "lastNetMigration" };
