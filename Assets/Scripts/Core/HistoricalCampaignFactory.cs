@@ -63,7 +63,8 @@ namespace HexCiv.Core
             }
 
             Visibility.RecomputeAll(state);
-            return new HistoricalCampaignSession(definition, state);
+            return new HistoricalCampaignSession(definition, state,
+                UrukCampaignSystem.CreateInitialProgress(definition));
         }
 
         /// <summary>
@@ -174,6 +175,7 @@ namespace HexCiv.Core
     {
         public HistoricalCampaignDefinition Definition { get; }
         public GameState State { get; }
+        public UrukCampaignProgress Progress { get; }
 
         public string CampaignId => Definition.id;
         public int CompletedTurns => Math.Max(0, State.TurnNumber - 1);
@@ -182,10 +184,13 @@ namespace HexCiv.Core
         public string CurrentIntervalJa => HistoricalCampaignCalendar.TurnIntervalJa(
             Definition, Math.Clamp(State.TurnNumber, 1, Definition.maxTurns));
 
-        public HistoricalCampaignSession(HistoricalCampaignDefinition definition, GameState state)
+        public HistoricalCampaignSession(HistoricalCampaignDefinition definition, GameState state,
+            UrukCampaignProgress progress)
         {
             Definition = definition ?? throw new ArgumentNullException(nameof(definition));
             State = state ?? throw new ArgumentNullException(nameof(state));
+            Progress = progress ?? throw new ArgumentNullException(nameof(progress));
+            UrukCampaignSystem.ValidateProgress(Definition, Progress);
         }
     }
 }

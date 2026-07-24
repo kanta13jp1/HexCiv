@@ -37,8 +37,9 @@ public static class HistoricalCampaignFoundationSmokeTest
         var errors = HistoricalCampaignValidator.Validate(definition);
         if (errors.Count != 0)
             throw new Exception("定義検証エラー: " + string.Join(" | ", errors));
-        if (definition.id != "uruk_4000" || definition.schemaVersion != 1)
-            throw new Exception("キャンペーン安定IDまたはschemaVersionが不正");
+        if (definition.id != "uruk_4000" || definition.schemaVersion != 1 ||
+            definition.datasetVersion != 1 || definition.reviewStatus != "verified")
+            throw new Exception("キャンペーン安定ID・版数・確認状態が不正");
         if (definition.startYear != -4000 || definition.endYear != -3000 ||
             definition.maxTurns != 50)
             throw new Exception("ウルク縦切り版の年代・ターン数が不正");
@@ -57,6 +58,15 @@ public static class HistoricalCampaignFoundationSmokeTest
             throw new Exception("実在物資台帳が不足");
         if (definition.sources.Length < 6)
             throw new Exception("出典台帳が不足");
+        if (definition.sources.Any(s => s.reviewStatus != "verified" ||
+            s.usage != "reference_only" || string.IsNullOrWhiteSpace(s.accessedDate)))
+            throw new Exception("出典の確認状態・用途・参照日が不足");
+        if (definition.startingScenario == null ||
+            definition.startingScenario.actualPopulation != 1500 ||
+            definition.startingScenario.roles.Total != 1500 ||
+            definition.startingScenario.statuses.enslaved != 0 ||
+            definition.startingScenario.improvements.Count(i => i.kind == "farm") != 2)
+            throw new Exception("小集落1,500人・農地2区画の開始条件が不正");
         if (HistoricalCampaignCalendar.YearAtTurnStart(definition, 1) != -4000 ||
             HistoricalCampaignCalendar.YearAtTurnEnd(definition, 1) != -3980 ||
             HistoricalCampaignCalendar.YearAtTurnStart(definition, 51) != -3000)
@@ -64,6 +74,13 @@ public static class HistoricalCampaignFoundationSmokeTest
         if (HistoricalCampaignCalendar.TurnIntervalJa(definition, 1) !=
             "紀元前4000年～紀元前3980年")
             throw new Exception("年代日本語表示が不正");
+
+        string originalStatus = definition.goods[0].reviewStatus;
+        definition.goods[0].reviewStatus = "draft";
+        if (!HistoricalCampaignValidator.Validate(definition)
+            .Any(e => e.Contains("verified必須")))
+            throw new Exception("未確認データが製品検証を通過した");
+        definition.goods[0].reviewStatus = originalStatus;
     }
 
     static void ValidateMap(HistoricalCampaignDefinition definition)
@@ -125,6 +142,9 @@ public static class HistoricalCampaignFoundationSmokeTest
         }
         if (session.CurrentYear != -4000 || session.CompletedTurns != 0)
             throw new Exception("初期セッション年代が不正");
+        if (session.Progress.actualPopulation != 1500 ||
+            session.Progress.statuses.enslaved != 0)
+            throw new Exception("ウルク専用人口進捗が不正");
     }
 
     static void ValidateSave(HistoricalCampaignDefinition definition)

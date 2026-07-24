@@ -3144,6 +3144,9 @@ namespace HexCiv.UI
                 int turn;
                 string civNameJa, savedAtIso;
                 bool has = SaveLoad.TryReadMeta(SaveSlotPath(slot), out turn, out civNameJa, out savedAtIso);
+                if (!has)
+                    has = HistoricalCampaignSave.TryReadMeta(SaveSlotPath(slot),
+                        out turn, out civNameJa, out savedAtIso);
 
                 string label;
                 if (has)
@@ -3258,7 +3261,10 @@ namespace HexCiv.UI
         /// </summary>
         bool RenderSlotThumbnail(int index, string path)
         {
-            var data = JsonUtility.FromJson<SaveData>(System.IO.File.ReadAllText(path));
+            string json = System.IO.File.ReadAllText(path);
+            if (HistoricalCampaignSave.TryGetInnerStateJson(json, out var innerStateJson))
+                json = innerStateJson;
+            var data = JsonUtility.FromJson<SaveData>(json);
             if (data == null || data.version < 1 || data.mapWidth <= 0 || data.mapHeight <= 0)
                 return false;
             int w = data.mapWidth;

@@ -7,6 +7,7 @@ using HexCiv.Render;
 using HexCiv.UI;
 using HexCiv.Control;
 using HexCiv.Audio;
+using HexCiv.Campaigns;
 
 namespace HexCiv
 {
@@ -56,6 +57,8 @@ namespace HexCiv
         CameraController cameraController;
         GameAudio audioManager;
         InputController inputController;
+        HistoricalCampaignSession historicalSession;
+        HistoricalCampaignPanel historicalCampaignPanel;
 
         int lastSeenVersion = -1;
         bool gameOverShown;
@@ -356,6 +359,7 @@ namespace HexCiv
         /// </summary>
         void StartNewGameWithConfig(GameConfig config)
         {
+            ClearHistoricalCampaignMode();
             var civilizationRoster = CreateCivilizationRoster(config);
             ApplyState(BuildNewGame(config, civilizationRoster, CreateLeaderRoster(config, civilizationRoster)));
             turnManager.BeginGame();
@@ -507,6 +511,35 @@ namespace HexCiv
         public void StartSpectatorFromTitle()
         {
             StartSimulationGame(0);
+        }
+
+        /// <summary>
+        /// タイトルの「ウルク編: 都市の夜明け」。検証済みJSONから固定史実マップ、
+        /// 8勢力、実人口・物資進捗を構築し、通常ランダムゲームとは独立した勝敗規則で開始する。
+        /// </summary>
+        public void StartHistoricalCampaignFromTitle()
+        {
+            try
+            {
+                var definition = HistoricalCampaignRepository.LoadBuiltIn(
+                    HistoricalCampaignRepository.Uruk4000Id);
+                historicalSession = HistoricalCampaignFactory.Build(definition);
+                ApplyState(historicalSession.State);
+                turnManager.UseStandardVictoryRules = false;
+                turnManager.BeginGame();
+                state.EmitLog("史実キャンペーン「ウルク—都市の夜明け」を開始した");
+                state.EmitLog("復元推定マップ: 紀元前4000年、小集落人口1,500人");
+                EnsureHistoricalCampaignUi();
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError("史実キャンペーン開始失敗: " + ex);
+                if (state != null)
+                {
+                    state.EmitLog("史実キャンペーンを開始できませんでした");
+                    state.Bump();
+                }
+            }
         }
 
         // ==================================================================
@@ -694,6 +727,8 @@ namespace HexCiv
                 LeaderCatalog.BelongsTo(state.HumanPlayer.LeaderId, selectedHumanCivilizationId))
                 selectedHumanLeaderId = state.HumanPlayer.LeaderId;
             turnManager = new TurnManager(state, new AIController());
+            turnManager.UseStandardVictoryRules =
+                historicalSession == null || historicalSession.State != state;
 
             EnsureWorldObjects();
             audioManager.Init(state);
@@ -752,6 +787,10 @@ namespace HexCiv
 
             lastSeenVersion = -1;
             gameOverShown = false;
+            if (historicalSession != null && historicalSession.State == state)
+                EnsureHistoricalCampaignUi();
+            else
+                RemoveHistoricalCampaignUi();
         }
 
         // ==================================================================
@@ -1045,8 +1084,16 @@ namespace HexCiv
                 OnEndTurn = () =>
                 {
                     if (state == null || state.IsGameOver) return;
+                    int turnBefore = state.TurnNumber;
                     audioManager?.PlayEndTurn();
                     turnManager.EndTurn();
+                    if (historicalSession != null && historicalSession.State == state &&
+                        state.TurnNumber > turnBefore)
+                    {
+                        UrukCampaignSystem.AdvanceAfterTurn(historicalSession);
+                        SaveHistoricalAutoCheckpoint();
+                        historicalCampaignPanel?.Refresh();
+                    }
                     if (uiManager != null) uiManager.NotifyTutorialEvent("turn_ended");   // チュートリアル連動
                     AutoSelectIdleUnitAtTurnStart();   // ターン開始時の未行動ユニット自動選択(2026-07-20 Claude Code 追加)
                 },
@@ -1106,6 +1153,7 @@ namespace HexCiv
                     // 観戦ゲームからの「もう一度プレイ」は新しい観戦ゲームを開始する
                     // (通常ゲームからは従来どおり人間ありの新規ゲーム。2026-07-20 Claude Code 追加)
                     if (simulationMode) StartSimulationGame(0);
+                    else if (historicalSession != null) StartHistoricalCampaignFromTitle();
                     else StartNewGame();
                 },
 
@@ -1129,7 +1177,18 @@ namespace HexCiv
             if (human == null || human.IsEliminated) return;
             try
             {
-                SaveLoad.SaveToFile(state, SaveSlotPath(slot));
+                if (historicalSession != null && historicalSession.State == state)
+                {
+                    state.LastSavedAtIso = DateTime.Now.ToString("yyyy-MM-ddTHH:mm:ss",
+                        System.Globalization.CultureInfo.InvariantCulture);
+                    System.IO.File.WriteAllText(SaveSlotPath(slot),
+                        HistoricalCampaignSave.Serialize(historicalSession),
+                        new System.Text.UTF8Encoding(false));
+                }
+                else
+                {
+                    SaveLoad.SaveToFile(state, SaveSlotPath(slot));
+                }
                 state.EmitLog($"スロット{slot}にセーブしました");
             }
             catch (Exception ex)
@@ -1158,9 +1217,22 @@ namespace HexCiv
             }
             try
             {
-                var loaded = SaveLoad.LoadFromFile(path);
-                if (loaded == null) throw new Exception("セーブデータを読み込めなかった");
-                ApplyState(loaded);
+                string json = System.IO.File.ReadAllText(path);
+                if (HistoricalCampaignSave.IsHistoricalCampaignSave(json))
+                {
+                    var loadedSession = HistoricalCampaignSave.Deserialize(json,
+                        HistoricalCampaignRepository.LoadBuiltIn);
+                    historicalSession = loadedSession;
+                    ApplyState(loadedSession.State);
+                    turnManager.UseStandardVictoryRules = false;
+                }
+                else
+                {
+                    var loaded = SaveLoad.Deserialize(json);
+                    if (loaded == null) throw new Exception("セーブデータを読み込めなかった");
+                    ClearHistoricalCampaignMode();
+                    ApplyState(loaded);
+                }
                 state.EmitLog($"スロット{slot}のデータをロードしました");
                 state.Bump();
             }
@@ -1169,6 +1241,115 @@ namespace HexCiv
                 Debug.LogWarning("ロード失敗: " + ex.Message);
                 state.EmitLog("ロードに失敗しました");
                 state.Bump();
+            }
+        }
+
+        void ApplyHistoricalCampaignAction(string actionId)
+        {
+            if (historicalSession == null || historicalSession.State != state) return;
+            if (UrukCampaignSystem.TryApplyAction(historicalSession, actionId, out _))
+                historicalCampaignPanel?.Refresh();
+        }
+
+        void EnsureHistoricalCampaignUi()
+        {
+            if (historicalSession == null || historicalSession.State != state) return;
+            if (historicalCampaignPanel == null)
+            {
+                var go = new GameObject("HistoricalCampaignPanel");
+                go.transform.SetParent(transform, false);
+                historicalCampaignPanel = go.AddComponent<HistoricalCampaignPanel>();
+            }
+            historicalCampaignPanel.Init(historicalSession, ApplyHistoricalCampaignAction,
+                () => SaveGameToSlot(1), LoadHistoricalQuick);
+        }
+
+        void RemoveHistoricalCampaignUi()
+        {
+            if (historicalCampaignPanel == null) return;
+            Destroy(historicalCampaignPanel.gameObject);
+            historicalCampaignPanel = null;
+        }
+
+        void ClearHistoricalCampaignMode()
+        {
+            historicalSession = null;
+            RemoveHistoricalCampaignUi();
+        }
+
+        static string HistoricalAutoSavePath(int generation)
+        {
+            return System.IO.Path.Combine(Application.persistentDataPath,
+                $"hexciv_uruk_autosave{generation}.json");
+        }
+
+        void SaveHistoricalAutoCheckpoint()
+        {
+            if (historicalSession == null || historicalSession.State != state) return;
+            try
+            {
+                string first = HistoricalAutoSavePath(1);
+                string second = HistoricalAutoSavePath(2);
+                string third = HistoricalAutoSavePath(3);
+                if (System.IO.File.Exists(second))
+                    System.IO.File.Copy(second, third, true);
+                if (System.IO.File.Exists(first))
+                    System.IO.File.Copy(first, second, true);
+                state.LastSavedAtIso = DateTime.Now.ToString("yyyy-MM-ddTHH:mm:ss",
+                    System.Globalization.CultureInfo.InvariantCulture);
+                System.IO.File.WriteAllText(first,
+                    HistoricalCampaignSave.Serialize(historicalSession),
+                    new System.Text.UTF8Encoding(false));
+            }
+            catch (Exception ex)
+            {
+                Debug.LogWarning("史実キャンペーン自動セーブ失敗: " + ex.Message);
+            }
+        }
+
+        void LoadHistoricalQuick()
+        {
+            string manual = SaveSlotPath(1);
+            if (System.IO.File.Exists(manual))
+            {
+                try
+                {
+                    string json = System.IO.File.ReadAllText(manual);
+                    if (HistoricalCampaignSave.IsHistoricalCampaignSave(json))
+                    {
+                        LoadGameFromSlot(1);
+                        return;
+                    }
+                }
+                catch
+                {
+                    // 手動スロットが壊れていれば自動セーブへフォールバックする。
+                }
+            }
+
+            string automatic = HistoricalAutoSavePath(1);
+            if (!System.IO.File.Exists(automatic))
+            {
+                state?.EmitLog("ウルク編のセーブデータがありません");
+                state?.Bump();
+                return;
+            }
+            try
+            {
+                string json = System.IO.File.ReadAllText(automatic);
+                var loadedSession = HistoricalCampaignSave.Deserialize(json,
+                    HistoricalCampaignRepository.LoadBuiltIn);
+                historicalSession = loadedSession;
+                ApplyState(loadedSession.State);
+                turnManager.UseStandardVictoryRules = false;
+                state.EmitLog("最新のウルク編自動セーブをロードしました");
+                state.Bump();
+            }
+            catch (Exception ex)
+            {
+                Debug.LogWarning("ウルク編自動ロード失敗: " + ex.Message);
+                state?.EmitLog("ウルク編の自動セーブをロードできませんでした");
+                state?.Bump();
             }
         }
 

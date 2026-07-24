@@ -83,10 +83,10 @@ namespace HexCiv.UI
         /// <summary>バナー帯のRect(テクスチャ欠落時はnull=ドリフトなし)。</summary>
         RectTransform bannerRect;
         float bannerBaseY;
-        /// <summary>出現アニメ対象のメニューボタン(最大5個: つづける〜終了)。</summary>
-        readonly RectTransform[] menuItemRects = new RectTransform[5];
-        readonly CanvasGroup[] menuItemGroups = new CanvasGroup[5];
-        readonly float[] menuItemTargetY = new float[5];
+        /// <summary>出現アニメ対象のメニューボタン(最大6個: つづける〜終了)。</summary>
+        readonly RectTransform[] menuItemRects = new RectTransform[6];
+        readonly CanvasGroup[] menuItemGroups = new CanvasGroup[6];
+        readonly float[] menuItemTargetY = new float[6];
         int menuItemCount;
         /// <summary>表示開始時刻(Time.unscaledTime)。全演出の基準時刻。</summary>
         float shownAt;
@@ -198,6 +198,13 @@ namespace HexCiv.UI
             // タイトルはフェード中も入力を通す(BeginCloseでブロック解除済み)ため、
             // 設定パネルはフェードの下ですぐ操作できる
             if (bootstrap != null) bootstrap.OpenSettingsFromTitle();
+        }
+
+        void OnHistoricalCampaignClicked()
+        {
+            if (closing) return;
+            if (bootstrap != null) bootstrap.StartHistoricalCampaignFromTitle();
+            BeginClose();
         }
 
         void OnSpectatorClicked()
@@ -338,6 +345,9 @@ namespace HexCiv.UI
             string savedCivJa, savedAtIso;
             bool hasSlot1 = SaveLoad.TryReadMeta(SaveSlotPath(1),
                 out savedTurn, out savedCivJa, out savedAtIso);
+            if (!hasSlot1)
+                hasSlot1 = HistoricalCampaignSave.TryReadMeta(SaveSlotPath(1),
+                    out savedTurn, out savedCivJa, out savedAtIso);
             continueButton.interactable = hasSlot1;
             if (hasSlot1)
             {
@@ -348,6 +358,11 @@ namespace HexCiv.UI
                 UIStyle.SetRect(meta.gameObject, new Vector2(0f, 0f), new Vector2(1f, 0f),
                     new Vector2(0.5f, 0f), new Vector2(0f, 1f), new Vector2(0f, 14f));
             }
+            y -= buttonStep;
+
+            CreateMenuButton(overlay.transform, "HistoricalCampaignButton",
+                "史実キャンペーン：ウルク—都市の夜明け", y,
+                OnHistoricalCampaignClicked);
             y -= buttonStep;
 
             CreateMenuButton(overlay.transform, "NewGameButton", "新しいゲーム / 設定", y,
@@ -407,7 +422,7 @@ namespace HexCiv.UI
         /// </summary>
         void RegisterMenuItem(GameObject go, float posY)
         {
-            if (menuItemCount >= menuItemRects.Length) return;   // 想定5個を超えたら演出なしで表示
+            if (menuItemCount >= menuItemRects.Length) return;   // 想定6個を超えたら演出なしで表示
             var itemGroup = go.AddComponent<CanvasGroup>();
             itemGroup.alpha = 0f;
             var rt = (RectTransform)go.transform;

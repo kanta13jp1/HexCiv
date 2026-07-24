@@ -11,6 +11,13 @@ namespace HexCiv.Core
         readonly GameState state;
         readonly IAIController ai;
 
+        /// <summary>
+        /// 通常4Xの制覇・文化・ターン上限勝利を使うか。
+        /// 史実キャンペーンは独自の勝敗条件をターン直後に判定するためfalseにする。
+        /// 既定trueなので既存ランダムゲームの挙動は変わらない。
+        /// </summary>
+        public bool UseStandardVictoryRules { get; set; } = true;
+
         public TurnManager(GameState state, IAIController ai)
         {
             this.state = state;
@@ -127,17 +134,20 @@ namespace HexCiv.Core
                 state.EliminateIfDefeated(state.Players[i]);
 
             // ---- 制覇勝利 ----
-            state.CheckDominationVictory();
+            if (UseStandardVictoryRules)
+                state.CheckDominationVictory();
 
             // ---- 文化交流・文化勝利 ----
             if (!state.IsGameOver)
             {
                 CultureSystem.AdvanceExchange(state);
-                CultureSystem.CheckCulturalVictory(state);
+                if (UseStandardVictoryRules)
+                    CultureSystem.CheckCulturalVictory(state);
             }
 
             // ---- ターン上限:スコア勝利 ----
-            if (!state.IsGameOver && state.Config != null && state.TurnNumber > state.Config.MaxTurns)
+            if (UseStandardVictoryRules && !state.IsGameOver &&
+                state.Config != null && state.TurnNumber > state.Config.MaxTurns)
             {
                 Player best = null;
                 int bestScore = -1;

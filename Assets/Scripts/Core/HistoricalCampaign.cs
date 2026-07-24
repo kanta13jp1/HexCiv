@@ -22,6 +22,17 @@ namespace HexCiv.Core
         public string publisher;
         public string title;
         public string url;
+        /// <summary>world_heritage / museum / academic / primary / other。</summary>
+        public string sourceType;
+        /// <summary>参照確認日。ISO 8601のYYYY-MM-DD。</summary>
+        public string accessedDate;
+        /// <summary>reference_only / reusable_asset。</summary>
+        public string usage;
+        /// <summary>素材自体を収録する場合に必須。参照のみなら空でよい。</summary>
+        public string license;
+        public string licenseUrl;
+        /// <summary>draft / review / verified / rejected。</summary>
+        public string reviewStatus;
     }
 
     [Serializable]
@@ -46,6 +57,7 @@ namespace HexCiv.Core
         public HistoricalLocalizedText name;
         /// <summary>confirmed / probable / inferred。</summary>
         public string confidence;
+        public string reviewStatus;
         public HistoricalMapPoint[] points;
         public string[] sourceRefs;
     }
@@ -59,6 +71,7 @@ namespace HexCiv.Core
         public HistoricalLocalizedText capitalName;
         public HistoricalLocalizedText leaderTitle;
         public string confidence;
+        public string reviewStatus;
         public bool human;
         public int startCol;
         public int startRow;
@@ -76,14 +89,77 @@ namespace HexCiv.Core
         public HistoricalLocalizedText name;
         public string category;
         public string confidence;
+        public string reviewStatus;
         public HistoricalLocalizedText historicalNote;
         public string[] sourceRefs;
+    }
+
+    [Serializable]
+    public sealed class HistoricalPopulationRoles
+    {
+        public int farmers;
+        public int pastoralists;
+        public int fishers;
+        public int artisans;
+        public int priests;
+        public int warriors;
+        public int laborers;
+
+        public int Total => farmers + pastoralists + fishers + artisans +
+            priests + warriors + laborers;
+    }
+
+    [Serializable]
+    public sealed class HistoricalPopulationStatuses
+    {
+        public int free;
+        public int dependent;
+        public int enslaved;
+
+        public int Total => free + dependent + enslaved;
+    }
+
+    [Serializable]
+    public sealed class HistoricalGoodAmount
+    {
+        public string id;
+        public int amount;
+    }
+
+    [Serializable]
+    public sealed class HistoricalImprovementDefinition
+    {
+        public string id;
+        public string kind;
+        public int col;
+        public int row;
+        public int condition;
+        public string confidence;
+        public string reviewStatus;
+        public string[] sourceRefs;
+    }
+
+    [Serializable]
+    public sealed class HistoricalStartingScenario
+    {
+        public int actualPopulation;
+        public HistoricalPopulationRoles roles;
+        public HistoricalPopulationStatuses statuses;
+        public HistoricalGoodAmount[] stockpiles;
+        public HistoricalImprovementDefinition[] improvements;
+        public int stability;
+        public bool populationAutomation;
+        public bool productionAutomation;
+        public bool tradeAutomation;
     }
 
     [Serializable]
     public sealed class HistoricalCampaignDefinition
     {
         public int schemaVersion;
+        public int datasetVersion;
+        /// <summary>製品ビルドへ読み込めるのはverifiedのみ。</summary>
+        public string reviewStatus;
         public string id;
         public HistoricalLocalizedText title;
         public HistoricalLocalizedText summary;
@@ -103,6 +179,7 @@ namespace HexCiv.Core
         public HistoricalRiverDefinition[] rivers;
         public HistoricalFactionDefinition[] factions;
         public HistoricalGoodDefinition[] goods;
+        public HistoricalStartingScenario startingScenario;
         public HistoricalSourceDefinition[] sources;
     }
 
@@ -111,6 +188,8 @@ namespace HexCiv.Core
     {
         static readonly Regex StableId = new Regex(
             "^[a-z0-9]+(?:_[a-z0-9]+)*$", RegexOptions.CultureInvariant);
+        static readonly Regex IsoDate = new Regex(
+            @"^\d{4}-\d{2}-\d{2}$", RegexOptions.CultureInvariant);
         const string KnownTerrainChars = "~=.gdhm";
 
         public static IReadOnlyList<string> Validate(HistoricalCampaignDefinition definition)
@@ -126,6 +205,9 @@ namespace HexCiv.Core
             RequireLocalized(errors, definition.title, "campaign.title");
             RequireLocalized(errors, definition.summary, "campaign.summary");
             if (definition.schemaVersion != 1) errors.Add("schemaVersionは1でなければならない");
+            if (definition.datasetVersion < 1) errors.Add("datasetVersionは1以上");
+            ValidateReviewStatus(errors, definition.reviewStatus, definition.id, true);
+            ValidateConfidence(errors, definition.mapConfidence, "campaign.mapConfidence");
             if (definition.mapWidth < 8 || definition.mapHeight < 8)
                 errors.Add("固定マップは8x8以上でなければならない");
             if (definition.maxTurns <= 0) errors.Add("maxTurnsは1以上");
@@ -149,12 +231,35 @@ namespace HexCiv.Core
                     if (!Uri.TryCreate(source.url, UriKind.Absolute, out var uri) ||
                         (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
                         errors.Add("出典URL不正: " + source.id);
+                    if (source.sourceType != "world_heritage" &&
+                        source.sourceType != "museum" &&
+                        source.sourceType != "academic" &&
+                        source.sourceType != "primary" &&
+                        source.sourceType != "other")
+                        errors.Add("出典sourceType不正: " + source.id);
+                    if (string.IsNullOrWhiteSpace(source.accessedDate) ||
+                        !IsoDate.IsMatch(source.accessedDate))
+                        errors.Add("出典accessedDate不正: " + source.id);
+                    if (source.usage != "reference_only" &&
+                        source.usage != "reusable_asset")
+                        errors.Add("出典usage不正: " + source.id);
+                    if (source.usage == "reusable_asset")
+                    {
+                        if (string.IsNullOrWhiteSpace(source.license))
+                            errors.Add("再利用素材のlicense欠落: " + source.id);
+                        if (!Uri.TryCreate(source.licenseUrl, UriKind.Absolute, out var licenseUri) ||
+                            (licenseUri.Scheme != Uri.UriSchemeHttp &&
+                             licenseUri.Scheme != Uri.UriSchemeHttps))
+                            errors.Add("再利用素材のlicenseUrl不正: " + source.id);
+                    }
+                    ValidateReviewStatus(errors, source.reviewStatus, source.id, true);
                 }
             }
 
             ValidateFactions(definition, sourceIds, errors);
             ValidateGoods(definition, sourceIds, errors);
             ValidateRivers(definition, sourceIds, errors);
+            ValidateStartingScenario(definition, sourceIds, errors);
             return errors;
         }
 
@@ -235,6 +340,7 @@ namespace HexCiv.Core
                 RequireLocalized(errors, faction.leaderTitle, faction.id + ".leaderTitle");
                 RequireLocalized(errors, faction.historicalNote, faction.id + ".historicalNote");
                 ValidateConfidence(errors, faction.confidence, faction.id);
+                ValidateReviewStatus(errors, faction.reviewStatus, faction.id, true);
                 if (faction.human) humans++;
                 if (faction.initialPopulation < 1) errors.Add("初期人口が1未満: " + faction.id);
                 if (!IsInBounds(definition, faction.startCol, faction.startRow))
@@ -269,6 +375,7 @@ namespace HexCiv.Core
                 RequireLocalized(errors, good.name, good.id + ".name");
                 RequireLocalized(errors, good.historicalNote, good.id + ".historicalNote");
                 ValidateConfidence(errors, good.confidence, good.id);
+                ValidateReviewStatus(errors, good.reviewStatus, good.id, true);
                 if (string.IsNullOrWhiteSpace(good.category)) errors.Add("物資category欠落: " + good.id);
                 ValidateSourceRefs(good.sourceRefs, sourceIds, good.id, errors);
             }
@@ -290,6 +397,7 @@ namespace HexCiv.Core
                 if (!ids.Add(river.id ?? "")) errors.Add("河川ID重複: " + river.id);
                 RequireLocalized(errors, river.name, river.id + ".name");
                 ValidateConfidence(errors, river.confidence, river.id);
+                ValidateReviewStatus(errors, river.reviewStatus, river.id, true);
                 if (river.points == null || river.points.Length < 2)
                 {
                     errors.Add("河川経路が短すぎる: " + river.id);
@@ -316,6 +424,80 @@ namespace HexCiv.Core
             }
         }
 
+        static void ValidateStartingScenario(HistoricalCampaignDefinition definition,
+            HashSet<string> sourceIds, List<string> errors)
+        {
+            var scenario = definition.startingScenario;
+            if (scenario == null)
+            {
+                errors.Add("startingScenarioがない");
+                return;
+            }
+            if (scenario.actualPopulation != 1500)
+                errors.Add("ウルク開始実人口は1500人");
+            if (scenario.roles == null || scenario.roles.Total != scenario.actualPopulation)
+                errors.Add("開始時の役割別人口合計が実人口と一致しない");
+            if (scenario.statuses == null ||
+                scenario.statuses.Total != scenario.actualPopulation)
+                errors.Add("開始時の地位別人口合計が実人口と一致しない");
+            if (scenario.statuses != null && scenario.statuses.enslaved != 0)
+                errors.Add("紀元前4000年開始時の奴隷人口は0でなければならない");
+            if (!scenario.populationAutomation || scenario.productionAutomation ||
+                scenario.tradeAutomation)
+                errors.Add("初期自動化は人口ON・生産OFF・交易OFF");
+            if (scenario.stability < 0 || scenario.stability > 100)
+                errors.Add("開始安定度は0..100");
+
+            var goodIds = new HashSet<string>();
+            if (definition.goods != null)
+                foreach (var good in definition.goods)
+                    if (good != null && !string.IsNullOrWhiteSpace(good.id))
+                        goodIds.Add(good.id);
+            var stockIds = new HashSet<string>();
+            if (scenario.stockpiles == null || scenario.stockpiles.Length != goodIds.Count)
+                errors.Add("開始備蓄は実在物資台帳の全項目を1件ずつ持つ");
+            else
+            {
+                foreach (var stock in scenario.stockpiles)
+                {
+                    if (stock == null) { errors.Add("nullの開始備蓄"); continue; }
+                    if (!goodIds.Contains(stock.id ?? ""))
+                        errors.Add("未登録の開始備蓄: " + stock.id);
+                    if (!stockIds.Add(stock.id ?? ""))
+                        errors.Add("開始備蓄ID重複: " + stock.id);
+                    if (stock.amount < 0) errors.Add("開始備蓄が負数: " + stock.id);
+                }
+            }
+
+            int farms = 0;
+            int canals = 0;
+            var improvementIds = new HashSet<string>();
+            if (scenario.improvements == null || scenario.improvements.Length == 0)
+            {
+                errors.Add("開始施設がない");
+                return;
+            }
+            foreach (var improvement in scenario.improvements)
+            {
+                if (improvement == null) { errors.Add("nullの開始施設"); continue; }
+                RequireStableId(errors, improvement.id, "improvement.id");
+                if (!improvementIds.Add(improvement.id ?? ""))
+                    errors.Add("開始施設ID重複: " + improvement.id);
+                if (improvement.kind == "farm") farms++;
+                else if (improvement.kind == "canal") canals++;
+                else errors.Add("開始施設kind不正: " + improvement.kind);
+                if (!IsInBounds(definition, improvement.col, improvement.row))
+                    errors.Add("開始施設がマップ範囲外: " + improvement.id);
+                if (improvement.condition < 0 || improvement.condition > 100)
+                    errors.Add("開始施設conditionは0..100: " + improvement.id);
+                ValidateConfidence(errors, improvement.confidence, improvement.id);
+                ValidateReviewStatus(errors, improvement.reviewStatus, improvement.id, true);
+                ValidateSourceRefs(improvement.sourceRefs, sourceIds, improvement.id, errors);
+            }
+            if (farms != 2) errors.Add("開始農地は正確に2区画");
+            if (canals < 1) errors.Add("未整備の開始運河が必要");
+        }
+
         static bool IsInBounds(HistoricalCampaignDefinition definition, int col, int row)
         {
             return col >= 0 && col < definition.mapWidth &&
@@ -340,6 +522,17 @@ namespace HexCiv.Core
             if (confidence != "confirmed" && confidence != "probable" &&
                 confidence != "inferred")
                 errors.Add("史料確度が不正: " + owner);
+        }
+
+        static void ValidateReviewStatus(List<string> errors, string status,
+            string owner, bool requireVerified)
+        {
+            bool known = status == "draft" || status == "review" ||
+                status == "verified" || status == "rejected";
+            if (!known)
+                errors.Add("確認状態が不正: " + owner);
+            else if (requireVerified && status != "verified")
+                errors.Add("製品収録データはverified必須: " + owner);
         }
 
         static void RequireStableId(List<string> errors, string id, string label)
