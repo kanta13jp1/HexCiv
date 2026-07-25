@@ -38,7 +38,7 @@ public static class HistoricalCampaignFoundationSmokeTest
         if (errors.Count != 0)
             throw new Exception("定義検証エラー: " + string.Join(" | ", errors));
         if (definition.id != "uruk_4000" || definition.schemaVersion != 1 ||
-            definition.datasetVersion != 1 || definition.reviewStatus != "verified")
+            definition.datasetVersion != 2 || definition.reviewStatus != "verified")
             throw new Exception("キャンペーン安定ID・版数・確認状態が不正");
         if (definition.startYear != -4000 || definition.endYear != -3000 ||
             definition.maxTurns != 50)

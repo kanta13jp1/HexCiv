@@ -28,7 +28,7 @@ namespace HexCiv.Core
     [Serializable]
     public sealed class UrukCampaignProgress
     {
-        public int version = 2;
+        public int version = 3;
         public int actualPopulation;
         public HistoricalPopulationRoles roles;
         public HistoricalPopulationStatuses statuses;
@@ -40,6 +40,28 @@ namespace HexCiv.Core
         public int storageCapacityMonths;
         public UrukSocialFactors social;
         public UrukPeriodEvent[] events;
+        public UrukRegionalFactionState[] regionalFactions;
+        public UrukCanalSegmentState[] canalSegments;
+        public UrukFarmPlotState[] farmPlots;
+        public UrukConstructionProjectState[] constructionProjects;
+        public UrukTradeOfferState[] tradeOffers;
+        public UrukTransportState[] transports;
+        public UrukMigrationGroupState[] migrationGroups;
+        public UrukWaterDisputeState[] waterDisputes;
+        public int nextRegionalId = 1;
+        public int regionalRevision;
+        public int regionalOverlayMode;
+        public int selectedIntakeCol = -1;
+        public int selectedIntakeRow = -1;
+        public string selectedFarmId;
+        public int reservedClay;
+        public int reservedReeds;
+        public int estimatedCanalTurns;
+        public int lastRegionalSourceWater;
+        public int lastRegionalFarmWater;
+        public int lastRegionalLeakage;
+        public int lastRegionalUnusedWater;
+        public int lastRegionalHumanYield;
         public int stability;
         public int consecutiveCriticalUnrest;
         public int currentFloodTrend = (int)UrukFloodTrend.Stable;
@@ -111,7 +133,7 @@ namespace HexCiv.Core
             var starting = definition.startingScenario;
             var progress = new UrukCampaignProgress
             {
-                version = 2,
+                version = 3,
                 actualPopulation = starting.actualPopulation,
                 roles = CopyRoles(starting.roles),
                 statuses = CopyStatuses(starting.statuses),
@@ -132,6 +154,7 @@ namespace HexCiv.Core
                 lastReportJa = "小集落ウルク。食料備蓄はわずかで、運河は堆積により十分に機能していない。",
             };
             UrukSubsistenceSystem.EnsureDefaults(progress);
+            UrukRegionalSystem.EnsureInitialized(definition, progress);
             ValidateProgress(definition, progress);
             return progress;
         }
@@ -140,12 +163,13 @@ namespace HexCiv.Core
         /// 第2基盤（progress version 1）のセーブを、推定値を明示した第3段階へ補完する。
         /// 旧JSONに存在しない値だけを設定し、既存人口・備蓄・施設進捗は保持する。
         /// </summary>
-        public static void MigrateProgress(UrukCampaignProgress progress)
+        public static void MigrateProgress(HistoricalCampaignDefinition definition,
+            UrukCampaignProgress progress)
         {
+            if (definition == null) throw new ArgumentNullException(nameof(definition));
             if (progress == null) throw new ArgumentNullException(nameof(progress));
             if (progress.version == 1)
             {
-                progress.version = 2;
                 progress.labor = new UrukLaborAllocation();
                 progress.laborAutomationPolicy = "food_security";
                 progress.seedGrain = 2;
@@ -161,7 +185,10 @@ namespace HexCiv.Core
                         progress.templeProgress >= 20 ? 2 : 1;
                 }
             }
+            if (progress.version == 1 || progress.version == 2)
+                progress.version = 3;
             UrukSubsistenceSystem.EnsureDefaults(progress);
+            UrukRegionalSystem.EnsureInitialized(definition, progress);
         }
 
         public static void ValidateProgress(HistoricalCampaignDefinition definition,
@@ -169,7 +196,7 @@ namespace HexCiv.Core
         {
             if (definition == null) throw new ArgumentNullException(nameof(definition));
             if (progress == null) throw new ArgumentNullException(nameof(progress));
-            if (progress.version != 2)
+            if (progress.version != 3)
                 throw new InvalidOperationException("ウルク進捗versionが不正");
             if (progress.actualPopulation < 0)
                 throw new InvalidOperationException("実人口が負数");
@@ -250,6 +277,7 @@ namespace HexCiv.Core
             progress.stability = Math.Clamp(progress.stability, 0, 100);
             progress.templeProgress = Math.Clamp(progress.templeProgress, 0,
                 TempleCompletionProgress);
+            UrukRegionalSystem.Validate(definition, progress);
         }
 
         static bool Percent(int value) => value >= 0 && value <= 100;
@@ -347,11 +375,21 @@ namespace HexCiv.Core
                     break;
 
                 default:
-                    if (!TryApplyLaborAction(progress, actionId, out resultJa))
+                    if (actionId != null &&
+                        actionId.StartsWith("labor_", StringComparison.Ordinal))
+                    {
+                        if (!TryApplyLaborAction(progress, actionId, out resultJa))
+                            return false;
+                    }
+                    else if (!UrukRegionalSystem.TryApplyAction(session, actionId,
+                        out resultJa))
+                    {
                         return false;
+                    }
                     break;
             }
 
+            UrukRegionalSystem.OnLegacyAction(session, actionId);
             progress.introTutorialCompleted = progress.lastCanalActionTurn > 0 &&
                 progress.lastFoodPriorityTurn > 0 && progress.templePlanned;
             state.EmitLog(resultJa);
@@ -375,6 +413,7 @@ namespace HexCiv.Core
 
             // 生産・消費・人口・社会・建設を同じ期間条件で一括解決する。
             // 運河の劣化は当期の収穫後に反映し、次期間の予測へ影響させる。
+            UrukRegionalSystem.Advance(session, completedTurn, flood);
             UrukSubsistenceSystem.Advance(session, completedTurn, flood);
             int canalCondition = CanalCondition(progress);
             bool maintained = progress.lastCanalActionTurn == completedTurn;
@@ -666,7 +705,9 @@ namespace HexCiv.Core
 
         static bool HasGood(UrukCampaignProgress progress, string id, int amount)
         {
-            return GoodAmount(progress, id) >= amount;
+            int reserved = id == "alluvial_clay" ? progress.reservedClay :
+                id == "reeds" ? progress.reservedReeds : 0;
+            return GoodAmount(progress, id) - reserved >= amount;
         }
 
         static bool TryConsumeGood(UrukCampaignProgress progress, string id, int amount)

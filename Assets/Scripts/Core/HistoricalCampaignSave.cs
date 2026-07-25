@@ -62,7 +62,8 @@ namespace HexCiv.Core
             int savedDatasetVersion = envelope.campaignDatasetVersion == 0
                 ? 1
                 : envelope.campaignDatasetVersion;
-            if (definition.datasetVersion != savedDatasetVersion)
+            if (savedDatasetVersion < 1 ||
+                savedDatasetVersion > definition.datasetVersion)
                 throw new InvalidOperationException("史実データセットのバージョンがセーブと一致しない");
             var state = SaveLoad.Deserialize(envelope.stateJson);
             if (state == null) throw new InvalidOperationException("内側のゲーム状態を復元できない");
@@ -75,7 +76,7 @@ namespace HexCiv.Core
             var progress = string.IsNullOrWhiteSpace(envelope.progressJson)
                 ? UrukCampaignSystem.CreateInitialProgress(definition)
                 : JsonUtility.FromJson<UrukCampaignProgress>(envelope.progressJson);
-            UrukCampaignSystem.MigrateProgress(progress);
+            UrukCampaignSystem.MigrateProgress(definition, progress);
             UrukCampaignSystem.ValidateProgress(definition, progress);
             return new HistoricalCampaignSession(definition, state, progress);
         }

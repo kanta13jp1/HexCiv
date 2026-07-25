@@ -142,6 +142,41 @@ namespace HexCiv.Core
     }
 
     [Serializable]
+    public sealed class HistoricalFarmPlotDefinition
+    {
+        public string id;
+        public string factionId;
+        public int col;
+        public int row;
+        /// <summary>barley / emmer / fallow。</summary>
+        public string crop;
+        public int condition;
+        public int drainage;
+        public int salinity;
+        public string confidence;
+        public string reviewStatus;
+        public string[] sourceRefs;
+    }
+
+    [Serializable]
+    public sealed class HistoricalCanalSegmentDefinition
+    {
+        public string id;
+        public string factionId;
+        public int fromCol;
+        public int fromRow;
+        public int toCol;
+        public int toRow;
+        public int condition;
+        public int capacity;
+        public bool completed;
+        public bool sourceIntake;
+        public string confidence;
+        public string reviewStatus;
+        public string[] sourceRefs;
+    }
+
+    [Serializable]
     public sealed class HistoricalStartingScenario
     {
         public int actualPopulation;
@@ -181,6 +216,8 @@ namespace HexCiv.Core
         public HistoricalRiverDefinition[] rivers;
         public HistoricalFactionDefinition[] factions;
         public HistoricalGoodDefinition[] goods;
+        public HistoricalFarmPlotDefinition[] farmPlots;
+        public HistoricalCanalSegmentDefinition[] canalSegments;
         public HistoricalStartingScenario startingScenario;
         public HistoricalSourceDefinition[] sources;
     }
@@ -261,6 +298,7 @@ namespace HexCiv.Core
             ValidateFactions(definition, sourceIds, errors);
             ValidateGoods(definition, sourceIds, errors);
             ValidateRivers(definition, sourceIds, errors);
+            ValidateRegionalInfrastructure(definition, sourceIds, errors);
             ValidateStartingScenario(definition, sourceIds, errors);
             return errors;
         }
@@ -425,6 +463,72 @@ namespace HexCiv.Core
                 ValidateSourceRefs(river.sourceRefs, sourceIds, river.id, errors);
             }
         }
+
+        static void ValidateRegionalInfrastructure(
+            HistoricalCampaignDefinition definition, HashSet<string> sourceIds,
+            List<string> errors)
+        {
+            var factionIds = new HashSet<string>();
+            if (definition.factions != null)
+                foreach (var faction in definition.factions)
+                    if (faction != null) factionIds.Add(faction.id);
+
+            if (definition.farmPlots == null ||
+                definition.farmPlots.Length < definition.factions.Length)
+                errors.Add("各勢力に1区画以上の史実農地定義が必要");
+            else
+            {
+                var ids = new HashSet<string>();
+                foreach (var farm in definition.farmPlots)
+                {
+                    if (farm == null) { errors.Add("nullの農地区画"); continue; }
+                    RequireStableId(errors, farm.id, "farm.id");
+                    if (!ids.Add(farm.id ?? "")) errors.Add("農地ID重複: " + farm.id);
+                    if (!factionIds.Contains(farm.factionId))
+                        errors.Add("農地の勢力ID不正: " + farm.id);
+                    if (!IsInBounds(definition, farm.col, farm.row))
+                        errors.Add("農地座標が範囲外: " + farm.id);
+                    if (farm.crop != "barley" && farm.crop != "emmer" &&
+                        farm.crop != "fallow")
+                        errors.Add("農地作物が不正: " + farm.id);
+                    if (!IsPercent(farm.condition) || !IsPercent(farm.drainage) ||
+                        !IsPercent(farm.salinity))
+                        errors.Add("農地状態が0..100でない: " + farm.id);
+                    ValidateConfidence(errors, farm.confidence, farm.id);
+                    ValidateReviewStatus(errors, farm.reviewStatus, farm.id, true);
+                    ValidateSourceRefs(farm.sourceRefs, sourceIds, farm.id, errors);
+                }
+            }
+
+            if (definition.canalSegments == null ||
+                definition.canalSegments.Length < definition.factions.Length)
+                errors.Add("各勢力に水路定義が必要");
+            else
+            {
+                var ids = new HashSet<string>();
+                foreach (var canal in definition.canalSegments)
+                {
+                    if (canal == null) { errors.Add("nullの水路区間"); continue; }
+                    RequireStableId(errors, canal.id, "canal.id");
+                    if (!ids.Add(canal.id ?? "")) errors.Add("水路ID重複: " + canal.id);
+                    if (!factionIds.Contains(canal.factionId))
+                        errors.Add("水路の勢力ID不正: " + canal.id);
+                    if (!IsInBounds(definition, canal.fromCol, canal.fromRow) ||
+                        !IsInBounds(definition, canal.toCol, canal.toRow))
+                        errors.Add("水路座標が範囲外: " + canal.id);
+                    else if (HexCoord.FromOffset(canal.fromCol, canal.fromRow)
+                        .DistanceTo(HexCoord.FromOffset(canal.toCol, canal.toRow)) != 1)
+                        errors.Add("水路区間が非隣接: " + canal.id);
+                    if (!IsPercent(canal.condition) || canal.capacity <= 0)
+                        errors.Add("水路状態または容量が不正: " + canal.id);
+                    ValidateConfidence(errors, canal.confidence, canal.id);
+                    ValidateReviewStatus(errors, canal.reviewStatus, canal.id, true);
+                    ValidateSourceRefs(canal.sourceRefs, sourceIds, canal.id, errors);
+                }
+            }
+        }
+
+        static bool IsPercent(int value) => value >= 0 && value <= 100;
 
         static void ValidateStartingScenario(HistoricalCampaignDefinition definition,
             HashSet<string> sourceIds, List<string> errors)

@@ -1,0 +1,257 @@
+using System;
+using System.Diagnostics;
+using HexCiv.Campaigns;
+using HexCiv.Core;
+using UnityEditor;
+using UnityEngine;
+
+/// <summary>
+/// ウルク編 Stage 4A の水・農地・AI台帳・輸送・移住を決定論的に検証する。
+/// </summary>
+public static class UrukRegionalSimulationSmokeTest
+{
+    [MenuItem("HexCiv/Run Uruk Regional Simulation Smoke Test")]
+    public static void Run()
+    {
+        try
+        {
+            var definition = HistoricalCampaignRepository.LoadBuiltIn(
+                HistoricalCampaignRepository.Uruk4000Id);
+            ValidateInitialLedgers(definition);
+            ValidateBrokenCanal(definition);
+            ValidatePlayerSequence(definition);
+            ValidateThreeSeedDeterminism();
+            UnityEngine.Debug.Log("URUK REGIONAL SIMULATION SMOKE OK");
+            if (Application.isBatchMode) EditorApplication.Exit(0);
+        }
+        catch (Exception ex)
+        {
+            UnityEngine.Debug.LogError(
+                "URUK REGIONAL SIMULATION SMOKE FAIL: " + ex);
+            if (Application.isBatchMode) EditorApplication.Exit(1);
+            else throw;
+        }
+    }
+
+    static void ValidateInitialLedgers(HistoricalCampaignDefinition definition)
+    {
+        var session = HistoricalCampaignFactory.Build(definition);
+        var progress = session.Progress;
+        Require(progress.version == 3, "進捗versionが3ではない");
+        Require(progress.regionalFactions.Length == 8, "8勢力台帳がない");
+        Require(progress.farmPlots.Length == definition.farmPlots.Length,
+            "農地定義が状態へ反映されていない");
+        Require(progress.canalSegments.Length == definition.canalSegments.Length,
+            "水路定義が状態へ反映されていない");
+        for (int i = 0; i < progress.regionalFactions.Length; i++)
+        {
+            var faction = progress.regionalFactions[i];
+            Require(faction.labor.Total == 100,
+                faction.factionId + "の労働配分が100%ではない");
+            Require(!string.IsNullOrWhiteSpace(faction.currentGoalJa),
+                faction.factionId + "の目的がない");
+            Require(!string.IsNullOrWhiteSpace(faction.aiArchetype),
+                faction.factionId + "のAI類型がない");
+        }
+        UrukRegionalSystem.ResolveWaterForTest(progress);
+        ValidateConservation(definition, progress);
+    }
+
+    static void ValidateBrokenCanal(HistoricalCampaignDefinition definition)
+    {
+        var session = HistoricalCampaignFactory.Build(definition);
+        var progress = session.Progress;
+        var intake = Segment(progress, "ur_marsh_intake");
+        var middle = Segment(progress, "ur_marsh_branch");
+        var farm = Farm(progress, "ur_hinterland_farm");
+        intake.condition = 80;
+        middle.condition = 0;
+        UrukRegionalSystem.ResolveWaterForTest(progress);
+        Require(farm.waterReceived == 0,
+            "中間水路が破断しても下流農地へ水が届いた");
+        middle.condition = 80;
+        UrukRegionalSystem.ResolveWaterForTest(progress);
+        Require(farm.waterReceived > 0,
+            "中間水路を修復しても下流農地へ水が届かない");
+        ValidateConservation(definition, progress);
+    }
+
+    static void ValidatePlayerSequence(HistoricalCampaignDefinition definition)
+    {
+        var session = HistoricalCampaignFactory.Build(definition);
+        var progress = session.Progress;
+        int clayBefore = UrukCampaignSystem.GoodAmount(progress,
+            "alluvial_clay");
+        int reedsBefore = UrukCampaignSystem.GoodAmount(progress, "reeds");
+
+        Require(UrukCampaignSystem.TryApplyAction(session,
+            UrukRegionalSystem.CropBarleyAction, out _), "大麦作付けに失敗");
+        Require(UrukCampaignSystem.TryApplyAction(session,
+            UrukRegionalSystem.PlanCanalAction, out _), "水路提案に失敗");
+        Require(progress.reservedClay > 0 && progress.reservedReeds > 0,
+            "水路資源が予約されていない");
+        Require(UrukCampaignSystem.GoodAmount(progress, "alluvial_clay") ==
+            clayBefore && UrukCampaignSystem.GoodAmount(progress, "reeds") ==
+            reedsBefore, "確定前の計画が資源を消費した");
+        Require(UrukCampaignSystem.TryApplyAction(session,
+            UrukRegionalSystem.CancelCanalPlanAction, out _), "水路取消に失敗");
+        Require(progress.reservedClay == 0 && progress.reservedReeds == 0,
+            "取消後も資源予約が残った");
+        Require(UrukCampaignSystem.GoodAmount(progress, "alluvial_clay") ==
+            clayBefore && UrukCampaignSystem.GoodAmount(progress, "reeds") ==
+            reedsBefore, "取消で資源量が変化した");
+
+        Require(UrukCampaignSystem.TryApplyAction(session,
+            UrukRegionalSystem.PlanCanalAction, out _), "水路再提案に失敗");
+        Require(UrukCampaignSystem.TryApplyAction(session,
+            UrukCampaignSystem.MaintainCanalAction, out _), "取水路整備に失敗");
+
+        int completedTurn = 0;
+        while (completedTurn < 7 &&
+            UrukRegionalSystem.HumanIrrigatedFarmCount(progress) == 0)
+        {
+            completedTurn++;
+            Advance(session, completedTurn);
+            ValidateConservation(definition, progress);
+        }
+        Require(UrukRegionalSystem.HumanIrrigatedFarmCount(progress) > 0,
+            "7期以内に計画水路から農地へ通水できない");
+        Require(progress.lastRegionalHumanYield > 0,
+            "灌漑農地の収穫が発生していない");
+
+        while (completedTurn < 6)
+        {
+            completedTurn++;
+            Advance(session, completedTurn);
+        }
+        var offer = UrukRegionalSystem.FirstOpenOffer(progress);
+        Require(offer != null && offer.contractKind == "barter",
+            "第6期のエリドゥ交易提案がない");
+        Require(UrukCampaignSystem.TryApplyAction(session,
+            UrukRegionalSystem.AcceptOfferAction, out _), "物々交換受諾に失敗");
+        completedTurn++;
+        Advance(session, completedTurn);
+        Require(progress.transports.Length >= 2,
+            "交換物資が実体輸送として生成されていない");
+        bool reedBoat = false;
+        foreach (var transport in progress.transports)
+        {
+            ValidateTransport(transport);
+            if (transport.mode == "reed_boat") reedBoat = true;
+        }
+        Require(reedBoat, "水域交易に葦船が使われていない");
+
+        while (completedTurn < 9)
+        {
+            completedTurn++;
+            Advance(session, completedTurn);
+            ValidateConservation(definition, progress);
+        }
+        Require(UrukRegionalSystem.FirstOpenDispute(progress) != null,
+            "第8期の水利紛争が生成されていない");
+        Require(UrukRegionalSystem.FirstWaitingMigration(progress) != null,
+            "第9期の移住集団が生成されていない");
+        Require(UrukCampaignSystem.TryApplyAction(session,
+            UrukRegionalSystem.NegotiateWaterAction, out _), "水利交渉に失敗");
+        Require(UrukCampaignSystem.TryApplyAction(session,
+            UrukRegionalSystem.AcceptMigrationAction, out _), "移住受入に失敗");
+        var migration = progress.migrationGroups[0];
+        completedTurn++;
+        Advance(session, completedTurn);
+        completedTurn++;
+        Advance(session, completedTurn);
+        Require(migration.status == "settled" &&
+            migration.departedPeople == migration.arrivedPeople,
+            "移住者数の保存則に違反");
+
+        string save = HistoricalCampaignSave.Serialize(session);
+        var loaded = HistoricalCampaignSave.Deserialize(save,
+            id => id == definition.id ? definition : null);
+        Require(JsonUtility.ToJson(session.Progress) ==
+            JsonUtility.ToJson(loaded.Progress),
+            "地域状態のセーブ往復が一致しない");
+        ValidateConservation(definition, loaded.Progress);
+    }
+
+    static void ValidateThreeSeedDeterminism()
+    {
+        int[] seeds = { 4107, 5209, 6401 };
+        var watch = Stopwatch.StartNew();
+        int turns = 0;
+        foreach (int seed in seeds)
+        {
+            string first = RunFiftyTurns(seed);
+            string second = RunFiftyTurns(seed);
+            Require(first == second, $"seed {seed} の50期結果が非決定的");
+            turns += 100;
+        }
+        watch.Stop();
+        double averageMs = watch.Elapsed.TotalMilliseconds / Math.Max(1, turns);
+        Require(averageMs < 500.0,
+            $"平均ターン処理が500msを超過: {averageMs:F1}ms");
+        UnityEngine.Debug.Log(
+            $"URUK REGIONAL 3-SEED PERF: {averageMs:F2} ms/turn");
+    }
+
+    static string RunFiftyTurns(int seed)
+    {
+        var definition = HistoricalCampaignRepository.LoadBuiltIn(
+            HistoricalCampaignRepository.Uruk4000Id);
+        definition.seed = seed;
+        var session = HistoricalCampaignFactory.Build(definition);
+        for (int turn = 1; turn <= 50; turn++)
+        {
+            Advance(session, turn);
+            ValidateConservation(definition, session.Progress);
+        }
+        return JsonUtility.ToJson(session.Progress);
+    }
+
+    static void Advance(HistoricalCampaignSession session, int completedTurn)
+    {
+        session.State.TurnNumber = completedTurn + 1;
+        UrukCampaignSystem.AdvanceAfterTurn(session);
+    }
+
+    static void ValidateConservation(HistoricalCampaignDefinition definition,
+        UrukCampaignProgress progress)
+    {
+        UrukRegionalSystem.Validate(definition, progress);
+        Require(progress.lastRegionalSourceWater ==
+            progress.lastRegionalFarmWater + progress.lastRegionalLeakage +
+            progress.lastRegionalUnusedWater, "水量保存則に違反");
+        foreach (var transport in progress.transports)
+            ValidateTransport(transport);
+        foreach (var faction in progress.regionalFactions)
+            foreach (var stock in faction.stockpiles)
+                Require(stock.amount >= 0,
+                    faction.factionId + "の資源が負数");
+    }
+
+    static void ValidateTransport(UrukTransportState transport)
+    {
+        Require(transport.shippedAmount == transport.remainingAmount +
+            transport.lostAmount + transport.deliveredAmount,
+            transport.id + "の輸送保存則に違反");
+    }
+
+    static UrukCanalSegmentState Segment(UrukCampaignProgress progress,
+        string id)
+    {
+        foreach (var segment in progress.canalSegments)
+            if (segment.id == id) return segment;
+        throw new Exception("水路が見つからない: " + id);
+    }
+
+    static UrukFarmPlotState Farm(UrukCampaignProgress progress, string id)
+    {
+        foreach (var farm in progress.farmPlots)
+            if (farm.id == id) return farm;
+        throw new Exception("農地が見つからない: " + id);
+    }
+
+    static void Require(bool condition, string message)
+    {
+        if (!condition) throw new Exception(message);
+    }
+}

@@ -41,6 +41,7 @@ namespace HexCiv.UI
         };
         bool detailed;
         HistoricalCampaignWorldVisuals worldVisuals;
+        UrukRegionalPanel regionalPanel;
 
         public void Init(HistoricalCampaignSession campaignSession,
             Action<string> campaignAction, Action quickSave, Action quickLoad)
@@ -57,6 +58,13 @@ namespace HexCiv.UI
                 worldVisuals = visuals.AddComponent<HistoricalCampaignWorldVisuals>();
             }
             worldVisuals.Init(session);
+            if (regionalPanel == null)
+            {
+                var regional = new GameObject("UrukRegionalPanel");
+                regional.transform.SetParent(transform, false);
+                regionalPanel = regional.AddComponent<UrukRegionalPanel>();
+            }
+            regionalPanel.Init(session, onAction);
             Refresh();
         }
 
@@ -96,6 +104,7 @@ namespace HexCiv.UI
             detailPanel.SetActive(detailed);
             laborPanel.SetActive(detailed);
             RefreshLabor(progress);
+            regionalPanel?.Refresh();
             worldVisuals?.Refresh();
         }
 
@@ -440,6 +449,8 @@ namespace HexCiv.UI
         readonly List<Material> materials = new List<Material>();
         int lastCanalCondition = -1;
         int lastTempleProgress = -1;
+        int lastRegionalRevision = -1;
+        int lastOverlayMode = -1;
 
         public void Init(HistoricalCampaignSession campaignSession)
         {
@@ -452,7 +463,11 @@ namespace HexCiv.UI
             if (session == null) return;
             int canal = UrukCampaignSystem.CanalCondition(session.Progress);
             int temple = session.Progress.templeProgress;
-            if (canal == lastCanalCondition && temple == lastTempleProgress) return;
+            int regional = session.Progress.regionalRevision;
+            int overlay = session.Progress.regionalOverlayMode;
+            if (canal == lastCanalCondition && temple == lastTempleProgress &&
+                regional == lastRegionalRevision && overlay == lastOverlayMode)
+                return;
             Rebuild();
         }
 
@@ -461,16 +476,23 @@ namespace HexCiv.UI
             ClearGenerated();
             if (session == null) return;
             var progress = session.Progress;
-            foreach (var improvement in progress.improvements)
+            if (progress.farmPlots != null && progress.canalSegments != null)
             {
-                var coord = HexCoord.FromOffset(improvement.col, improvement.row);
-                var tile = session.State.Map.Get(coord);
-                if (tile == null) continue;
-                float y = RenderUtil.TileVisualHeight(tile) + 0.09f;
-                if (improvement.kind == "farm")
-                    BuildFarm(coord.ToWorld(), y);
-                else if (improvement.kind == "canal")
-                    BuildCanal(coord.ToWorld(), y, improvement.condition);
+                BuildRegionalInfrastructure(progress);
+            }
+            else
+            {
+                foreach (var improvement in progress.improvements)
+                {
+                    var coord = HexCoord.FromOffset(improvement.col, improvement.row);
+                    var tile = session.State.Map.Get(coord);
+                    if (tile == null) continue;
+                    float y = RenderUtil.TileVisualHeight(tile) + 0.09f;
+                    if (improvement.kind == "farm")
+                        BuildFarm(coord.ToWorld(), y);
+                    else if (improvement.kind == "canal")
+                        BuildCanal(coord.ToWorld(), y, improvement.condition);
+                }
             }
             if (progress.templePlanned)
             {
@@ -484,6 +506,131 @@ namespace HexCiv.UI
             }
             lastCanalCondition = UrukCampaignSystem.CanalCondition(progress);
             lastTempleProgress = progress.templeProgress;
+            lastRegionalRevision = progress.regionalRevision;
+            lastOverlayMode = progress.regionalOverlayMode;
+        }
+
+        void BuildRegionalInfrastructure(UrukCampaignProgress progress)
+        {
+            int overlay = progress.regionalOverlayMode;
+            foreach (var farm in progress.farmPlots)
+            {
+                if (overlay == 1 || overlay == 3) continue;
+                if (overlay == 0 && farm.ownerFactionId != "uruk_community") continue;
+                var coord = HexCoord.FromOffset(farm.col, farm.row);
+                var tile = session.State.Map.Get(coord);
+                if (tile == null) continue;
+                float y = RenderUtil.TileVisualHeight(tile) + 0.09f;
+                Color crop = farm.crop == "barley"
+                    ? new Color(0.78f, 0.66f, 0.22f)
+                    : farm.crop == "emmer"
+                        ? new Color(0.67f, 0.52f, 0.18f)
+                        : new Color(0.32f, 0.38f, 0.22f);
+                if (!farm.irrigated)
+                    crop = Color.Lerp(crop, new Color(0.35f, 0.30f, 0.25f), 0.5f);
+                if (farm.salinity >= 55)
+                    crop = Color.Lerp(crop, new Color(0.90f, 0.82f, 0.72f), 0.65f);
+                BuildRegionalFarm(coord.ToWorld(), y, crop,
+                    $"農地 {farm.id}　{farm.crop}　水{farm.waterReceived}/" +
+                    $"{farm.waterDemand}　塩害{farm.salinity}%");
+            }
+
+            if (overlay != 2)
+            {
+                foreach (var segment in progress.canalSegments)
+                {
+                    if (overlay == 0 &&
+                        segment.ownerFactionId != "uruk_community") continue;
+                    if (!segment.completed && !segment.planned) continue;
+                    Color color;
+                    if (segment.planned)
+                        color = new Color(0.85f, 0.70f, 0.20f);
+                    else if (overlay == 1)
+                        color = segment.currentFlow > 0
+                            ? Color.Lerp(new Color(0.20f, 0.45f, 0.66f),
+                                new Color(0.18f, 0.85f, 0.95f),
+                                Mathf.Clamp01(segment.currentFlow / 12f))
+                            : new Color(0.48f, 0.34f, 0.25f);
+                    else
+                        color = Color.Lerp(new Color(0.20f, 0.20f, 0.18f),
+                            new Color(0.15f, 0.52f, 0.68f),
+                            Mathf.Clamp01(segment.condition / 100f));
+                    BuildCanalEdge(segment, color);
+                }
+            }
+
+            if (overlay == 3)
+            {
+                foreach (var transport in progress.transports)
+                    if (transport.status == "en_route" &&
+                        transport.path != null && transport.path.Length >= 2)
+                        BuildRoute(transport.path, new Color(0.95f, 0.72f, 0.18f),
+                            $"輸送 {transport.goodId} {transport.remainingAmount}　" +
+                            $"到着{transport.arrivalTurn}期");
+                foreach (var migration in progress.migrationGroups)
+                {
+                    if (migration.status != "in_transit") continue;
+                    var origin = UrukRegionalSystem.FindFaction(progress,
+                        migration.originFactionId);
+                    var destination = UrukRegionalSystem.FindFaction(progress,
+                        migration.destinationFactionId);
+                    if (origin == null || destination == null) continue;
+                    BuildRoute(new[]
+                    {
+                        new HistoricalMapPoint
+                            { col = origin.startCol, row = origin.startRow },
+                        new HistoricalMapPoint
+                            { col = destination.startCol, row = destination.startRow },
+                    }, new Color(0.25f, 0.90f, 0.72f),
+                        $"移住 {migration.departedPeople}人");
+                }
+            }
+        }
+
+        void BuildRegionalFarm(Vector3 center, float y, Color crop,
+            string objectName)
+        {
+            CreateCube(objectName, new Vector3(center.x, y, center.z),
+                new Vector3(0.78f, 0.035f, 0.62f),
+                Color.Lerp(crop, new Color(0.30f, 0.23f, 0.12f), 0.35f));
+            for (int i = -2; i <= 2; i++)
+                CreateCube(objectName + "_畝", new Vector3(center.x + i * 0.13f,
+                    y + 0.03f, center.z), new Vector3(0.035f, 0.025f, 0.56f),
+                    crop);
+        }
+
+        void BuildCanalEdge(UrukCanalSegmentState segment, Color color)
+        {
+            var from = HexCoord.FromOffset(segment.fromCol, segment.fromRow);
+            var to = HexCoord.FromOffset(segment.toCol, segment.toRow);
+            var fromTile = session.State.Map.Get(from);
+            var toTile = session.State.Map.Get(to);
+            if (fromTile == null || toTile == null) return;
+            var a = from.ToWorld();
+            var b = to.ToWorld();
+            a.y = RenderUtil.TileVisualHeight(fromTile) + 0.13f;
+            b.y = RenderUtil.TileVisualHeight(toTile) + 0.13f;
+            CreateOrientedCube(
+                $"水路 {segment.id}　流量{segment.currentFlow}　状態{segment.condition}%　" +
+                $"堆積{segment.silt}%", a, b,
+                segment.planned ? 0.075f : 0.12f, color);
+        }
+
+        void BuildRoute(HistoricalMapPoint[] path, Color color, string objectName)
+        {
+            for (int i = 1; i < path.Length; i++)
+            {
+                var from = HexCoord.FromOffset(path[i - 1].col, path[i - 1].row);
+                var to = HexCoord.FromOffset(path[i].col, path[i].row);
+                var fromTile = session.State.Map.Get(from);
+                var toTile = session.State.Map.Get(to);
+                if (fromTile == null || toTile == null) continue;
+                var a = from.ToWorld();
+                var b = to.ToWorld();
+                a.y = RenderUtil.TileVisualHeight(fromTile) + 0.30f;
+                b.y = RenderUtil.TileVisualHeight(toTile) + 0.30f;
+                CreateOrientedCube(objectName, a, b, 0.07f, color);
+            }
         }
 
         void BuildFarm(Vector3 center, float y)
@@ -526,6 +673,28 @@ namespace HexCiv.UI
             go.transform.SetParent(transform, false);
             go.transform.position = position;
             go.transform.localScale = scale;
+            var collider = go.GetComponent<Collider>();
+            if (collider != null) Destroy(collider);
+            var shader = Shader.Find("Sprites/Default");
+            var material = new Material(shader) { color = color };
+            materials.Add(material);
+            go.GetComponent<MeshRenderer>().sharedMaterial = material;
+            generated.Add(go);
+        }
+
+        void CreateOrientedCube(string objectName, Vector3 from, Vector3 to,
+            float width, Color color)
+        {
+            Vector3 delta = to - from;
+            float length = delta.magnitude;
+            if (length <= 0.001f) return;
+            var go = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            go.name = objectName;
+            go.transform.SetParent(transform, false);
+            go.transform.position = (from + to) * 0.5f;
+            go.transform.rotation = Quaternion.LookRotation(delta.normalized,
+                Vector3.up);
+            go.transform.localScale = new Vector3(width, 0.025f, length);
             var collider = go.GetComponent<Collider>();
             if (collider != null) Destroy(collider);
             var shader = Shader.Find("Sprites/Default");

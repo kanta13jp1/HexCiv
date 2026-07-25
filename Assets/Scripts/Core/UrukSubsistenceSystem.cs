@@ -569,6 +569,20 @@ namespace HexCiv.Core
             progress.events = next;
         }
 
+        public static void ApplyExternalMigration(UrukCampaignProgress progress,
+            int people, int turn, string reasonJa, string confidence = "inferred")
+        {
+            if (progress == null) throw new ArgumentNullException(nameof(progress));
+            if (people == 0) return;
+            ApplyPopulationChangeProportionally(progress, people);
+            if (people > 0)
+                progress.lastMigrationIn += people;
+            else
+                progress.lastMigrationOut += -people;
+            AppendEvent(progress, turn, people > 0 ? "migration_in" : "migration_out",
+                Math.Abs(people), reasonJa, confidence);
+        }
+
         static void ApplyPopulationChangeProportionally(
             UrukCampaignProgress progress, int change)
         {

@@ -708,3 +708,20 @@ public Dictionary<int,int> AiWarPressure;     // 短期モード専用の非永�
 - AIの宣戦条件を強化する(現状スモークテストでは150ターンでAI同士の戦争が発生しない: wars=0)
 - セーブスロットの複数化(現在1スロット)
 - ゲーム設定画面(マップサイズ・文明数・シード指定)
+
+### 2026-07-25 Codex: ウルク史実キャンペーン Stage 4A・地域水利／農業／交流
+
+- `Campaigns/uruk_4000.json` を datasetVersion 2 へ更新し、8勢力の農地9区画と水路11区間を追加した。推定河道・湿地利用に関する確度、確認状態、既存出典参照を保持する。
+- `Core/UrukRegionalSystem.cs` を追加。水路をヘックス辺グラフとして扱い、取水源→区間→農地の水量、容量、状態、漏水、堆積、破断を決定論的に解決する。農地は大麦／エンマー小麦／休耕、排水、塩害、収量を個別状態として持つ。
+- 8勢力すべてに人口・物資・労働・安定度台帳を持たせ、エリドゥ、ウル、ラガシュ、ニップル、キシュ、スシアナ、湿地共同体の地理・生業別AI方針を追加した。危機時は食料労働、非重要工事停止、備蓄、交易の順に適応する。
+- 水路工事は複数区間の計画、資源予約、優先施工、ターン終了確定、確定前取消に対応。予約済み粘土・葦を既存行動が二重消費しないよう統合した。
+- 贈与と物々交換を実物資の輸送として実装。葦船／陸路、出発、到着予定、損失、到着量を保存し、積載量＝輸送中＋損失＋到着の保存則を検証する。水利紛争の交渉と、出身地を保持した移住集団の受入／拒否も追加した。
+- `UI/UrukRegionalPanel.cs` と史実ワールド表示を追加。通常／水利／農地／物流のオーバーレイ、農地切替、作付け、水路提案・取消、交易、交渉、移住判断を日本語で操作できる。水量、漏水、塩害、予約資源、到着予定、史実確度を簡潔に表示する。
+- 進捗を version 3 へ移行し、旧version 1/2セーブを地域初期状態へ補完する。datasetVersion 1の既存セーブも新しい定義へ読み込める。
+- 検証:
+  - `Logs/stage4a_foundation.log`: `HISTORICAL CAMPAIGN FOUNDATION SMOKE OK`
+  - `Logs/stage4a_vertical.log`: `URUK CAMPAIGN VERTICAL SLICE SMOKE OK`
+  - `Logs/stage4a_regional_final.log`: 中間水路破断、通水、計画取消、実体輸送、移住、セーブ往復、3シード×50期の決定性を含め `URUK REGIONAL SIMULATION SMOKE OK`。平均 `0.11 ms/turn`
+  - `Logs/stage4a_normal150.log`: 既存ランダムゲーム150ターン `SMOKE OK`
+  - `Logs/stage4a_build_final.log`: Unity 6000.3.20f1、Windows `BUILD OK: 98019061 bytes`
+  - 正式 `Build/HexCiv.exe` を30秒実起動し、Player.logでUnity 6000.3.20f1・例外なしを確認した。画面自動操作はユーザー入力検出時点で停止した。
