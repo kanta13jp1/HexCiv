@@ -75,6 +75,7 @@ namespace HexCiv.Core
             var progress = string.IsNullOrWhiteSpace(envelope.progressJson)
                 ? UrukCampaignSystem.CreateInitialProgress(definition)
                 : JsonUtility.FromJson<UrukCampaignProgress>(envelope.progressJson);
+            UrukCampaignSystem.MigrateProgress(progress);
             UrukCampaignSystem.ValidateProgress(definition, progress);
             return new HistoricalCampaignSession(definition, state, progress);
         }

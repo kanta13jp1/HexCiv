@@ -20,16 +20,25 @@ namespace HexCiv.UI
         Action onQuickLoad;
         Canvas canvas;
         GameObject detailPanel;
+        GameObject laborPanel;
         Text heading;
         Text summary;
         Text advisorTitle;
         Text advisorBody;
         Text detailText;
+        Text laborTotalText;
         Text reportText;
         Button canalButton;
         Button foodButton;
         Button templeButton;
         Button administrationButton;
+        readonly Text[] laborValues = new Text[6];
+        readonly Button[] laborDownButtons = new Button[6];
+        readonly Button[] laborUpButtons = new Button[6];
+        static readonly string[] LaborKinds =
+        {
+            "food", "canal", "construction", "crafts", "trade", "militia",
+        };
         bool detailed;
         HistoricalCampaignWorldVisuals worldVisuals;
 
@@ -57,15 +66,14 @@ namespace HexCiv.UI
             var progress = session.Progress;
             heading.text = $"史実キャンペーン　{session.Definition.title.ja}　" +
                 $"{session.CurrentIntervalJa}　ターン{session.State.TurnNumber}/{session.Definition.maxTurns}";
-            int food = UrukCampaignSystem.TotalFood(progress);
             int irrigated = UrukCampaignSystem.IrrigatedFarmCount(progress);
             summary.text =
-                $"人口 {progress.actualPopulation:N0}人（{Signed(progress.lastPopulationChange)}）　" +
-                $"食料 {food}　農地 {irrigated}/{UrukCampaignSystem.FarmCount(progress)} 灌漑　" +
+                $"人口 {PopulationDisplay(progress)}（{Signed(progress.lastPopulationChange)}）　" +
+                $"食料 {FoodDisplay(progress)}　農地 {irrigated}/{UrukCampaignSystem.FarmCount(progress)} 灌漑　" +
                 $"運河 {UrukCampaignSystem.CanalCondition(progress)}%　" +
-                $"神殿 {progress.templeProgress}%　安定 {progress.stability}";
+                $"神殿 {progress.templeStage}/5・{progress.templeProgress}%　安定 {progress.stability}";
             advisorTitle.text = "顧問　" + UrukCampaignSystem.TutorialTitleJa(session);
-            advisorBody.text = UrukCampaignSystem.TutorialBodyJa(session);
+            advisorBody.text = BuildAdvisorBody(progress);
             reportText.text = string.IsNullOrWhiteSpace(progress.lastReportJa)
                 ? "" : "前期間: " + progress.lastReportJa;
             detailText.text = BuildDetailText(progress);
@@ -78,12 +86,16 @@ namespace HexCiv.UI
                 progress.lastFoodPriorityTurn != turn;
             templeButton.interactable = !session.State.IsGameOver &&
                 !progress.templePlanned &&
-                UrukCampaignSystem.GoodAmount(progress, "alluvial_clay") >= 4 &&
-                UrukCampaignSystem.GoodAmount(progress, "reeds") >= 2;
+                UrukCampaignSystem.GoodAmount(progress, "alluvial_clay") >= 1 &&
+                UrukCampaignSystem.GoodAmount(progress, "reeds") >= 1;
             administrationButton.interactable = !session.State.IsGameOver &&
                 !progress.administrationAdopted &&
-                progress.templeProgress >= UrukCampaignSystem.AdministrationUnlockProgress;
+                progress.templeStage >= 5 &&
+                progress.templeProgress >= UrukCampaignSystem.AdministrationUnlockProgress &&
+                UrukCampaignSystem.GoodAmount(progress, "alluvial_clay") >= 2;
             detailPanel.SetActive(detailed);
+            laborPanel.SetActive(detailed);
+            RefreshLabor(progress);
             worldVisuals?.Refresh();
         }
 
@@ -142,10 +154,10 @@ namespace HexCiv.UI
                 "食料を優先", 268f,
                 () => ApplyAction(UrukCampaignSystem.PrioritizeFoodAction));
             templeButton = CreateActionButton(advisor.transform, "TempleButton",
-                "神殿区画を着工（粘土4・葦2）", 216f,
+                "初期神殿を着工（粘土1・葦1）", 216f,
                 () => ApplyAction(UrukCampaignSystem.PlanTempleAction));
             administrationButton = CreateActionButton(advisor.transform, "AdministrationButton",
-                "配給・記録制度を採用（粘土2）", 164f,
+                "数量記録行政を採用（粘土2）", 164f,
                 () => ApplyAction(UrukCampaignSystem.AdoptAdministrationAction));
 
             reportText = UIStyle.CreateText(advisor.transform, "Report", "", 13,
@@ -174,12 +186,58 @@ namespace HexCiv.UI
             detailPanel = UIStyle.CreatePanel(canvasGo.transform, "CampaignDetail",
                 new Color(0.025f, 0.04f, 0.07f, 0.97f));
             UIStyle.SetRect(detailPanel, new Vector2(1f, 0.5f), new Vector2(1f, 0.5f),
-                new Vector2(1f, 0.5f), new Vector2(-418f, 20f), new Vector2(470f, 500f));
-            detailText = UIStyle.CreateText(detailPanel.transform, "DetailText", "", 14,
+                new Vector2(1f, 0.5f), new Vector2(-418f, 20f), new Vector2(470f, 660f));
+            detailText = UIStyle.CreateText(detailPanel.transform, "DetailText", "", 12,
                 TextAnchor.UpperLeft, UIStyle.TextMain);
             detailText.horizontalOverflow = HorizontalWrapMode.Wrap;
             UIStyle.StretchFull(detailText.gameObject, 18f);
             detailPanel.SetActive(false);
+
+            laborPanel = UIStyle.CreatePanel(canvasGo.transform, "CampaignLabor",
+                new Color(0.025f, 0.04f, 0.07f, 0.97f));
+            UIStyle.SetRect(laborPanel, new Vector2(1f, 0.5f), new Vector2(1f, 0.5f),
+                new Vector2(1f, 0.5f), new Vector2(-888f, 20f), new Vector2(450f, 500f));
+            var laborTitle = UIStyle.CreateText(laborPanel.transform, "LaborTitle",
+                "公共労働の配分（5%刻み）", 18,
+                TextAnchor.UpperLeft, UIStyle.Accent);
+            laborTitle.fontStyle = FontStyle.Bold;
+            UIStyle.SetRect(laborTitle.gameObject, new Vector2(0f, 1f), new Vector2(1f, 1f),
+                new Vector2(0.5f, 1f), new Vector2(0f, -14f), new Vector2(-28f, 30f));
+            laborTotalText = UIStyle.CreateText(laborPanel.transform, "LaborTotal", "", 13,
+                TextAnchor.UpperLeft, UIStyle.TextDim);
+            laborTotalText.horizontalOverflow = HorizontalWrapMode.Wrap;
+            UIStyle.SetRect(laborTotalText.gameObject, new Vector2(0f, 1f), new Vector2(1f, 1f),
+                new Vector2(0.5f, 1f), new Vector2(0f, -46f), new Vector2(-28f, 54f));
+            for (int i = 0; i < LaborKinds.Length; i++)
+                CreateLaborRow(laborPanel.transform, i, 354f - i * 54f);
+            var laborNote = UIStyle.CreateText(laborPanel.transform, "LaborNote",
+                "世帯維持を除く動員可能人口のみ。食料30%を保護。\n" +
+                "自動管理は強制・債務・捕虜・権利変更を行いません。",
+                12, TextAnchor.LowerLeft, UIStyle.TextDim);
+            laborNote.horizontalOverflow = HorizontalWrapMode.Wrap;
+            UIStyle.SetRect(laborNote.gameObject, new Vector2(0f, 0f), new Vector2(1f, 0f),
+                new Vector2(0.5f, 0f), new Vector2(0f, 14f), new Vector2(-28f, 56f));
+            laborPanel.SetActive(false);
+        }
+
+        void CreateLaborRow(Transform parent, int index, float y)
+        {
+            string kind = LaborKinds[index];
+            laborValues[index] = UIStyle.CreateText(parent, "Labor_" + kind, "", 14,
+                TextAnchor.MiddleLeft, UIStyle.TextMain);
+            UIStyle.SetRect(laborValues[index].gameObject,
+                new Vector2(0f, 0f), new Vector2(0f, 0f), new Vector2(0f, 0f),
+                new Vector2(16f, y), new Vector2(280f, 40f));
+            laborDownButtons[index] = UIStyle.CreateButton(parent, "LaborDown_" + kind,
+                "−5%", 12, () => ApplyAction("labor_" + kind + "_down"));
+            UIStyle.SetRect(laborDownButtons[index].gameObject,
+                new Vector2(0f, 0f), new Vector2(0f, 0f), new Vector2(0f, 0f),
+                new Vector2(300f, y + 3f), new Vector2(58f, 34f));
+            laborUpButtons[index] = UIStyle.CreateButton(parent, "LaborUp_" + kind,
+                "+5%", 12, () => ApplyAction("labor_" + kind + "_up"));
+            UIStyle.SetRect(laborUpButtons[index].gameObject,
+                new Vector2(0f, 0f), new Vector2(0f, 0f), new Vector2(0f, 0f),
+                new Vector2(366f, y + 3f), new Vector2(58f, 34f));
         }
 
         Button CreateActionButton(Transform parent, string name, string label, float y,
@@ -197,23 +255,77 @@ namespace HexCiv.UI
             Refresh();
         }
 
+        void RefreshLabor(UrukCampaignProgress progress)
+        {
+            if (laborTotalText == null || progress.labor == null) return;
+            int mobilizable = UrukSubsistenceSystem.MobilizablePopulation(progress);
+            laborTotalText.text =
+                $"動員可能 {KnownPeople(progress, mobilizable)}／実人口 {PopulationDisplay(progress)}\n" +
+                $"配分合計 {progress.labor.Total}%　自動管理 " +
+                $"{(progress.populationAutomation ? "ON（食料安全）" : "OFF")}";
+            bool enabled = !session.State.IsGameOver;
+            for (int i = 0; i < LaborKinds.Length; i++)
+            {
+                string kind = LaborKinds[i];
+                int percent = LaborPercent(progress.labor, kind);
+                int people = UrukSubsistenceSystem.AssignedPeople(progress, kind);
+                laborValues[i].text =
+                    $"{UrukSubsistenceSystem.LaborNameJa(kind)}　{percent}%　" +
+                    $"{KnownPeople(progress, people)}";
+                laborDownButtons[i].interactable = enabled &&
+                    (kind != "food" || percent > 30) && percent > 0;
+                laborUpButtons[i].interactable = enabled;
+            }
+        }
+
         string BuildDetailText(UrukCampaignProgress progress)
         {
+            var social = progress.social;
             return
-                "人口（実人数・推定）\n" +
-                $"農耕民 {progress.roles.farmers:N0}　牧畜民 {progress.roles.pastoralists:N0}\n" +
-                $"漁民 {progress.roles.fishers:N0}　職人 {progress.roles.artisans:N0}\n" +
-                $"神官 {progress.roles.priests:N0}　戦士 {progress.roles.warriors:N0}\n" +
-                $"労働者 {progress.roles.laborers:N0}\n\n" +
-                "社会的地位\n" +
-                $"自由民 {progress.statuses.free:N0}　従属民 {progress.statuses.dependent:N0}\n" +
-                $"奴隷 {progress.statuses.enslaved:N0}（開始時0・制度成立後のみ）\n\n" +
-                "物資（1=推定物流単位）\n" +
-                $"大麦 {Good(progress, "barley")}　エンマー小麦 {Good(progress, "emmer_wheat")}\n" +
-                $"魚 {Good(progress, "fish")}　羊・羊毛 {Good(progress, "sheep_wool")}\n" +
-                $"葦 {Good(progress, "reeds")}　沖積粘土 {Good(progress, "alluvial_clay")}\n" +
-                $"木材 {Good(progress, "timber")}　石材 {Good(progress, "building_stone")}　" +
-                $"銅 {Good(progress, "copper")}\n\n" +
+                "人口収支（学術的推定）\n" +
+                $"総人口 {PopulationDisplay(progress)}　出生 {KnownPeople(progress, progress.lastBirths)}\n" +
+                $"通常死亡 {KnownPeople(progress, progress.lastNormalDeaths)}　" +
+                $"危機死亡 {KnownPeople(progress, progress.lastCrisisDeaths)}\n" +
+                $"流入 {KnownPeople(progress, progress.lastMigrationIn)}　" +
+                $"流出 {KnownPeople(progress, progress.lastMigrationOut)}\n\n" +
+                "長期的役割（現在の公共労働とは別）\n" +
+                $"農耕民 {KnownPeople(progress, progress.roles.farmers)}　" +
+                $"牧畜民 {KnownPeople(progress, progress.roles.pastoralists)}\n" +
+                $"漁民 {KnownPeople(progress, progress.roles.fishers)}　" +
+                $"職人 {KnownPeople(progress, progress.roles.artisans)}　" +
+                $"神官 {KnownPeople(progress, progress.roles.priests)}　" +
+                $"戦士 {KnownPeople(progress, progress.roles.warriors)}\n\n" +
+                "食料台帳（1=推定物流単位）\n" +
+                $"期首+産出 {KnownUnits(progress, progress.lastFoodProduced)}　" +
+                $"消費 {KnownUnits(progress, progress.lastFoodConsumed)}　" +
+                $"不足 {KnownUnits(progress, progress.lastFoodShortage)}\n" +
+                $"配給損失 {KnownUnits(progress, progress.lastDistributionLoss)}　" +
+                $"腐敗・溢出 {KnownUnits(progress, progress.lastFoodSpoiled)}　" +
+                $"種籾 {KnownUnits(progress, progress.seedGrain)}\n" +
+                $"期末備蓄 {FoodDisplay(progress)}／容量 約{progress.storageCapacityMonths}か月\n\n" +
+                "次期収穫予測\n" +
+                $"{KnownUnits(progress, progress.lastForecastFood)}単位　" +
+                $"労働{progress.lastFoodLaborFactor}% 灌漑{progress.lastIrrigationFactor}% " +
+                $"土壌{progress.lastSoilFactor}% 氾濫{progress.lastFloodFactor}% " +
+                $"種籾・道具{progress.lastSeedToolFactor}%\n\n" +
+                "地位（変化は原因イベントとして記録）\n" +
+                $"自由 {KnownPeople(progress, progress.statuses.free)}　" +
+                $"従属 {KnownPeople(progress, progress.statuses.dependent)}　" +
+                $"債務拘束 {KnownPeople(progress, progress.statuses.debtBound)}\n" +
+                $"捕虜 {KnownPeople(progress, progress.statuses.captive)}　" +
+                $"奴隷化状態 {KnownPeople(progress, progress.statuses.enslaved)}\n" +
+                $"{(string.IsNullOrWhiteSpace(progress.lastStatusEventJa) ? "直近の地位変化なし" : progress.lastStatusEventJa)}\n\n" +
+                "社会状態（高いほど良好）\n" +
+                $"食料{social?.foodSecurity ?? 0} 労働{social?.laborBurden ?? 0} " +
+                $"配給{social?.distributionFairness ?? 0} 格差{social?.inequality ?? 0}\n" +
+                $"信頼{social?.leadershipTrust ?? 0} 祭祀{social?.ritualSupport ?? 0} " +
+                $"外部{social?.externalSecurity ?? 0} 水利{social?.waterRelations ?? 0} " +
+                $"衝撃{social?.recentShock ?? 0}\n" +
+                $"重大不安 {progress.consecutiveCriticalUnrest}/3　" +
+                $"{progress.lastCriticalUnrestReasonJa}\n\n" +
+                $"神殿 {progress.templeStage}/5 " +
+                $"{UrukSubsistenceSystem.TempleStageNameJa(progress.templeStage)}　" +
+                $"{progress.templeProgress}%\n{progress.lastConstructionReportJa}\n\n" +
                 "自動管理\n" +
                 $"人口配置 {(progress.populationAutomation ? "ON" : "OFF")}／" +
                 $"生産 {(progress.productionAutomation ? "ON" : "OFF")}／" +
@@ -221,6 +333,91 @@ namespace HexCiv.UI
                 "史料表示\n地図・施設配置: 復元推定\n" +
                 "人口量: 学術的推定をゲーム用に丸めた値\n" +
                 "音響・3Dモデル: 現代制作の暫定復元";
+        }
+
+        string BuildAdvisorBody(UrukCampaignProgress progress)
+        {
+            string risk;
+            string actions;
+            if (UrukCampaignSystem.CanalCondition(progress) < 60)
+            {
+                risk = "灌漑不足。運河の堆積で農地の収量が低下。";
+                actions = "①運河を整備 ②運河労働を増加 ③食料30%以上を維持";
+            }
+            else if (UrukSubsistenceSystem.FoodReserveTenthsMonths(progress) < 30)
+            {
+                risk = "食料備蓄不足。腐敗・配給損失と人口増が備蓄を圧迫。";
+                actions = "①食料を優先 ②食料労働を増加 ③種籾を保護";
+            }
+            else if (progress.stability < 35)
+            {
+                risk = "共同体の分裂。食料・負担・配給公平の不満が蓄積。";
+                actions = "①不足を解消 ②公共労働を軽減 ③危機を2期間避ける";
+            }
+            else if (progress.templePlanned && progress.templeStage < 5)
+            {
+                risk = "神殿建設の停滞。建設労働または粘土・葦が必要。";
+                actions = "①建設労働を確保 ②必要物資を保護 ③食料安全を維持";
+            }
+            else
+            {
+                risk = "都市国家成立条件。人口・灌漑・備蓄・行政を同時に維持。";
+                actions = "①食料安全を継続 ②完全灌漑を維持 ③数量記録行政を整備";
+            }
+            int forecast = UrukSubsistenceSystem.ForecastFoodProduction(progress);
+            string forecastText = progress.administrationAdopted
+                ? $"次期産出予測 {forecast}単位"
+                : $"次期産出予測 約{Math.Max(0, forecast - 2)}～{forecast + 2}単位";
+            return $"最大リスク: {risk}\n{actions}\n{forecastText}";
+        }
+
+        static string PopulationDisplay(UrukCampaignProgress progress)
+        {
+            if (progress.administrationAdopted)
+                return $"{progress.actualPopulation:N0}人（推定）";
+            int lower = Math.Max(0, progress.actualPopulation / 100 * 100 - 100);
+            int upper = (progress.actualPopulation / 100 + 1) * 100;
+            return $"{lower:N0}～{upper:N0}人";
+        }
+
+        static string FoodDisplay(UrukCampaignProgress progress)
+        {
+            int tenths = UrukSubsistenceSystem.FoodReserveTenthsMonths(progress);
+            if (progress.administrationAdopted)
+                return $"{tenths / 10}.{tenths % 10}か月分（推定）";
+            int lower = tenths / 10;
+            int upper = Math.Max(lower + 1, (tenths + 9) / 10);
+            return $"約{lower}～{upper}か月分";
+        }
+
+        static string KnownPeople(UrukCampaignProgress progress, int value)
+        {
+            if (progress.administrationAdopted) return $"{Math.Max(0, value):N0}人";
+            if (value <= 0) return "0人前後";
+            int step = value >= 500 ? 100 : value >= 100 ? 50 : 10;
+            int lower = Math.Max(0, value / step * step - step);
+            int upper = (value / step + 1) * step;
+            return $"{lower:N0}～{upper:N0}人";
+        }
+
+        static string KnownUnits(UrukCampaignProgress progress, int value)
+        {
+            if (progress.administrationAdopted) return Math.Max(0, value).ToString();
+            return $"{Math.Max(0, value - 1)}～{Math.Max(1, value + 1)}";
+        }
+
+        static int LaborPercent(UrukLaborAllocation labor, string kind)
+        {
+            return kind switch
+            {
+                "food" => labor.food,
+                "canal" => labor.canal,
+                "construction" => labor.construction,
+                "crafts" => labor.crafts,
+                "trade" => labor.trade,
+                "militia" => labor.militia,
+                _ => 0,
+            };
         }
 
         static int Good(UrukCampaignProgress progress, string id)

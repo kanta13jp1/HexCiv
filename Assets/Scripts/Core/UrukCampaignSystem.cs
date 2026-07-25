@@ -28,18 +28,40 @@ namespace HexCiv.Core
     [Serializable]
     public sealed class UrukCampaignProgress
     {
-        public int version = 1;
+        public int version = 2;
         public int actualPopulation;
         public HistoricalPopulationRoles roles;
         public HistoricalPopulationStatuses statuses;
         public HistoricalGoodAmount[] stockpiles;
         public HistoricalImprovementState[] improvements;
+        public UrukLaborAllocation labor;
+        public string laborAutomationPolicy;
+        public int seedGrain;
+        public int storageCapacityMonths;
+        public UrukSocialFactors social;
+        public UrukPeriodEvent[] events;
         public int stability;
         public int consecutiveCriticalUnrest;
         public int currentFloodTrend = (int)UrukFloodTrend.Stable;
         public int lastFoodProduced;
         public int lastFoodConsumed;
+        public int lastFoodShortage;
+        public int lastDistributionLoss;
+        public int lastFoodSpoiled;
+        public int lastFoodCarryover;
+        public int lastSeedUsed;
+        public int lastFoodLaborFactor;
+        public int lastIrrigationFactor;
+        public int lastFloodFactor;
+        public int lastSoilFactor;
+        public int lastSeedToolFactor;
+        public int lastForecastFood;
         public int lastPopulationChange;
+        public int lastBirths;
+        public int lastNormalDeaths;
+        public int lastCrisisDeaths;
+        public int lastMigrationIn;
+        public int lastMigrationOut;
         public int lastCanalActionTurn;
         public int lastFoodPriorityTurn;
         public bool populationAutomation;
@@ -47,7 +69,11 @@ namespace HexCiv.Core
         public bool tradeAutomation;
         public bool templePlanned;
         public int templeProgress;
+        public int templeStage;
+        public int recordKnowledgeElements;
         public bool administrationAdopted;
+        public bool foodSecureThisPeriod;
+        public int consecutiveFoodSecurePeriods;
         public bool isCityState;
         public int cityStateFoundedTurn;
         public int tributaryCount;
@@ -56,6 +82,9 @@ namespace HexCiv.Core
         public int culturalReach;
         public int knowledgeMilestones;
         public bool introTutorialCompleted;
+        public string lastStatusEventJa;
+        public string lastConstructionReportJa;
+        public string lastCriticalUnrestReasonJa;
         public string lastReportJa;
     }
 
@@ -69,9 +98,9 @@ namespace HexCiv.Core
         public const int CityStatePopulation = 2500;
         public const int CityStateTempleProgress = 100;
         public const int TempleCompletionProgress = 100;
-        public const int AdministrationUnlockProgress = 60;
+        public const int AdministrationUnlockProgress = 100;
         public const int MinimumCommunityPopulation = 500;
-        public const int CriticalStability = 15;
+        public const int CriticalStability = 20;
         public const int CriticalUnrestPeriodsForDefeat = 3;
 
         public static UrukCampaignProgress CreateInitialProgress(
@@ -82,20 +111,57 @@ namespace HexCiv.Core
             var starting = definition.startingScenario;
             var progress = new UrukCampaignProgress
             {
+                version = 2,
                 actualPopulation = starting.actualPopulation,
                 roles = CopyRoles(starting.roles),
                 statuses = CopyStatuses(starting.statuses),
                 stockpiles = CopyStockpiles(starting.stockpiles),
                 improvements = CopyImprovements(starting.improvements),
+                labor = new UrukLaborAllocation(),
+                laborAutomationPolicy = "food_security",
+                seedGrain = 2,
+                storageCapacityMonths = UrukSubsistenceSystem.InitialStorageMonths,
+                social = null,
+                events = Array.Empty<UrukPeriodEvent>(),
                 stability = starting.stability,
                 populationAutomation = starting.populationAutomation,
                 productionAutomation = starting.productionAutomation,
                 tradeAutomation = starting.tradeAutomation,
                 currentFloodTrend = (int)UrukFloodTrend.Stable,
+                recordKnowledgeElements = 3,
                 lastReportJa = "小集落ウルク。食料備蓄はわずかで、運河は堆積により十分に機能していない。",
             };
+            UrukSubsistenceSystem.EnsureDefaults(progress);
             ValidateProgress(definition, progress);
             return progress;
+        }
+
+        /// <summary>
+        /// 第2基盤（progress version 1）のセーブを、推定値を明示した第3段階へ補完する。
+        /// 旧JSONに存在しない値だけを設定し、既存人口・備蓄・施設進捗は保持する。
+        /// </summary>
+        public static void MigrateProgress(UrukCampaignProgress progress)
+        {
+            if (progress == null) throw new ArgumentNullException(nameof(progress));
+            if (progress.version == 1)
+            {
+                progress.version = 2;
+                progress.labor = new UrukLaborAllocation();
+                progress.laborAutomationPolicy = "food_security";
+                progress.seedGrain = 2;
+                progress.storageCapacityMonths =
+                    UrukSubsistenceSystem.InitialStorageMonths;
+                progress.events = Array.Empty<UrukPeriodEvent>();
+                progress.recordKnowledgeElements = 3;
+                if (progress.templePlanned)
+                {
+                    progress.templeStage = progress.templeProgress >= 100 ? 5 :
+                        progress.templeProgress >= 75 ? 4 :
+                        progress.templeProgress >= 45 ? 3 :
+                        progress.templeProgress >= 20 ? 2 : 1;
+                }
+            }
+            UrukSubsistenceSystem.EnsureDefaults(progress);
         }
 
         public static void ValidateProgress(HistoricalCampaignDefinition definition,
@@ -103,7 +169,7 @@ namespace HexCiv.Core
         {
             if (definition == null) throw new ArgumentNullException(nameof(definition));
             if (progress == null) throw new ArgumentNullException(nameof(progress));
-            if (progress.version != 1)
+            if (progress.version != 2)
                 throw new InvalidOperationException("ウルク進捗versionが不正");
             if (progress.actualPopulation < 0)
                 throw new InvalidOperationException("実人口が負数");
@@ -111,8 +177,10 @@ namespace HexCiv.Core
                 throw new InvalidOperationException("役割別人口の合計が実人口と一致しない");
             if (progress.statuses == null || progress.statuses.Total != progress.actualPopulation)
                 throw new InvalidOperationException("地位別人口の合計が実人口と一致しない");
-            if (progress.statuses.enslaved < 0)
-                throw new InvalidOperationException("奴隷人口が負数");
+            if (progress.statuses.free < 0 || progress.statuses.dependent < 0 ||
+                progress.statuses.debtBound < 0 || progress.statuses.captive < 0 ||
+                progress.statuses.enslaved < 0)
+                throw new InvalidOperationException("地位別人口が負数");
             if (progress.stockpiles == null ||
                 progress.stockpiles.Length != definition.goods.Length)
                 throw new InvalidOperationException("物資備蓄数が台帳と一致しない");
@@ -135,10 +203,56 @@ namespace HexCiv.Core
                     improvement.condition > 100)
                     throw new InvalidOperationException("施設進捗が不正");
             }
+            UrukSubsistenceSystem.EnsureDefaults(progress);
+            if (progress.labor.Total != 100 ||
+                progress.labor.food < 30 ||
+                progress.labor.food % UrukSubsistenceSystem.LaborStep != 0 ||
+                progress.labor.canal % UrukSubsistenceSystem.LaborStep != 0 ||
+                progress.labor.construction % UrukSubsistenceSystem.LaborStep != 0 ||
+                progress.labor.crafts % UrukSubsistenceSystem.LaborStep != 0 ||
+                progress.labor.trade % UrukSubsistenceSystem.LaborStep != 0 ||
+                progress.labor.militia % UrukSubsistenceSystem.LaborStep != 0)
+                throw new InvalidOperationException("労働配分が5%刻み・合計100%ではない");
+            if (progress.seedGrain < 0 || progress.storageCapacityMonths <= 0 ||
+                progress.consecutiveFoodSecurePeriods < 0)
+                throw new InvalidOperationException("食料台帳の値が不正");
+            if (progress.lastBirths < 0 || progress.lastNormalDeaths < 0 ||
+                progress.lastCrisisDeaths < 0 || progress.lastMigrationIn < 0 ||
+                progress.lastMigrationOut < 0)
+                throw new InvalidOperationException("人口変動の内訳が不正");
+            if (progress.social == null ||
+                !Percent(progress.social.foodSecurity) ||
+                !Percent(progress.social.laborBurden) ||
+                !Percent(progress.social.distributionFairness) ||
+                !Percent(progress.social.inequality) ||
+                !Percent(progress.social.leadershipTrust) ||
+                !Percent(progress.social.ritualSupport) ||
+                !Percent(progress.social.externalSecurity) ||
+                !Percent(progress.social.waterRelations) ||
+                !Percent(progress.social.recentShock))
+                throw new InvalidOperationException("社会状態の内訳が不正");
+            if (progress.events == null)
+                throw new InvalidOperationException("期間イベント履歴がnull");
+            foreach (var periodEvent in progress.events)
+                if (periodEvent == null || periodEvent.turn < 0 ||
+                    periodEvent.people < 0 ||
+                    string.IsNullOrWhiteSpace(periodEvent.kind))
+                    throw new InvalidOperationException("期間イベント履歴が不正");
+            if (progress.templeStage < 0 || progress.templeStage > 5)
+                throw new InvalidOperationException("神殿建設段階が不正");
+            if (!progress.templePlanned &&
+                (progress.templeStage != 0 || progress.templeProgress != 0))
+                throw new InvalidOperationException("未着工の神殿進捗が不正");
+            if (progress.administrationAdopted &&
+                (progress.templeStage < 5 ||
+                 progress.templeProgress < AdministrationUnlockProgress))
+                throw new InvalidOperationException("数量記録行政の前提が不足");
             progress.stability = Math.Clamp(progress.stability, 0, 100);
             progress.templeProgress = Math.Clamp(progress.templeProgress, 0,
                 TempleCompletionProgress);
         }
+
+        static bool Percent(int value) => value >= 0 && value <= 100;
 
         public static bool TryApplyAction(HistoricalCampaignSession session, string actionId,
             out string resultJa)
@@ -167,7 +281,7 @@ namespace HexCiv.Core
                         return false;
                     }
                     progress.lastCanalActionTurn = turn;
-                    SetCanalCondition(progress, CanalCondition(progress) + 35);
+                    SetCanalCondition(progress, CanalCondition(progress) + 40);
                     resultJa = "労働力と葦を運河へ配分した。水路の堆積を除き、農地へ水を導く。";
                     break;
 
@@ -179,7 +293,9 @@ namespace HexCiv.Core
                     }
                     progress.lastFoodPriorityTurn = turn;
                     progress.populationAutomation = true;
-                    resultJa = "顧問が人口を農耕・漁撈へ優先配置した。次の収支で食料+1。";
+                    progress.laborAutomationPolicy = "food_security";
+                    UrukSubsistenceSystem.ApplyFoodSecurityAutomation(progress);
+                    resultJa = "顧問が公共労働を食料安全優先へ再配分した。強制労働や権利変更は行わない。";
                     break;
 
                 case PlanTempleAction:
@@ -188,17 +304,20 @@ namespace HexCiv.Core
                         resultJa = "神殿区画はすでに建設中。";
                         return false;
                     }
-                    if (!HasGood(progress, "alluvial_clay", 4) ||
-                        !HasGood(progress, "reeds", 2))
+                    if (!HasGood(progress, "alluvial_clay", 1) ||
+                        !HasGood(progress, "reeds", 1))
                     {
-                        resultJa = "神殿区画の着工には沖積粘土4・葦2が必要。";
+                        resultJa = "初期神殿区画の敷地準備には沖積粘土1・葦1が必要。";
                         return false;
                     }
-                    TryConsumeGood(progress, "alluvial_clay", 4);
-                    TryConsumeGood(progress, "reeds", 2);
+                    TryConsumeGood(progress, "alluvial_clay", 1);
+                    TryConsumeGood(progress, "reeds", 1);
                     progress.templePlanned = true;
                     progress.templeProgress = 5;
-                    resultJa = "日干し煉瓦と葦を確保し、神殿区画の建設を始めた。";
+                    progress.templeStage = 1;
+                    progress.lastConstructionReportJa =
+                        "初期神殿区画（復元推定）: 敷地選定と準備を開始。";
+                    resultJa = "敷地を定め、初期神殿区画の5段階建設を始めた（ジッグラトではない）。";
                     break;
 
                 case AdoptAdministrationAction:
@@ -207,9 +326,15 @@ namespace HexCiv.Core
                         resultJa = "配給・記録制度はすでに採用済み。";
                         return false;
                     }
-                    if (progress.templeProgress < AdministrationUnlockProgress)
+                    if (progress.templeProgress < AdministrationUnlockProgress ||
+                        progress.templeStage < 5)
                     {
-                        resultJa = $"神殿区画の進捗{AdministrationUnlockProgress}%で制度を採用できる。";
+                        resultJa = "神殿の祭祀・貯蔵・配給段階が完成すると数量記録行政を採用できる。";
+                        return false;
+                    }
+                    if (progress.recordKnowledgeElements < 3)
+                    {
+                        resultJa = "トークン・封泥・数量知識が不足している。";
                         return false;
                     }
                     if (!TryConsumeGood(progress, "alluvial_clay", 2))
@@ -218,12 +343,13 @@ namespace HexCiv.Core
                         return false;
                     }
                     progress.administrationAdopted = true;
-                    resultJa = "配給と物資記録を担う行政制度を採用した。";
+                    resultJa = "数量記録行政を採用した。これは文字の完成ではなく、在庫推定と配給予測を改善する。";
                     break;
 
                 default:
-                    resultJa = "不明なキャンペーン行動。";
-                    return false;
+                    if (!TryApplyLaborAction(progress, actionId, out resultJa))
+                        return false;
+                    break;
             }
 
             progress.introTutorialCompleted = progress.lastCanalActionTurn > 0 &&
@@ -247,77 +373,23 @@ namespace HexCiv.Core
             var flood = FloodForPeriod(session.Definition.seed, completedTurn);
             progress.currentFloodTrend = (int)flood;
 
+            // 生産・消費・人口・社会・建設を同じ期間条件で一括解決する。
+            // 運河の劣化は当期の収穫後に反映し、次期間の予測へ影響させる。
+            UrukSubsistenceSystem.Advance(session, completedTurn, flood);
             int canalCondition = CanalCondition(progress);
             bool maintained = progress.lastCanalActionTurn == completedTurn;
             canalCondition -= maintained ? 5 : 12;
             if (flood == UrukFloodTrend.Severe) canalCondition -= 18;
             SetCanalCondition(progress, canalCondition);
 
-            int irrigated = IrrigatedFarmCount(progress);
-            int produced = FarmCount(progress) * 2 + irrigated * 2 +
-                (progress.roles.fishers > 0 ? 1 : 0);
-            if (progress.lastFoodPriorityTurn == completedTurn) produced++;
-            switch (flood)
-            {
-                case UrukFloodTrend.Drought: produced -= 2; break;
-                case UrukFloodTrend.Beneficial: produced += 2; break;
-                case UrukFloodTrend.Severe: produced -= 3; break;
-            }
-            produced = Math.Max(0, produced);
-            int consumed = Math.Max(1, (progress.actualPopulation + 449) / 450);
-            AddGood(progress, "barley", produced);
-            int shortage = ConsumeFood(progress, consumed);
-            int remainingFood = TotalFood(progress);
-
-            int populationChange;
-            if (shortage > 0)
-            {
-                populationChange = -Math.Min(180, 60 + shortage * 30);
-                progress.stability -= 8 + shortage * 2;
-            }
-            else if (remainingFood >= consumed * 2 && progress.stability >= 45)
-            {
-                populationChange = 110;
-                progress.stability += 1;
-            }
-            else
-            {
-                populationChange = 40;
-            }
-            if (flood == UrukFloodTrend.Severe)
-            {
-                populationChange -= 30;
-                progress.stability -= 4;
-            }
-            else if (flood == UrukFloodTrend.Beneficial)
-            {
-                progress.stability += 2;
-            }
-
-            ApplyPopulationChange(progress, populationChange);
-            progress.lastFoodProduced = produced;
-            progress.lastFoodConsumed = consumed;
-            progress.lastPopulationChange = populationChange;
-            progress.stability = Math.Clamp(progress.stability, 0, 100);
-
-            if (progress.templePlanned && progress.templeProgress < TempleCompletionProgress)
-            {
-                int build = 14;
-                if (progress.roles.artisans >= 80) build += 2;
-                if (flood == UrukFloodTrend.Severe) build -= 4;
-                progress.templeProgress = Math.Min(TempleCompletionProgress,
-                    progress.templeProgress + Math.Max(1, build));
-            }
-
-            if (progress.stability <= CriticalStability)
-                progress.consecutiveCriticalUnrest++;
-            else
-                progress.consecutiveCriticalUnrest = 0;
-
             TryFoundCityState(session);
+            int totalLoss = progress.lastDistributionLoss + progress.lastFoodSpoiled;
             progress.lastReportJa =
-                $"{UrukFloodTrendNameJa(flood)}。食料 産出{produced}／消費{consumed}、" +
-                $"人口{Signed(populationChange)}人、運河状態{CanalCondition(progress)}%。";
+                $"{UrukFloodTrendNameJa(flood)}。食料 産出{progress.lastFoodProduced}／" +
+                $"消費{progress.lastFoodConsumed}／損失{totalLoss}、" +
+                $"備蓄{UrukSubsistenceSystem.FoodReserveMonthsJa(progress)}、" +
+                $"人口{Signed(progress.lastPopulationChange)}人、" +
+                $"運河状態{CanalCondition(progress)}%。";
             state.EmitLog("ウルク年代記: " + progress.lastReportJa);
             CheckVictoryAndDefeat(session);
             ValidateProgress(session.Definition, progress);
@@ -336,8 +408,8 @@ namespace HexCiv.Core
         {
             int farms = FarmCount(progress);
             int condition = CanalCondition(progress);
-            if (condition >= 50) return farms;
-            if (condition >= 25) return Math.Min(1, farms);
+            if (condition >= 60) return farms;
+            if (condition >= 30) return Math.Min(1, farms);
             return 0;
         }
 
@@ -368,8 +440,10 @@ namespace HexCiv.Core
             var progress = session.Progress;
             if (turn <= 1 && progress.lastCanalActionTurn <= 0) return "1. 運河を整備する";
             if (turn <= 2 && progress.lastFoodPriorityTurn <= 0) return "2. 食料を安定させる";
-            if (turn <= 3 && !progress.templePlanned) return "3. 神殿区画を計画する";
-            if (!progress.administrationAdopted) return "都市国家成立への準備";
+            if (turn <= 3 && !progress.templePlanned) return "3. 初期神殿区画を計画する";
+            if (!progress.templePlanned) return "初期神殿区画を着工する";
+            if (progress.templeStage < 5) return "神殿・倉庫を段階建設する";
+            if (!progress.administrationAdopted) return "数量記録行政を整える";
             if (!progress.isCityState) return "人口と備蓄を育てる";
             return "都市国家ウルクの時代";
         }
@@ -379,16 +453,19 @@ namespace HexCiv.Core
             int turn = session.State.TurnNumber;
             var progress = session.Progress;
             if (turn <= 1 && progress.lastCanalActionTurn <= 0)
-                return "未整備の運河へ労働力と葦を割り当ててください。整備後にターンを終了します。";
+                return "最大リスクは灌漑不足です。①運河を整備 ②食料労働を維持 ③ターン終了。詳細で予測を確認できます。";
             if (turn <= 2 && progress.lastFoodPriorityTurn <= 0)
-                return "人口配置は自動管理中です。「食料を優先」で農耕・漁撈へ重点を置きます。";
+                return "最大リスクは備蓄不足です。「食料を優先」で公共労働を再配分します。強制労働は自動化しません。";
             if (turn <= 3 && !progress.templePlanned)
-                return "粘土と葦を使って神殿区画を着工します。完成まで複数期間かかります。";
+                return "粘土1・葦1で初期神殿区画（復元推定）を着工します。全5段階で、途中停止と資源不足が起こります。";
+            if (progress.templeStage < 5)
+                return $"神殿段階 {progress.templeStage}/5「" +
+                    $"{UrukSubsistenceSystem.TempleStageNameJa(progress.templeStage)}」。" +
+                    "建設配分・粘土・葦を確保してください。";
             if (!progress.administrationAdopted)
-                return $"神殿進捗{progress.templeProgress}%／{AdministrationUnlockProgress}%で" +
-                    "配給・記録制度を採用できます。";
+                return "神殿倉庫完成後、粘土2で「数量記録行政」を採用できます。文字完成とは区別して表示します。";
             if (!progress.isCityState)
-                return "人口2,500人、灌漑農地2区画、食料余裕、神殿完成をそろえてください。";
+                return "人口2,500人、完全灌漑農地2区画、2期間連続の食料安全、神殿完成、数量記録行政をそろえてください。";
             return "軍事・科学・文化・経済の即時勝利、または最終ターンの存続勝利を目指します。";
         }
 
@@ -401,6 +478,32 @@ namespace HexCiv.Core
                 UrukFloodTrend.Severe => "洪水多発",
                 _ => "安定した水位",
             };
+        }
+
+        static bool TryApplyLaborAction(UrukCampaignProgress progress,
+            string actionId, out string resultJa)
+        {
+            if (string.IsNullOrWhiteSpace(actionId) ||
+                !actionId.StartsWith("labor_", StringComparison.Ordinal))
+            {
+                resultJa = "不明なキャンペーン行動。";
+                return false;
+            }
+            string[] parts = actionId.Split('_');
+            if (parts.Length != 3)
+            {
+                resultJa = "労働配分の指定が不正。";
+                return false;
+            }
+            int delta = parts[2] == "up" ? UrukSubsistenceSystem.LaborStep :
+                parts[2] == "down" ? -UrukSubsistenceSystem.LaborStep : 0;
+            if (delta == 0)
+            {
+                resultJa = "労働配分の増減指定が不正。";
+                return false;
+            }
+            return UrukSubsistenceSystem.TryAdjustLabor(progress, parts[1],
+                delta, out resultJa);
         }
 
         static UrukFloodTrend FloodForPeriod(int seed, int completedTurn)
@@ -420,11 +523,12 @@ namespace HexCiv.Core
         {
             var progress = session.Progress;
             if (progress.isCityState) return;
-            int consumption = Math.Max(1, (progress.actualPopulation + 449) / 450);
             if (progress.actualPopulation < CityStatePopulation ||
                 IrrigatedFarmCount(progress) < 2 ||
-                TotalFood(progress) < consumption * 2 ||
+                progress.consecutiveFoodSecurePeriods <
+                    UrukSubsistenceSystem.SecurePeriodsForCityState ||
                 progress.templeProgress < CityStateTempleProgress ||
+                progress.templeStage < 5 ||
                 !progress.administrationAdopted)
                 return;
             progress.isCityState = true;
@@ -541,6 +645,8 @@ namespace HexCiv.Core
             int statusRemove = -actual;
             statusRemove = RemoveUpTo(ref progress.statuses.free, statusRemove);
             statusRemove = RemoveUpTo(ref progress.statuses.dependent, statusRemove);
+            statusRemove = RemoveUpTo(ref progress.statuses.debtBound, statusRemove);
+            statusRemove = RemoveUpTo(ref progress.statuses.captive, statusRemove);
             RemoveUpTo(ref progress.statuses.enslaved, statusRemove);
         }
 
@@ -613,6 +719,8 @@ namespace HexCiv.Core
             {
                 free = source.free,
                 dependent = source.dependent,
+                debtBound = source.debtBound,
+                captive = source.captive,
                 enslaved = source.enslaved,
             };
         }

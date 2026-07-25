@@ -114,9 +114,11 @@ namespace HexCiv.Core
     {
         public int free;
         public int dependent;
+        public int debtBound;
+        public int captive;
         public int enslaved;
 
-        public int Total => free + dependent + enslaved;
+        public int Total => free + dependent + debtBound + captive + enslaved;
     }
 
     [Serializable]
