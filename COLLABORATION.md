@@ -26,6 +26,24 @@ CodexとClaude Codeは、以後この `HexCiv` プロジェクトだけを更新
 
 ## 最新状況
 
+### ✅ 2026-07-28 Claude Code 第22弾: UIをヘッドレスでPNGに焼く手段 + それで見つけた見た目の欠陥3件
+
+**背景**: このプロジェクトの UI は実行時にコードで組み立てるため、**起動して目で見るまで見た目が分からない**。文字の重なり・はみ出し・成立していないグラフといった不具合は、「例外が出ない」ことをいくら確認しても捕まらない。
+
+**手段**: 新規 `Editor/UiScreenshot.cs`。対象 Canvas を ScreenSpaceOverlay から ScreenSpaceCamera へ差し替え、RenderTexture へ描くだけの専用カメラで1フレーム描画して PNG に落とす(Overlay のままだと画面の無いヘッドレスでは何も焼けない)。出力は `Logs/`(.gitignore 済み)なのでリポジトリを汚さない。
+
+```powershell
+& 'C:\Program Files\Unity\Hub\Editor\6000.3.20f1\Editor\Unity.exe' -batchmode -quit -projectPath 'C:\Users\kanta\GitHub\HexCiv' -executeMethod UiScreenshot.CaptureGrowthHistory -logFile 'C:\Users\kanta\GitHub\HexCiv\Logs\ui_capture.log'
+```
+
+**焼いてみて初めて分かった欠陥3件(いずれも例外は出ない)**
+
+1. **記録1件でグラフが破綻**: 棒が1本しか無いと画面幅いっぱいの帯になり、軸の上端・下端も同じ数字が並んで意味を成さない。**これは起点を置いた直後=ユーザーが最初に見る状態**だった。記録が2件未満のときは説明文へ差し替え、棒の幅にも上限(56px)を設けた。
+2. **「0 回の更新」**: 起点しか無いときに壊れて見える文言。「〜から記録中(まだ更新はありません)」へ。一覧の空白域にも次に何が起きるかの案内を1行足した。
+3. **`UrukRegionalPanel` が型名のまま**: 日本語名の対応表に Codex の最新パネルが無く、他が「政治」「領土の変遷」と出る中で1つだけ生の型名だった。「南メソポタミア地域管理」を追加(全15パネルの対応漏れはこれだけ)。
+
+**検証(Unity 6000.3.20f1 / 2026-07-28)**: コンパイル error 0 / warning 0。`GROWTH HISTORY SMOKE OK`、`UPDATE DIGEST SMOKE OK`、`SmokeTest` 全19行が基準ログと **diff 完全一致**、`BUILD OK: 98031349 bytes`、実起動で例外ゼロかつ起点が重複せず維持されることを確認。修正後の PNG で3件とも解消を目視確認した。
+
 ### ✅ 2026-07-28 Claude Code 第21弾: 「成長の記録」の穴を2つ塞ぐ(起点・増えたものの名前)
 
 第20弾を実際に使う場面に置いて見つかった2つの穴を塞いだ。どちらも**放置すると後から復元できない**種類のもの。

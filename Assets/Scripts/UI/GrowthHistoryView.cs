@@ -224,7 +224,10 @@ namespace HexCiv.UI
             string since = GrowthHistory.FormatAtJa(records[0].AtIso);
             int growth = GrowthHistory.GrowthSinceOldest(records);
 
-            string head = since + " から " + updates + " 回の更新";
+            // 更新0回で「0 回の更新」と出すと壊れて見えるので、記録を始めたばかりだと明示する
+            string head = updates == 0
+                ? since + " から記録中(まだ更新はありません)"
+                : since + " から " + updates + " 回の更新";
             if (growth > 0) head += " / この間に +" + Num(growth);
             head += "   —   今の世界: 台帳 " + Num(newest.LedgerTotal)
                   + " ・ 技術/ユニット/建物 " + Num(newest.RulesTotal)
@@ -251,11 +254,17 @@ namespace HexCiv.UI
             if (chartImage != null) chartImage.raycastTarget = false;
             Place(chart, topOffset, ChartHeight);
 
-            if (records.Count == 0)
+            // 記録が1件以下では「推移」を描けない。無理に1本だけ描くと画面幅いっぱいの帯になり、
+            // 上端と下端のラベルも同じ数字が並んで意味を成さないため、説明文に差し替える。
+            if (records.Count < 2)
             {
-                var empty = UIStyle.CreateText(chart.transform, "ChartEmpty",
-                    "ゲームを起動して新しい要素が増えると、ここに成長が積み上がっていきます。", 13,
+                string message = records.Count == 0
+                    ? "ゲームを起動して新しい要素が増えると、ここに成長が積み上がっていきます。"
+                    : "起点だけを記録しています(今の世界の大きさ " + Num(records[0].Magnitude)
+                      + ")。\n次に何かが増えたときから、ここに伸びが描かれます。";
+                var empty = UIStyle.CreateText(chart.transform, "ChartEmpty", message, 13,
                     TextAnchor.MiddleCenter, UIStyle.TextDim);
+                empty.horizontalOverflow = HorizontalWrapMode.Wrap;
                 UIStyle.StretchFull(empty.gameObject, 12f);
                 return;
             }
@@ -282,7 +291,9 @@ namespace HexCiv.UI
             float plotWidth = PanelWidth - Pad * 2f - insetX * 2f;
             int count = records.Count;
             float slot = plotWidth / count;
-            float barWidth = Mathf.Max(slot - 2f, 2f);
+            // 記録が少ないうちは1本あたりの幅が広くなりすぎて「棒グラフ」に見えないため上限を設ける
+            const float MaxBarWidth = 56f;
+            float barWidth = Mathf.Min(Mathf.Max(slot - 2f, 2f), MaxBarWidth);
 
             for (int i = 0; i < count; i++)
             {
@@ -378,6 +389,17 @@ namespace HexCiv.UI
             int row = 0;
             for (int i = endExclusive - 1; i >= start; i--, row++)
                 BuildRow(records[i], row);
+
+            // 起点しか無いうちは一覧がほぼ空白になるので、次に何が起きるかを1行で伝える
+            if (records.Count == 1 && row < RowsPerPage)
+            {
+                var hint = UIStyle.CreateText(listRoot.transform, "Hint",
+                    "Codex や Claude Code が新しい要素を足すと、次の起動でここに1行ずつ積まれます。",
+                    12, TextAnchor.MiddleLeft, UIStyle.TextDim);
+                UIStyle.SetRect(hint.gameObject, new Vector2(0f, 1f), new Vector2(1f, 1f),
+                    new Vector2(0.5f, 1f), new Vector2(0f, -(row * RowHeight + 6f)),
+                    new Vector2(-12f, RowHeight));
+            }
 
             if (pageLabel != null)
             {

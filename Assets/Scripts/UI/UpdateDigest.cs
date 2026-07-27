@@ -102,6 +102,7 @@ namespace HexCiv.UI
             { "PopulationPanel",         "人口・社会" },
             { "ScoreGraphPanel",         "戦況グラフ" },
             { "TimelapsePanel",          "領土の変遷" },
+            { "UrukRegionalPanel",       "南メソポタミア地域管理" },
             { "WorldHistoryPanel",       "世界史図鑑" },
         };
 
