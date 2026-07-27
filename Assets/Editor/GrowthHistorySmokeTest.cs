@@ -30,6 +30,8 @@ public static class GrowthHistorySmokeTest
             ValidateNoChangeIsNotRecorded();
             ValidateBoundedToMaxRecords();
             ValidateCorruptedDataIsSurvivable();
+            ValidateEnsureOrigin();
+            ValidateNewNamesArePreserved();
             ValidateViewBuilds();
             Debug.Log("GROWTH HISTORY SMOKE OK");
             Restore(saved);
@@ -158,6 +160,70 @@ public static class GrowthHistorySmokeTest
     }
 
     /// <summary>
+    /// 起点の自動記録。記録が空のときだけ1件置き、既に記録があれば何もしないこと。
+    /// これが効かないと、基準値だけあって履歴が空の環境で「成長の記録」がずっと空になる。
+    /// </summary>
+    static void ValidateEnsureOrigin()
+    {
+        GrowthHistory.Clear();
+        if (!GrowthHistory.EnsureOrigin(Update(1500, 7)))
+            throw new Exception("空の状態で起点を記録できない");
+        if (GrowthHistory.Count != 1) throw new Exception("起点が1件になっていない");
+
+        var records = GrowthHistory.Load();
+        if (!records[0].IsOrigin) throw new Exception("起点として記録されていない");
+        // 実際には何も増えていないので、増分は 0 でなければならない
+        if (records[0].TotalDelta != 0 || records[0].LedgerDelta != 0)
+            throw new Exception("起点に増分が入っている: " + records[0].TotalDelta);
+        if (records[0].LedgerTotal != 1500) throw new Exception("起点の総数が不正");
+
+        // 既に記録があるときは何もしない(起点が量産されない)
+        if (GrowthHistory.EnsureOrigin(Update(1600, 9)))
+            throw new Exception("記録があるのに起点を追加した");
+        if (GrowthHistory.Count != 1) throw new Exception("起点が増えた: " + GrowthHistory.Count);
+
+        // null を渡しても例外を出さず false
+        GrowthHistory.Clear();
+        if (GrowthHistory.EnsureOrigin(null)) throw new Exception("null で起点を記録した");
+    }
+
+    /// <summary>
+    /// 「何が増えたか」の名前が保存され、読み戻せること。
+    /// 件数だけを残すと基準値が進んだ時点でどれが増えたのか永久に分からなくなるため、
+    /// ここは往復(保存→読み込み)で確認する。
+    /// </summary>
+    static void ValidateNewNamesArePreserved()
+    {
+        GrowthHistory.Clear();
+
+        var result = Update(1200, 3);
+        result.NewPanelKeys.Add("TimelapsePanel");
+        result.NewPanelKeys.Add("UrukRegionalPanel");
+        result.NewCoreTypeKeys.Add("UrukRegionalSystem");
+        if (!GrowthHistory.Record(result, "台帳 +3 / 新しいパネル 2"))
+            throw new Exception("名前付きの更新を記録できない");
+
+        // キャッシュではなく保存された内容から読み戻す(直列化の往復を確認する)
+        GrowthHistory.Reload();
+        var records = GrowthHistory.Load();
+        if (records.Count != 1) throw new Exception("記録が読み戻せない");
+
+        var record = records[0];
+        if (record.NewPanelNames == null || record.NewPanelNames.Count != 2)
+            throw new Exception("パネル名が保存されていない");
+        if (record.NewPanelNames[0] != "TimelapsePanel" || record.NewPanelNames[1] != "UrukRegionalPanel")
+            throw new Exception("パネル名が壊れている: " + string.Join(",", record.NewPanelNames.ToArray()));
+        if (record.NewCoreTypeNames == null || record.NewCoreTypeNames.Count != 1)
+            throw new Exception("Core型名が保存されていない");
+        if (record.NewCoreTypeNames[0] != "UrukRegionalSystem")
+            throw new Exception("Core型名が壊れている: " + record.NewCoreTypeNames[0]);
+
+        // 件数フィールドは名前から導出されるので必ず一致する
+        if (record.NewPanels != 2 || record.NewCoreTypes != 1)
+            throw new Exception("件数と名前の数が食い違う: " + record.NewPanels + "/" + record.NewCoreTypes);
+    }
+
+    /// <summary>
     /// 閲覧画面(GrowthHistoryView)が例外なく組み上がることを確認する。
     ///
     /// 描画の見た目までは検証できないが、レイアウト計算・グラフ生成・行生成は実際に走るので、
@@ -176,11 +242,17 @@ public static class GrowthHistorySmokeTest
         AssertViewHierarchy(view, "記録あり");
         DisposeView(view);
 
-        // ---- 記録なし(空の状態) ----
+        // ---- 記録が空の状態で開く(= 起点が自動で置かれ、空のまま終わらないこと) ----
         GrowthHistory.Clear();
         var emptyView = GrowthHistoryView.Open();
         if (emptyView == null) throw new Exception("記録なしで閲覧画面を開けなかった");
         AssertViewHierarchy(emptyView, "記録なし");
+        if (GrowthHistory.Count != 1)
+            throw new Exception("空の状態で開いても起点が置かれない: " + GrowthHistory.Count);
+        var seeded = GrowthHistory.Load()[0];
+        if (!seeded.IsOrigin) throw new Exception("置かれた1件が起点になっていない");
+        if (seeded.Magnitude <= 0)
+            throw new Exception("起点の世界の大きさが 0 — 実行時カウントが取れていない");
         DisposeView(emptyView);
 
         if (GrowthHistoryView.IsOpen)

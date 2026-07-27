@@ -75,12 +75,55 @@ namespace HexCiv.UI
         {
             if (result == null || result.Snapshot == null) return false;
             if (!result.IsFirstRun && !result.HasChanges) return false;   // 変化なしは残さない
+            return Append(result, summaryJa, result.IsFirstRun);
+        }
 
+        /// <summary>
+        /// 記録がまだ1件も無いときに限り、その時点の総数を「起点」として1件だけ残す。
+        ///
+        /// 基準値が既にある(=初回起動ではない)のに履歴が空、という状態は普通に起こる。
+        /// 「今回の更新」の仕組みが入る前から遊んでいた場合や、履歴を消した後がそれで、
+        /// このままだと**次に何かが増えるまで「成長の記録」が空のまま**になる。
+        /// 起点を1件置いておけば、そこからの伸びを最初の更新から測れる。
+        ///
+        /// 増分はすべて 0 で記録する(実際には何も増えていないため)。
+        /// </summary>
+        /// <param name="result">ComputeOnly() の結果。書き込みはこのメソッドが行う。</param>
+        /// <returns>起点を記録したら true。既に記録があるか失敗したら false。</returns>
+        public static bool EnsureOrigin(DigestResult result)
+        {
+            if (Count > 0) return false;
+            if (result == null || result.Snapshot == null) return false;
+            return Append(result, "ここから記録を始めました", true);
+        }
+
+        /// <summary>
+        /// 現在の規模を自分で数えて起点を置く簡便版。記録が既にあれば何もしない。
+        /// <see cref="UpdateDigest.ComputeOnly"/> は**読むだけ**で基準値を動かさないため、
+        /// 「今回の更新」の判定に影響しない。例外は投げない。
+        /// </summary>
+        public static bool EnsureOrigin()
+        {
+            if (Count > 0) return false;
+            try
+            {
+                return EnsureOrigin(UpdateDigest.ComputeOnly());
+            }
+            catch (Exception ex)
+            {
+                Debug.LogWarning("GrowthHistory: 起点の記録に失敗しました: " + ex.Message);
+                return false;
+            }
+        }
+
+        /// <summary>記録を1件作って保存する(Record / EnsureOrigin の共通部分)。</summary>
+        static bool Append(DigestResult result, string summaryJa, bool asOrigin)
+        {
             try
             {
                 var record = new GrowthRecord();
                 record.AtIso = DateTime.Now.ToString("yyyy-MM-ddTHH:mm:ss");
-                record.IsOrigin = result.IsFirstRun;
+                record.IsOrigin = asOrigin;
 
                 record.LedgerTotal = Snapshot(result, "ledger.total");
                 record.Categories  = Snapshot(result, "ledger.categories");
@@ -91,14 +134,23 @@ namespace HexCiv.UI
                 record.CoreTypes   = Snapshot(result, "core.systems")
                                    + Snapshot(result, "core.catalogs");
 
-                if (!result.IsFirstRun)
+                if (!asOrigin)
                 {
                     record.TotalDelta   = result.TotalDelta;
                     record.LedgerDelta  = result.LedgerDelta;
                     record.RulesDelta   = result.RulesDelta;
-                    record.NewPanels    = result.NewPanelKeys != null ? result.NewPanelKeys.Count : 0;
-                    record.NewCoreTypes = result.NewCoreTypeKeys != null
-                        ? result.NewCoreTypeKeys.Count : 0;
+                    // 何が増えたかの**名前**もここで残す。増分の件数だけを残すと
+                    // 「新しいパネル 1」までしか後から言えず、どれが増えたのかは
+                    // 次の起動で基準値が進んだ時点で永久に分からなくなる。
+                    record.NewPanelNames    = CopyNames(result.NewPanelKeys);
+                    record.NewCoreTypeNames = CopyNames(result.NewCoreTypeKeys);
+                    record.NewPanels    = record.NewPanelNames.Count;
+                    record.NewCoreTypes = record.NewCoreTypeNames.Count;
+                }
+                else
+                {
+                    record.NewPanelNames = new List<string>();
+                    record.NewCoreTypeNames = new List<string>();
                 }
                 record.SummaryJa = summaryJa ?? "";
 
@@ -113,6 +165,17 @@ namespace HexCiv.UI
                 Debug.LogWarning("GrowthHistory: 記録に失敗しました: " + ex.Message);
                 return false;
             }
+        }
+
+        static List<string> CopyNames(List<string> source)
+        {
+            var copy = new List<string>();
+            if (source == null) return copy;
+            for (int i = 0; i < source.Count; i++)
+            {
+                if (!string.IsNullOrEmpty(source[i])) copy.Add(source[i]);
+            }
+            return copy;
         }
 
         /// <summary>
@@ -251,6 +314,15 @@ namespace HexCiv.UI
 
         /// <summary>1行要約(例:「台帳 +24 / 新しいパネル 1」)。</summary>
         public string SummaryJa;
+
+        /// <summary>
+        /// この更新で新しく現れたUIパネルの型名。件数(NewPanels)だけでなく名前も残すことで、
+        /// 後から「どれが増えたのか」を言える。基準値が進むと二度と復元できない情報。
+        /// </summary>
+        public List<string> NewPanelNames;
+
+        /// <summary>この更新で新しく現れた Core の System / Catalog 型名。</summary>
+        public List<string> NewCoreTypeNames;
 
         /// <summary>グラフの縦軸に使う「世界の大きさ」。台帳+規則+パネル+仕組みの総和。</summary>
         public int Magnitude

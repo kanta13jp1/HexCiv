@@ -686,6 +686,19 @@ namespace HexCiv.UI
             // shownAt の確定より前に実行する。
             TryBuildUpdateCard(overlay.transform);
 
+            // 「成長の記録」の起点(2026-07-27 追加)。記録がまだ1件も無いときだけ、今の規模を
+            // 起点として置く。**カードの構築より後**に呼ぶのが要点で、差分があった起動では
+            // 直前の確定で更新が1件記録済みになっているため、起点は作られない
+            // (増えた後の値を「起点」と称して二重に置いてしまうのを避ける)。
+            try
+            {
+                GrowthHistory.EnsureOrigin();
+            }
+            catch (Exception ex)
+            {
+                Debug.LogWarning("[TitleScreen] 成長の記録の起点を置けませんでした: " + ex.Message);
+            }
+
             // 全UI構築完了=表示開始。ここを全演出(グロー/出現/ドリフト)の基準時刻にする
             // (2026-07-22 追加)
             shownAt = Time.unscaledTime;

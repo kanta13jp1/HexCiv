@@ -116,6 +116,24 @@ namespace HexCiv.UI
         {
             records = GrowthHistory.Load();
 
+            // 記録がまだ1件も無いなら、その時点の総数を「起点」として残す。
+            // 基準値が既にあるのに履歴が空、という状態は普通に起こる(この仕組みが入る前から
+            // 遊んでいた場合など)。起点を置かないと、次に何かが増えるまでこの画面が
+            // ずっと空のままになり、「育っていくのを見る」入口として機能しない。
+            if (records.Count == 0)
+            {
+                try
+                {
+                    // ComputeOnly は読むだけで基準値を動かさない(起動中はキャッシュを返す)
+                    if (GrowthHistory.EnsureOrigin(UpdateDigest.ComputeOnly()))
+                        records = GrowthHistory.Load();
+                }
+                catch (System.Exception ex)
+                {
+                    Debug.LogWarning("[GrowthHistoryView] 起点を記録できませんでした: " + ex.Message);
+                }
+            }
+
             var cgo = new GameObject("GrowthHistoryCanvas", typeof(Canvas), typeof(CanvasScaler),
                 typeof(GraphicRaycaster));
             cgo.transform.SetParent(transform, false);
@@ -399,10 +417,7 @@ namespace HexCiv.UI
             UIStyle.SetRect(delta.gameObject, new Vector2(0f, 0f), new Vector2(0f, 1f),
                 new Vector2(0f, 0.5f), new Vector2(104f, 0f), new Vector2(72f, 0f));
 
-            string detail = record.IsOrigin
-                ? "ここから記録を始めました(世界の大きさ " + Num(record.Magnitude) + ")"
-                : (string.IsNullOrEmpty(record.SummaryJa) ? "更新" : record.SummaryJa);
-            var summary = UIStyle.CreateText(container.transform, "Summary", detail, 13,
+            var summary = UIStyle.CreateText(container.transform, "Summary", DescribeJa(record), 13,
                 TextAnchor.MiddleLeft, UIStyle.TextMain);
             UIStyle.SetRect(summary.gameObject, new Vector2(0f, 0f), new Vector2(1f, 1f),
                 new Vector2(0f, 0.5f), new Vector2(188f, 0f), new Vector2(-320f, 0f));
@@ -411,6 +426,61 @@ namespace HexCiv.UI
                 "世界の大きさ " + Num(record.Magnitude), 12, TextAnchor.MiddleRight, UIStyle.TextDim);
             UIStyle.SetRect(total.gameObject, new Vector2(1f, 0f), new Vector2(1f, 1f),
                 new Vector2(1f, 0.5f), new Vector2(-6f, 0f), new Vector2(160f, 0f));
+        }
+
+        /// <summary>
+        /// 1件の記録を1行の日本語にする。**何が増えたかを名前で言う**のがこのメソッドの主眼で、
+        /// 「新しいパネル 1」ではなく「新しいパネル: 領土の変遷」と出す。
+        ///
+        /// 名前を持たない古い形式の記録(名前を残す前に保存されたもの)は件数表示へ自動的に
+        /// 落ちるので、既存の記録が読めなくなることはない。
+        /// </summary>
+        static string DescribeJa(GrowthRecord record)
+        {
+            if (record.IsOrigin)
+            {
+                string head = string.IsNullOrEmpty(record.SummaryJa)
+                    ? "ここから記録を始めました" : record.SummaryJa;
+                return head + "(世界の大きさ " + Num(record.Magnitude) + ")";
+            }
+
+            var parts = new List<string>();
+            if (record.LedgerDelta > 0) parts.Add("台帳 +" + Num(record.LedgerDelta));
+            if (record.RulesDelta > 0) parts.Add("技術・ユニット・建物 +" + Num(record.RulesDelta));
+
+            if (record.NewPanelNames != null && record.NewPanelNames.Count > 0)
+                parts.Add("新しいパネル: " + JoinPanelLabels(record.NewPanelNames));
+            else if (record.NewPanels > 0)
+                parts.Add("新しいパネル " + record.NewPanels);          // 名前を持たない旧記録
+
+            if (record.NewCoreTypeNames != null && record.NewCoreTypeNames.Count > 0)
+                parts.Add("新しい仕組み: " + JoinNames(record.NewCoreTypeNames));
+            else if (record.NewCoreTypes > 0)
+                parts.Add("新しい仕組み " + record.NewCoreTypes);        // 名前を持たない旧記録
+
+            if (parts.Count == 0)
+                return string.IsNullOrEmpty(record.SummaryJa) ? "更新" : record.SummaryJa;
+            return string.Join(" / ", parts.ToArray());
+        }
+
+        /// <summary>パネル型名を日本語表示名へ直して連結する(上限を超えたら「ほか N」)。</summary>
+        static string JoinPanelLabels(List<string> names)
+        {
+            var labels = new List<string>();
+            for (int i = 0; i < names.Count; i++) labels.Add(UpdateDigest.PanelLabelJa(names[i]));
+            return JoinNames(labels);
+        }
+
+        /// <summary>名前を「A・B・C ほか2」の形に連結する(行からあふれさせない)。</summary>
+        static string JoinNames(List<string> names)
+        {
+            const int MaxShown = 3;
+            int shown = Mathf.Min(names.Count, MaxShown);
+            var head = new string[shown];
+            for (int i = 0; i < shown; i++) head[i] = names[i];
+            string joined = string.Join("・", head);
+            int rest = names.Count - shown;
+            return rest > 0 ? joined + " ほか" + rest : joined;
         }
 
         static string Num(int value)
