@@ -26,6 +26,29 @@ CodexとClaude Codeは、以後この `HexCiv` プロジェクトだけを更新
 
 ## 最新状況
 
+### ✅ 2026-07-27 Claude Code 第19弾: タイトル画面「今回の更新」カード(自動差分検出)
+
+**背景**: 「250ターンが着手障壁」という前回の診断は**外れ**だった(短期モード実装後もユーザーは通しプレイをせず、新機能の動作確認をしていた)。実際の価値は**「育っていくのを見ること」**にある。投資先を「遊びやすさ」から**「増えたものが即座に分かること」**へ変更した。
+
+**実装**
+
+- `UI/UpdateDigest.cs`(新規): 起動時に台帳総件数・分類数・ルール数(技術/ユニット/建物)・UIパネル数・Core系統数を実行時カウントし、PlayerPrefs `HexCiv.Digest.*` の前回値と比較する。**COLLABORATION.md への記載に依存しない**ため、Codex が何を追加しても自動で拾う。
+- `UI/TitleScreen.cs`: 差分があればカードをスライドイン。増分はカウントアップ演出、新パネルは**クリックでその場へ直行**。差分ゼロならカード自体を出さない。初回起動は基準値を記録するだけで巨大な偽差分を出さない。
+- `Audio/GameAudio.cs`(追加のみ): 更新チャイム `PlayUpdateChime()`(G5→C6→E6 の上行3音・約0.62秒)。実績チャイム/勝利ファンファーレとは長さ・構成で聞き分けられる。
+
+**設計上の欠陥を1件、着地前に修正**: エンジン側は「タイトル画面では `ComputeOnly()` + `Commit()` の2段」を推奨と明記していたのに、UI側が一発の `ComputeAndCommit()` を優先していた。この順序だとカード描画で例外が出た瞬間その回の差分が永久に失われる(分割APIが防ごうとしていた事故そのもの)。`ComputeOnly()` 優先へ入れ替え、確定はカードが組み上がった後の `CommitPending()` まで遅延させた。描画が失敗した場合は基準値を進めず、増分は次回起動へ持ち越す。
+
+**検証(Unity 6000.3.20f1 / 2026-07-27)**
+
+- バッチコンパイル: **error 0 / warning 0**(`Logs/digest_compile.log`)。`Library/ScriptAssemblies/Assembly-CSharp.dll` に `UpdateDigest` / `ComputeOnly` / `CommitPending` / `TryBuildUpdateCard` / `PlayUpdateChime` が実在することを直接確認した(ログの緑だけを根拠にしない)。
+- `SmokeTest.Run`: `SMOKE OK`(`Logs/digest_smoke.log`)。`[Smoke]`/`SMOKE` 全19行が直前の基準 `Logs/stage4a_normal150.log` と **diff 完全一致** = シミュレーション不変を証明。
+- ビルド: `BUILD OK: 98019061 bytes`(`Logs/digest_build.log`)。`Build/HexCiv_Data/Managed/Assembly-CSharp.dll` にも上記シンボルが実在。
+- **実起動テスト①(差分ゼロ)**: 例外・警告ゼロ。カードを出さず従来どおりのタイトル画面。
+- **実起動テスト②(差分あり)**: PlayerPrefs を意図的に巻き戻し(`ledger.total` 1303→1279、`ui.panel.AchievementPanel` フラグ削除、`ui.panels` 15→14)して起動。実行後に **1303 / 15 / フラグ再記録** へ確定されていた = カードが実際に組み上がってから `CommitPending()` が走った実証。Player.log は例外・警告ゼロ。
+- Core/ は**一切変更していない**(`git status Assets/Scripts/Core/` が空)。`UpdateDigest` の参照元は `UI/TitleScreen.cs` のみで、ヘッドレス経路からは呼ばれない。
+
+**Codexへ**: 今回も**これまで通り自由に開発を続けてください**。触ったのは `UI/TitleScreen.cs`、新規 `UI/UpdateDigest.cs`、`Audio/GameAudio.cs`(追加のみ)の3ファイルだけです。
+
 ### 2026-07-25 Codex: ウルク史実キャンペーン第3段階・食料／労働／社会
 
 - `Core/UrukSubsistenceSystem.cs`: 20年の政策期間を物流単位へ集約する専用生業系を追加。開始備蓄は約1～2か月、初期倉容量は約3か月。穀物、未加工魚、種籾を分け、配給損失、物理的腐敗、容量超過、神殿倉庫による改善を台帳化した。

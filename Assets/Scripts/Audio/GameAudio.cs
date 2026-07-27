@@ -63,6 +63,15 @@ namespace HexCiv.Audio
         // とは音域・構成で聞き分けられる。音量・ミュートは既存の Play() が一括処理する。
         AudioClip achievementClip;
 
+        // --- 2026-07-24 Claude Code 追加: 更新チャイム(タイトルの「今回の更新」カード) ---
+        // タイトル画面(UI/TitleScreen.cs)の「今回の更新」カードがスライドインする瞬間に一度だけ
+        // 鳴らす、短く明るい上行3音(G5→C6→E6)のチェレスタ風モチーフ(約0.62秒)。
+        // 実績解除チャイム(高音域の装飾二音+トレモロ和音、AchievementClip)とは「和音を持たない
+        // 単純な3段の上行」である点で、勝利ファンファーレ(約2.5秒の6音上行+和音)とは長さ・音域・
+        // 構成で明確に聞き分けられる。前回起動からの差分が無いときは呼ばれない(=無音)。
+        // 音量・ミュートは既存の Play() が一括処理し、ヘッドレスでは GameAudio 自体が生成されない。
+        AudioClip updateChimeClip;
+
         // --- 2026-07-22 Claude Code 追加: 時代の鐘 ---
         // 時代の変わり目(古代→中世→近代。UIManager が時代遷移時に PlayEraBell を呼ぶ)に鳴らす
         // 深く長く響く二打の鐘。非整数倍音を異なる減衰で重ねた鐘特有の金属質な響きを低い基音で
@@ -526,6 +535,10 @@ namespace HexCiv.Audio
             // --- 2026-07-22 Claude Code 追加: 法の施行(荘厳な儀礼音) ---
             // 生成はこの初期化経路で一度だけ行い、RegisterClip 経由で破棄も既存と同じ扱い。
             decreeClip = CreateDecreeClip();
+
+            // --- 2026-07-24 Claude Code 追加: 更新チャイム(タイトルの「今回の更新」カード) ---
+            // 生成はこの初期化経路で一度だけ行い、RegisterClip 経由で破棄も既存と同じ扱い。
+            updateChimeClip = CreateUpdateChimeClip();
         }
 
         public void PlayUiClick() => Play(uiClickClip);
@@ -607,6 +620,14 @@ namespace HexCiv.Audio
         // 2026-07-22 Claude Code 追加: 時代の鐘(UIManager が時代遷移=古代→中世→近代で呼ぶ。
         // 音量・ミュートは Play() が一括処理)
         public void PlayEraBell() => Play(eraBellClip);
+
+        /// <summary>
+        /// 更新チャイム(2026-07-24 Claude Code 追加)。タイトル画面(UI/TitleScreen.cs)の
+        /// 「今回の更新」カードが現れる瞬間に一度だけ呼ぶ、短く明るい上行3音のモチーフ。
+        /// 前回起動から差分が無いときはカード自体を出さないため呼ばれない(=無音)。
+        /// 音量・ミュートは既存の Play() が一括処理し、クリップ未生成(ヘッドレス等)でも無害。
+        /// </summary>
+        public void PlayUpdateChime() => Play(updateChimeClip);
 
         /// <summary>
         /// 警告ブザー(2026-07-22 Claude Code 追加)。UIManager の警告バナー
@@ -1815,6 +1836,44 @@ namespace HexCiv.Audio
                 }
 
                 return Mathf.Clamp(sample * 0.9f, -0.85f, 0.85f);
+            });
+        }
+
+        /// <summary>
+        /// 更新チャイム(2026-07-24 Claude Code 追加)。約0.62秒。
+        /// G5→C6→E6 の上行3音(0.10秒間隔)を、基音+オクターブ+わずかな3倍音の
+        /// チェレスタ風の音色で鳴らす。前2音は速く減衰させて「トン・トン」と刻み、
+        /// 最後のE6だけ長めに残して明るく締める。和音・トレモロ・ノイズを一切含まないため、
+        /// 装飾二音+きらめく和音の実績チャイム(PlayAchievement)や、約2.5秒の6音上行+
+        /// 和音の勝利ファンファーレとは長さ・構成の両面で明確に聞き分けられる。
+        /// 固定周波数の加算合成のみで乱数を使わず、毎回同一波形になる
+        /// (シミュレーションの決定性には一切干渉しない)。
+        /// </summary>
+        AudioClip CreateUpdateChimeClip()
+        {
+            const float duration = 0.62f;
+            // G5(783.99) → C6(1046.50) → E6(1318.51): 明るい長三和音の上行
+            float[] notes = { 783.99f, 1046.50f, 1318.51f };
+            const float spacing = 0.10f;
+            return CreateClip("Update Digest Chime", duration, t =>
+            {
+                float sample = 0f;
+                for (int i = 0; i < notes.Length; i++)
+                {
+                    float local = t - i * spacing;
+                    if (local < 0f) continue;
+                    float f = notes[i];
+                    float tone = Sine(f, local)
+                        + 0.42f * Sine(f * 2f, local)
+                        + 0.12f * Sine(f * 3f, local);
+                    // 最後の音だけ長い余韻(減衰5.0)、前2音は歯切れよく(減衰9.5)
+                    float decay = i == notes.Length - 1 ? 5.0f : 9.5f;
+                    float env = Mathf.Clamp01(local / 0.005f) * Mathf.Exp(-local * decay);
+                    sample += tone * env * 0.30f;
+                }
+                // クリップ末尾は短くフェードして途切れ音を防ぐ
+                sample *= Mathf.Clamp01((duration - t) / 0.06f);
+                return Mathf.Clamp(sample * 0.85f, -0.85f, 0.85f);
             });
         }
 
