@@ -220,7 +220,9 @@ namespace HexCiv.UI
 
             // Esc = そのまま遊ぶ(閉じるだけ)。クラス冒頭コメントのとおり InputController 側の
             // Esc 処理(選択解除/フルスクリーン解除)も同フレームに走りうるが、許容する。
-            if (Input.GetKeyDown(KeyCode.Escape)) BeginClose();
+            // ただし「成長の記録」が開いている間は、その画面が Esc を自分で消費するので
+            // タイトルは閉じない(記録を閉じたつもりでゲームが始まってしまうのを防ぐ)。
+            if (Input.GetKeyDown(KeyCode.Escape) && !GrowthHistoryView.IsOpen) BeginClose();
         }
 
         /// <summary>
@@ -458,6 +460,41 @@ namespace HexCiv.UI
         }
 
         /// <summary>
+        /// 「成長の記録」を開く(2026-07-27 追加)。**タイトル画面は閉じない** — 記録を見た後に
+        /// そのままメニューへ戻れるようにするため。開けなかった場合(記録画面の生成失敗)は
+        /// 何も起きないだけで、タイトル画面は従来どおり操作できる。
+        /// </summary>
+        void OnGrowthHistoryClicked()
+        {
+            if (closing) return;
+            try
+            {
+                GrowthHistoryView.Open();
+            }
+            catch (Exception ex)
+            {
+                Debug.LogWarning("[TitleScreen] 成長の記録を開けませんでした: " + ex.Message);
+            }
+        }
+
+        /// <summary>
+        /// 開いたままの「成長の記録」を閉じる(2026-07-27 追加)。記録画面は独立した
+        /// ルートの GameObject なので、タイトル画面が消えても自動では片付かない。
+        /// ゲーム画面の上に取り残されないよう、遷移時に明示的に畳む。
+        /// </summary>
+        void CloseGrowthHistory()
+        {
+            try
+            {
+                GrowthHistoryView.CloseIfOpen();
+            }
+            catch (Exception ex)
+            {
+                Debug.LogWarning("[TitleScreen] 成長の記録を閉じられませんでした: " + ex.Message);
+            }
+        }
+
+        /// <summary>
         /// フェードアウトを開始する。入力ブロック(レイキャスト・ボタン)は即時解除し、
         /// 下のゲームをすぐ操作可能にする(見た目のフェードだけが約0.4秒続く)。
         /// </summary>
@@ -468,6 +505,7 @@ namespace HexCiv.UI
             closeStartedAt = Time.unscaledTime;
             EndTitleIntroOnce();   // タイトルBGMイントロを通常BGMへ戻す(2026-07-22 追加)
             DismissUpdateCard();   // 「今回の更新」カードを即座に退場させる(2026-07-24 追加)
+            CloseGrowthHistory();  // 開いたままの「成長の記録」を畳む(2026-07-27 追加)
             if (group != null)
             {
                 group.interactable = false;
@@ -496,6 +534,8 @@ namespace HexCiv.UI
         void OnDestroy()
         {
             EndTitleIntroOnce();
+            // BeginClose を経ずに破棄された経路(シーン遷移など)でも記録画面を取り残さない
+            CloseGrowthHistory();
         }
 
         // ==================================================================
@@ -628,6 +668,18 @@ namespace HexCiv.UI
             credit.raycastTarget = false;
             UIStyle.SetRect(credit.gameObject, new Vector2(1f, 0f), new Vector2(1f, 0f),
                 new Vector2(1f, 0f), new Vector2(-14f, 10f), new Vector2(460f, 18f));
+
+            // 「成長の記録」ボタン(2026-07-27 追加)。左下に常設する。
+            //
+            // 「今回の更新」カードは差分があるときしか出ないため、そのままでは差分ゼロの日に
+            // 過去の成長を振り返る導線が無くなる。この入口は**記録の有無にかかわらず常に出す**
+            // (記録が空でも、その旨を説明する画面が開くだけで害はない)。
+            // メニュー6個ぶんの出現アニメ枠(menuItemRects)は既に埋まっているので、
+            // 右下のクレジットと対になる控えめな脇役として扱い、枠は消費しない。
+            var growthButton = UIStyle.CreateButton(overlay.transform, "GrowthHistoryButton",
+                "成長の記録", 13, OnGrowthHistoryClicked);
+            UIStyle.SetRect(growthButton.gameObject, new Vector2(0f, 0f), new Vector2(0f, 0f),
+                new Vector2(0f, 0f), new Vector2(14f, 10f), new Vector2(132f, 28f));
 
             // 「今回の更新」カード(2026-07-24 追加)。差分が無い/取得できない場合は何も作らない。
             // 計測(台帳の実行時カウント)に時間がかかっても演出の基準時刻がずれないよう、

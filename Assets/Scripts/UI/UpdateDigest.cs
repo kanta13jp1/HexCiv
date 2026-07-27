@@ -168,6 +168,11 @@ namespace HexCiv.UI
                 PlayerPrefs.SetInt(PrefsPrefix + BaselineKey, 1);
                 PlayerPrefs.Save();
                 result.Committed = true;
+
+                // 「成長の記録」へ1件残す(2026-07-27 追加)。基準値の前進と1対1に対応させたい
+                // ので、確定に成功したこの位置でのみ呼ぶ。記録の失敗は確定の成否に影響させない
+                // (GrowthHistory.Record は例外を投げず、失敗しても false を返すだけ)。
+                GrowthHistory.Record(result, BuildSummaryJa(result));
                 return true;
             }
             catch (Exception ex)
@@ -284,6 +289,10 @@ namespace HexCiv.UI
             for (int i = 0; i < numeric.Count; i++) result.Snapshot[numeric[i].Key] = numeric[i].Current;
             for (int i = 0; i < categories.Count; i++) result.Snapshot[categories[i].Key] = categories[i].Current;
 
+            // Core 走査の世代。記録済みの世代が違う起動では Core 系を報告せず基準値化だけする。
+            bool coreBaselineOnly = ReadPref(CoreScanGenerationKey) != CoreScanGeneration;
+            result.Snapshot[CoreScanGenerationKey] = CoreScanGeneration;
+
             if (firstRun)
             {
                 // 初回は基準値を作るだけ。巨大な偽カードを出さない。
@@ -305,6 +314,10 @@ namespace HexCiv.UI
             {
                 var metric = numeric[i];
                 if (!HasPref(metric.Key)) continue;
+                // 走査世代が変わった直後の Core 指標は、増えたのではなく「拾えるようになった」
+                // だけなので報告しない(Snapshot には既に入っているので基準値化はされる)。
+                if (coreBaselineOnly && metric.Key.StartsWith("core.", StringComparison.Ordinal))
+                    continue;
                 int previous = ReadPref(metric.Key);
                 int delta = metric.Current - previous;
                 if (delta > 0)
@@ -351,8 +364,12 @@ namespace HexCiv.UI
             }
 
             // ---- 新しいCoreの仕組み(名前だけ拾う。行は core.systems / core.catalogs の集計行が担当) ----
-            AppendNewCoreTypes(coreSystemNames, result);
-            AppendNewCoreTypes(coreCatalogNames, result);
+            // 走査世代が変わった直後は、既存の型が一斉に「新しい仕組み」として湧いてしまうので飛ばす。
+            if (!coreBaselineOnly)
+            {
+                AppendNewCoreTypes(coreSystemNames, result);
+                AppendNewCoreTypes(coreCatalogNames, result);
+            }
 
             // ---- 行の並び(決定的): 集計 → 分類の内訳 → 新パネル(ジャンプ可能なので末尾) ----
             result.Lines.AddRange(headLines);
@@ -380,6 +397,17 @@ namespace HexCiv.UI
         // ==================================================================
 
         const string LedgerTotalKey = "ledger.total";
+
+        /// <summary>
+        /// Core 型の走査世代(2026-07-27 追加)。走査条件を変えて拾える型が変わったときに上げる。
+        /// 記録済みの世代がこの値と違う起動では、Core 系の指標(core.systems / core.catalogs と
+        /// core.type.* の存在フラグ)を**静かに基準値化するだけ**にし、差分としては報告しない。
+        ///
+        /// これが無いと、走査条件の修正だけで「新しい仕組み +24」のような**実際には何も増えて
+        /// いない偽の更新**が既存ユーザーへ出てしまう(世代2 = static class を拾えるようにした修正)。
+        /// </summary>
+        const string CoreScanGenerationKey = "core.scan.generation";
+        const int CoreScanGeneration = 2;
 
         /// <summary>世界史台帳(全地域)の総件数・分類数・分類ごとの件数。</summary>
         static void CollectLedgerMetrics(List<Metric> numeric, List<Metric> categories)
@@ -507,7 +535,12 @@ namespace HexCiv.UI
                 if (type == null) continue;
                 try
                 {
-                    if (type.IsNested || type.IsAbstract || type.IsInterface) continue;
+                    if (type.IsNested || type.IsInterface) continue;
+                    // C# の `static class` は IL 上 abstract sealed になる。単純に IsAbstract で
+                    // 弾くと Core の System / Catalog(すべて static class)が**1件も拾えない**
+                    // (2026-07-27 実測: core.systems / core.catalogs が常に 0 だった)。
+                    // 除きたいのは継承前提の抽象基底だけなので、sealed でない abstract に限る。
+                    if (type.IsAbstract && !type.IsSealed) continue;
                     string ns = type.Namespace;
                     if (string.IsNullOrEmpty(ns)) continue;
                     string name = type.Name;
