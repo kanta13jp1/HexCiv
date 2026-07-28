@@ -21,3 +21,6 @@
 .vs/
 .idea/
 crashlytics-build.properties
+
+# 配布用パッケージ (scripts/pack_release.ps1 の出力)
+dist/
