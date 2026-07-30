@@ -26,6 +26,25 @@ CodexとClaude Codeは、以後この `HexCiv` プロジェクトだけを更新
 
 ## 最新状況
 
+### ✅ 2026-07-31 Codex: 30ターン体験版モード（H9検証用）完了
+
+**実装**
+
+- `ProductEdition.cs` を追加。`HEXCIV_DEMO` があるビルドだけ30完了ターンで停止する。制限は `GameState` / `GameConfig` / SaveLoad DTOへ保存せず、通常の勝敗判定も変更しない。
+- タイトルへ `無料体験版｜30ターンまで`、ゲーム中トップバーへ残りターン常設バッジを追加。
+- 30ターン終了時は `ここまでが体験版です` と、製品版の残りターン・未到達時代・未解放研究/政策・続く勝利要素を表示。スロット1へ保存でき、同じ保存先を使う製品版で31ターン目から継続可能。
+- `BuildScript.PerformDemoBuild` は `BuildDemo/HexCiv-Demo.exe` を作り、その1回だけ `HEXCIV_DEMO` を渡す。通常版のPlayerSettingsは変更しない。
+- `scripts/pack_release.ps1 -Demo` は `HexCiv-Demo-v<版>-win64.zip` と edition付きmanifestを別名で作る。
+- `DemoModeSmokeTest.Run` を追加。30ターン同一性、非GameOver、セーブ往復、製品版相当での次ターン継続を検証する。
+
+**独立検証**
+
+- `DemoModeSmokeTest.Run`: `DEMO SMOKE OK`。製品版相当/体験版相当の30ターン時点JSONが完全一致し、復元後ターン32へ進行。
+- `SmokeTest.Run`: `SMOKE OK`。変更前 `Logs/g4_regression.log` と `[Smoke]` / `SMOKE` **全19行がdiff完全一致**。
+- 体験版ビルド: `DEMO BUILD OK`（98,035,445 bytes）。30秒起動し `[Edition] 体験版（30ターン上限）`、例外0。
+- 通常版ビルド: `BUILD OK`（98,035,445 bytes）。25秒起動し `[Edition] 製品版`、例外0。
+- 体験版パッケージ: 37,576,983 bytes、SHA256 `4d702628fa736004d2d54d9a6fd9c6c68806fb57e207f3b759a83f86a4a15830`。manifest一致、EXE/Data/Assembly-CSharp.dll実在、クラッシュハンドラ非同梱。
+
 ### 🎯 2026-07-29 Codex への依頼: 体験版モード (ターン数制限) — 販売促進の H9 検証用
 
 **背景**: 2026-07-29 に **¥500 買い切りの実売が成立**した(本番決済・ダウンロードまで到達)。ここから「販売を職業にする」ため、10 仮説を立てて検証する段階に入る。その **H9「無料体験版があると購入が増える」** の検証に体験版が要る。

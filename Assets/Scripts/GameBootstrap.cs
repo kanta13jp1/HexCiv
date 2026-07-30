@@ -62,6 +62,11 @@ namespace HexCiv
 
         int lastSeenVersion = -1;
         bool gameOverShown;
+        /// <summary>
+        /// 体験版の30ターン終了画面を現在のstateで表示済みか。
+        /// GameState.IsGameOverは変更せず、製品版へ持ち越せるセーブを保つ。
+        /// </summary>
+        bool demoLimitShown;
         /// <summary>フルスクリーン設定の現在値(PlayerPrefs と同期。エディタでは表示のみで実切替はしない)。</summary>
         bool fullscreenActive;
         string selectedHumanCivilizationId = "athens";
@@ -146,6 +151,9 @@ namespace HexCiv
 
         void Start()
         {
+            Debug.Log(ProductEdition.IsDemo
+                ? $"[Edition] 体験版（{ProductEdition.DemoTurnLimit}ターン上限）"
+                : "[Edition] 製品版");
             MigrateLegacySaveFile();
             ApplyFullscreenFromPrefs();   // 保存済みのフルスクリーン設定を起動時に1回適用(2026-07-21 追加)
             string savedCivilization = PlayerPrefs.GetString(SelectedCivilizationKey, "athens");
@@ -165,6 +173,10 @@ namespace HexCiv
         void Update()
         {
             if (state == null) return;
+
+            // 体験版の上限はセーブ状態へ書かない実行時ガード。上限到達済みのセーブを
+            // 体験版で読み込んだ場合も、入力処理より先に終了画面を出す。
+            ShowDemoLimitIfReached();
 
             if (inputController != null) inputController.Update();
 
@@ -202,6 +214,28 @@ namespace HexCiv
                 if (mapRenderer != null) mapRenderer.ClearHighlights();
                 if (uiManager != null) uiManager.ShowGameOver(state.GameOverMessageJa);
                 if (audioManager != null) audioManager.PlayGameOver(state.Winner == state.HumanPlayer);
+            }
+        }
+
+        /// <summary>
+        /// 体験版の上限到達をUIへ反映する。通常の勝敗が同時に成立した場合は
+        /// GameOver画面を優先する。state.IsGameOverは意図的に変更しない。
+        /// </summary>
+        void ShowDemoLimitIfReached()
+        {
+            if (!ProductEdition.IsDemo || demoLimitShown || state == null ||
+                state.IsGameOver || !ProductEdition.HasReachedDemoLimit(state))
+                return;
+
+            demoLimitShown = true;
+            simulationPaused = true;
+            if (inputController != null) inputController.ClearSelection();
+            if (mapRenderer != null) mapRenderer.ClearHighlights();
+            if (uiManager != null)
+            {
+                string details = ProductEdition.BuildContinuationSummary(
+                    state, historicalSession != null && historicalSession.State == state);
+                uiManager.ShowDemoLimit(details);
             }
         }
 
@@ -445,11 +479,18 @@ namespace HexCiv
             float holdBefore = simulationEventHoldUntil;
             var stopwatch = System.Diagnostics.Stopwatch.StartNew();
             int ran = 0;
-            while (ran < hardCap && now >= nextSimulationTurnAt && !state.IsGameOver)
+            while (ran < hardCap && now >= nextSimulationTurnAt && !state.IsGameOver &&
+                (!ProductEdition.IsDemo || !ProductEdition.HasReachedDemoLimit(state)))
             {
                 turnManager.RunHeadlessTurn();
                 ran++;
                 nextSimulationTurnAt += interval;
+                if (ProductEdition.IsDemo && ProductEdition.HasReachedDemoLimit(state))
+                {
+                    simulationPaused = true;
+                    ShowDemoLimitIfReached();
+                    break;
+                }
                 // 観戦演出イベントが発生したらこのフレームのバッチを即終了(残りは次フレーム以降)
                 if (simulationEventHoldUntil > holdBefore) break;
                 if (stopwatch.Elapsed.TotalMilliseconds >= 10.0) break;
@@ -737,6 +778,7 @@ namespace HexCiv
             mapRenderer.Init(state);
             entityRenderer.Init(state);
             uiManager.Init(state, actions);
+            uiManager.SetDemoMode(ProductEdition.IsDemo, ProductEdition.DemoTurnLimit);
 
             SetupCameraAndLight();
 
@@ -787,10 +829,12 @@ namespace HexCiv
 
             lastSeenVersion = -1;
             gameOverShown = false;
+            demoLimitShown = false;
             if (historicalSession != null && historicalSession.State == state)
                 EnsureHistoricalCampaignUi();
             else
                 RemoveHistoricalCampaignUi();
+            ShowDemoLimitIfReached();
         }
 
         // ==================================================================
@@ -1084,6 +1128,11 @@ namespace HexCiv
                 OnEndTurn = () =>
                 {
                     if (state == null || state.IsGameOver) return;
+                    if (ProductEdition.IsDemo && ProductEdition.HasReachedDemoLimit(state))
+                    {
+                        ShowDemoLimitIfReached();
+                        return;
+                    }
                     int turnBefore = state.TurnNumber;
                     audioManager?.PlayEndTurn();
                     turnManager.EndTurn();
@@ -1094,6 +1143,7 @@ namespace HexCiv
                         SaveHistoricalAutoCheckpoint();
                         historicalCampaignPanel?.Refresh();
                     }
+                    ShowDemoLimitIfReached();
                     if (uiManager != null) uiManager.NotifyTutorialEvent("turn_ended");   // チュートリアル連動
                     AutoSelectIdleUnitAtTurnStart();   // ターン開始時の未行動ユニット自動選択(2026-07-20 Claude Code 追加)
                 },

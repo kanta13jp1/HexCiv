@@ -24,21 +24,29 @@
 .PARAMETER OutDir
     zip と manifest の出力先。既定は dist(.gitignore 済み)。
 
+.PARAMETER Demo
+    30ターン体験版をパッケージする。BuildDemo を読み、
+    HexCiv-Demo-v<版>-win64.zip を出力する。
+
 .EXAMPLE
     pwsh -File scripts/pack_release.ps1
     pwsh -File scripts/pack_release.ps1 -Version 1.1
+    pwsh -File scripts/pack_release.ps1 -Demo
 #>
 [CmdletBinding()]
 param(
     [string]$Version,
     [string]$BuildDir,
-    [string]$OutDir
+    [string]$OutDir,
+    [switch]$Demo
 )
 
 $ErrorActionPreference = 'Stop'
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
-if (-not $BuildDir) { $BuildDir = Join-Path $repoRoot 'Build' }
+if (-not $BuildDir) {
+    $BuildDir = Join-Path $repoRoot $(if ($Demo) { 'BuildDemo' } else { 'Build' })
+}
 if (-not $OutDir)   { $OutDir   = Join-Path $repoRoot 'dist' }
 
 # ---- 版番号 ----
@@ -56,8 +64,10 @@ if ($Version -notmatch '^[0-9A-Za-z.\-_]+$') {
 # ---- ビルドの検証(空の zip を配ってしまう事故を防ぐ) ----
 if (-not (Test-Path $BuildDir)) { throw "ビルドがありません: $BuildDir" }
 
-$exe = Join-Path $BuildDir 'HexCiv.exe'
-$dataDir = Join-Path $BuildDir 'HexCiv_Data'
+$exeName = if ($Demo) { 'HexCiv-Demo.exe' } else { 'HexCiv.exe' }
+$dataName = if ($Demo) { 'HexCiv-Demo_Data' } else { 'HexCiv_Data' }
+$exe = Join-Path $BuildDir $exeName
+$dataDir = Join-Path $BuildDir $dataName
 if (-not (Test-Path $exe))     { throw "実行ファイルがありません: $exe" }
 if (-not (Test-Path $dataDir)) { throw "データフォルダがありません: $dataDir" }
 
@@ -74,9 +84,11 @@ $excludeExtensions = @('.pdb')
 
 New-Item -ItemType Directory -Force -Path $OutDir | Out-Null
 
-$stageRoot = Join-Path $OutDir ".stage_$Version"
+$editionStem = if ($Demo) { 'HexCiv-Demo' } else { 'HexCiv' }
+$packageName = "$editionStem-v$Version-win64"
+$stageRoot = Join-Path $OutDir ".stage_$packageName"
 if (Test-Path $stageRoot) { Remove-Item -Recurse -Force $stageRoot }
-$stageDir = Join-Path $stageRoot "HexCiv-v$Version-win64"
+$stageDir = Join-Path $stageRoot $packageName
 New-Item -ItemType Directory -Force -Path $stageDir | Out-Null
 
 try {
@@ -105,7 +117,7 @@ try {
     }
 
     # ---- zip ----
-    $zipPath = Join-Path $OutDir "HexCiv-v$Version-win64.zip"
+    $zipPath = Join-Path $OutDir "$packageName.zip"
     if (Test-Path $zipPath) { Remove-Item -Force $zipPath }
     Compress-Archive -Path $stageDir -DestinationPath $zipPath -CompressionLevel Optimal
 
@@ -113,7 +125,8 @@ try {
     $zipItem = Get-Item $zipPath
     $hash = (Get-FileHash -Path $zipPath -Algorithm SHA256).Hash.ToLowerInvariant()
     $manifest = [ordered]@{
-        product     = 'hexciv'
+        product     = $(if ($Demo) { 'hexciv-demo' } else { 'hexciv' })
+        edition     = $(if ($Demo) { 'demo-30-turns' } else { 'full' })
         version     = $Version
         platform    = 'win64'
         fileName    = $zipItem.Name
@@ -124,7 +137,7 @@ try {
         # 生成時刻は UTC の ISO8601。配信中のファイルと突き合わせるときの手掛かり。
         builtAtUtc  = (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ')
     }
-    $manifestPath = Join-Path $OutDir "HexCiv-v$Version-win64.manifest.json"
+    $manifestPath = Join-Path $OutDir "$packageName.manifest.json"
     $manifest | ConvertTo-Json | Out-File -FilePath $manifestPath -Encoding utf8
 
     Write-Output "PACK OK"

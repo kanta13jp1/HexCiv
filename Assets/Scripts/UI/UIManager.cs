@@ -480,6 +480,15 @@ namespace HexCiv.UI
         RectTransform tooltipRect;
         bool tooltipVisible;
 
+        // ---- 体験版表示（販売仮説H9検証用） ----
+        bool demoModeActive;
+        int demoTurnLimit;
+        GameObject demoBadge;
+        Text demoBadgeText;
+        GameObject demoLimitOverlay;
+        Text demoLimitDetailsText;
+        Button demoSaveButton;
+
         // ---- ゲームオーバー ----
         GameObject gameOverOverlay;
         Text gameOverText;
@@ -593,6 +602,7 @@ namespace HexCiv.UI
 
             BuildCanvas();
             BuildTopBar();
+            BuildDemoBadge();
             BuildAudioControls();
             BuildLog();
             BuildUnitPanel();
@@ -614,6 +624,7 @@ namespace HexCiv.UI
             BuildTutorial();
             BuildTooltip();
             BuildGameOverOverlay();
+            BuildDemoLimitOverlay();
 
             RefreshAll();
 
@@ -709,6 +720,23 @@ namespace HexCiv.UI
             civNameText.resizeTextMaxSize = 14;
             UIStyle.SetRect(civNameText.gameObject, new Vector2(1f, 0f), new Vector2(1f, 1f),
                 new Vector2(1f, 0.5f), new Vector2(-36f, 0f), new Vector2(220f, 0f));
+        }
+
+        /// <summary>
+        /// 起動直後から体験版であることを示す常設バッジ。
+        /// 研究ボタンと文明名の間の空きへ置き、製品版ではGameObjectごと非表示にする。
+        /// </summary>
+        void BuildDemoBadge()
+        {
+            demoBadge = UIStyle.CreatePanel(topBar.transform, "DemoBadge",
+                new Color(0.55f, 0.39f, 0.08f, 1f));
+            UIStyle.SetRect(demoBadge, new Vector2(0f, 0.5f), new Vector2(0f, 0.5f),
+                new Vector2(0f, 0.5f), new Vector2(600f, 0f), new Vector2(210f, 26f));
+
+            demoBadgeText = UIStyle.CreateText(demoBadge.transform, "Label", "体験版", 13,
+                TextAnchor.MiddleCenter, new Color(1f, 0.95f, 0.78f, 1f));
+            UIStyle.StretchFull(demoBadgeText.gameObject, 2f);
+            demoBadge.SetActive(false);
         }
 
         void BuildAudioControls()
@@ -2128,6 +2156,43 @@ namespace HexCiv.UI
             gameOverOverlay.SetActive(false);
         }
 
+        /// <summary>
+        /// 体験版の30ターン到達画面。通常のGameOverとは別物で、GameState.IsGameOverを
+        /// 変更せずに入力を遮る。ここから保存したデータを製品版で続行できる。
+        /// </summary>
+        void BuildDemoLimitOverlay()
+        {
+            demoLimitOverlay = UIStyle.CreatePanel(canvas.transform, "DemoLimitOverlay",
+                new Color(0.02f, 0.03f, 0.06f, 0.94f));
+            UIStyle.StretchFull(demoLimitOverlay);
+
+            var title = UIStyle.CreateText(demoLimitOverlay.transform, "Title",
+                "ここまでが体験版です", 34, TextAnchor.MiddleCenter, UIStyle.Accent);
+            UIStyle.SetRect(title.gameObject, new Vector2(0f, 0.5f), new Vector2(1f, 0.5f),
+                new Vector2(0.5f, 0.5f), new Vector2(0f, 235f), new Vector2(-40f, 56f));
+
+            demoLimitDetailsText = UIStyle.CreateText(demoLimitOverlay.transform, "Details", "",
+                18, TextAnchor.UpperLeft, UIStyle.TextMain);
+            demoLimitDetailsText.lineSpacing = 1.18f;
+            UIStyle.SetRect(demoLimitDetailsText.gameObject,
+                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
+                new Vector2(0.5f, 0.5f), new Vector2(0f, 25f), new Vector2(760f, 330f));
+
+            demoSaveButton = UIStyle.CreateButton(demoLimitOverlay.transform, "DemoSaveButton",
+                "スロット1に保存", 18, OnDemoSaveClicked);
+            UIStyle.SetRect(demoSaveButton.gameObject, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
+                new Vector2(0.5f, 0.5f), new Vector2(0f, -235f), new Vector2(260f, 50f));
+            UIStyle.AddButtonIcon(demoSaveButton, "save", 20f, 12f);
+
+            var note = UIStyle.CreateText(demoLimitOverlay.transform, "SaveNote",
+                "製品版は同じセーブスロットを読み込めます", 14,
+                TextAnchor.MiddleCenter, UIStyle.TextDim);
+            UIStyle.SetRect(note.gameObject, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
+                new Vector2(0.5f, 0.5f), new Vector2(0f, -278f), new Vector2(560f, 28f));
+
+            demoLimitOverlay.SetActive(false);
+        }
+
         // ================= 公開API =================
 
         /// <summary>全パネルの表示内容を更新する。毎フレーム呼んでも安全。</summary>
@@ -2142,6 +2207,53 @@ namespace HexCiv.UI
             RefreshSimulationBar();
             if (civilizationPanel != null && civilizationPanel.activeSelf) RefreshCivilizationList();
             if (leaderPanel != null && leaderPanel.activeSelf) RefreshLeaderList();
+        }
+
+        /// <summary>
+        /// ビルドエディションを表示へ反映する。製品版では関連UIを完全に隠す。
+        /// </summary>
+        public void SetDemoMode(bool active, int turnLimit)
+        {
+            demoModeActive = active;
+            demoTurnLimit = Mathf.Max(1, turnLimit);
+            if (demoBadge != null) demoBadge.SetActive(active);
+            if (!active && demoLimitOverlay != null) demoLimitOverlay.SetActive(false);
+            RefreshDemoBadge();
+            if (state != null && canvas != null) RefreshTopBar();
+        }
+
+        /// <summary>
+        /// 体験版の上限到達画面を表示する。通常の終了画面とは独立しており、
+        /// 保存ボタンはGameActionsの既存スロット1経路を使う。
+        /// </summary>
+        public void ShowDemoLimit(string detailsJa)
+        {
+            if (!demoModeActive || canvas == null || demoLimitOverlay == null) return;
+            CloseAllPanels();
+            HideTutorial();
+            SetSelectedUnit(null);
+            if (gameOverOverlay != null) gameOverOverlay.SetActive(false);
+            demoLimitDetailsText.text = string.IsNullOrEmpty(detailsJa)
+                ? "製品版ではこの続きからプレイできます。"
+                : detailsJa;
+            if (demoSaveButton != null)
+                demoSaveButton.interactable = state != null && state.HumanPlayer != null;
+            demoLimitOverlay.SetActive(true);
+            demoLimitOverlay.transform.SetAsLastSibling();
+            RefreshDemoBadge();
+        }
+
+        void RefreshDemoBadge()
+        {
+            if (!demoModeActive || demoBadgeText == null || state == null) return;
+            int remaining = ProductEdition.RemainingDemoTurns(state, demoTurnLimit);
+            demoBadgeText.text = $"体験版  残り{remaining}ターン";
+        }
+
+        void OnDemoSaveClicked()
+        {
+            if (actions?.OnSaveGameSlot != null) actions.OnSaveGameSlot(1);
+            else actions?.OnSaveGame?.Invoke();
         }
 
         /// <summary>選択中ユニットを設定する。null でユニットパネルを隠す。</summary>
@@ -2517,6 +2629,7 @@ namespace HexCiv.UI
             CloseAllPanels();
             HideTutorial();
             SetSelectedUnit(null);
+            if (demoLimitOverlay != null) demoLimitOverlay.SetActive(false);
             gameOverText.text = string.IsNullOrEmpty(messageJa) ? "ゲーム終了" : messageJa;
             RebuildGameOverStats();   // 全文明の最終成績(2026-07-21 追加)
             gameOverOverlay.SetActive(true);
@@ -3742,7 +3855,18 @@ namespace HexCiv.UI
 
         void RefreshTopBar()
         {
-            turnText.text = $"ターン {state.TurnNumber}/{(state.Config != null ? state.Config.MaxTurns : 0)}";
+            bool demoLimitReached = demoModeActive &&
+                ProductEdition.HasReachedTurnLimit(state, demoTurnLimit);
+            bool canContinue = !state.IsGameOver && !demoLimitReached;
+            int shownTurn = demoModeActive
+                ? Mathf.Min(state.TurnNumber, demoTurnLimit)
+                : state.TurnNumber;
+            int shownLimit = demoModeActive
+                ? demoTurnLimit
+                : (state.Config != null ? state.Config.MaxTurns : 0);
+            turnText.text = demoModeActive
+                ? $"ターン {shownTurn}/{shownLimit} 体験版"
+                : $"ターン {shownTurn}/{shownLimit}";
 
             var p = state.HumanPlayer;
             if (p == null)
@@ -3768,7 +3892,7 @@ namespace HexCiv.UI
                 {
                     researchButtonLabel.text = "研究を選択";
                 }
-                researchButton.interactable = !state.IsGameOver;
+                researchButton.interactable = canContinue;
                 civNameText.text = string.IsNullOrEmpty(p.LeaderNameJa)
                     ? p.NameJa
                     : p.NameJa + "｜" + p.LeaderNameJa;
@@ -3776,14 +3900,15 @@ namespace HexCiv.UI
                 civSwatch.color = p.Color;
             }
 
-            endTurnButton.interactable = !state.IsGameOver;
-            if (nextUnitButton != null) nextUnitButton.interactable = !state.IsGameOver && p != null;
-            if (saveButton != null) saveButton.interactable = !state.IsGameOver && p != null;
+            endTurnButton.interactable = canContinue;
+            if (nextUnitButton != null) nextUnitButton.interactable = canContinue && p != null;
+            if (saveButton != null) saveButton.interactable = canContinue && p != null;
             if (loadButton != null) loadButton.interactable = !state.IsGameOver;
-            if (civilizationButton != null) civilizationButton.interactable = !state.IsGameOver && p != null;
-            if (leaderButton != null) leaderButton.interactable = !state.IsGameOver && p != null;
-            if (settingsButton != null) settingsButton.interactable = !state.IsGameOver;
+            if (civilizationButton != null) civilizationButton.interactable = canContinue && p != null;
+            if (leaderButton != null) leaderButton.interactable = canContinue && p != null;
+            if (settingsButton != null) settingsButton.interactable = canContinue;
 
+            RefreshDemoBadge();
             RefreshEraIndicator();   // 時代表示(ターン変化時のみ実更新。2026-07-22 追加)
         }
 

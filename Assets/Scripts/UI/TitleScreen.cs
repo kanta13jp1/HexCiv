@@ -604,6 +604,19 @@ namespace HexCiv.UI
             UIStyle.SetRect(subtitle.gameObject, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
                 new Vector2(0.5f, 0.5f), new Vector2(0f, 148f), new Vector2(600f, 30f));
 
+            // 体験版ビルドは最初に見えるタイトル上で明示する。製品版では生成自体を行わない。
+            if (ProductEdition.IsDemo)
+            {
+                var demo = UIStyle.CreatePanel(overlay.transform, "DemoEditionBadge",
+                    new Color(0.55f, 0.39f, 0.08f, 0.96f));
+                UIStyle.SetRect(demo, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
+                    new Vector2(0.5f, 0.5f), new Vector2(0f, 112f), new Vector2(310f, 30f));
+                var demoLabel = UIStyle.CreateText(demo.transform, "Label",
+                    $"無料体験版｜{ProductEdition.DemoTurnLimit}ターンまで", 15,
+                    TextAnchor.MiddleCenter, new Color(1f, 0.95f, 0.78f, 1f));
+                UIStyle.StretchFull(demoLabel.gameObject, 2f);
+            }
+
             // ---- 縦並びメニュー ----
             const float buttonWidth = 340f;
             const float buttonHeight = 46f;

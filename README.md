@@ -285,3 +285,20 @@ Unity 6.3 LTS (6000.3.20f1) 製の、シヴィライゼーション風ターン�
 - シミュレーション(`Core/`)は MonoBehaviour 非依存で、ヘッドレス実行可能
 - スモークテスト: `Unity.exe -batchmode -nographics -projectPath . -executeMethod SmokeTest.Run`
 - ビルド: `Unity.exe -batchmode -nographics -projectPath . -executeMethod BuildScript.PerformBuild`
+
+### 30ターン体験版
+
+体験版は通常版と同じシミュレーションを30ターンまで遊べる別ビルドです。
+制限はセーブデータへ書き込まれないため、体験版のスロット1を製品版で読み込むと
+31ターン目からそのまま続行できます。
+
+```powershell
+# 体験版EXE: BuildDemo/HexCiv-Demo.exe
+Unity.exe -batchmode -nographics -quit -projectPath . -executeMethod BuildScript.PerformDemoBuild
+
+# 体験版ZIP + SHA256 manifest: dist/HexCiv-Demo-v<版>-win64.*
+.\scripts\pack_release.ps1 -Demo
+
+# 30ターン同一性・セーブ互換の専用検証
+Unity.exe -batchmode -nographics -quit -projectPath . -executeMethod DemoModeSmokeTest.Run
+```
