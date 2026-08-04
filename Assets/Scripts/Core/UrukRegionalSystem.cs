@@ -195,16 +195,36 @@ namespace HexCiv.Core
         public string id;
         public string claimantFactionId;
         public string respondentFactionId;
+        /// <summary>被害または不足が観測された農地。</summary>
+        public string claimantFarmId;
+        /// <summary>請求側の取水路。</summary>
+        public string claimantSegmentId;
+        /// <summary>問題の原因とみなされた応答側取水路。旧segmentId。</summary>
         public string segmentId;
         public string causeJa;
         public int createdTurn;
-        /// <summary>open / negotiated / rejected。</summary>
+        public int claimantWaterDeficit;
+        public int claimantCanalCondition;
+        public int respondentFlowAtClaim;
+        /// <summary>share_water / grain_compensation / joint_maintenance / rejected。</summary>
+        public string resolutionKind;
+        public int agreementStartTurn;
+        public int agreementUntilTurn;
+        public int waterSharePerTurn;
+        public int waterShareExpectedTotal;
+        public int waterSharedTotal;
+        public int barleyTransferred;
+        public int laborCommitted;
+        public bool agreementSettled;
+        public int trustAfter;
+        public string confidence;
+        /// <summary>open / shared / compensated / jointly_maintained / rejected / completed / defaulted。</summary>
         public string status;
         public string resultJa;
     }
 
     /// <summary>
-    /// ウルク第4A段階の水利グラフ、農地、8勢力台帳、輸送、移住。
+    /// ウルク地域段階の水利グラフ、農地、8勢力台帳、輸送、移住、外交。
     /// 通常4Xの状態・RNGには触れず、配列順と安定IDだけで決定的に解決する。
     /// </summary>
     public static class UrukRegionalSystem
@@ -222,6 +242,8 @@ namespace HexCiv.Core
         public const string AcquireAccessAction = "regional_acquire_access";
         public const string OfferTributeAction = "regional_offer_tribute";
         public const string NegotiateWaterAction = "regional_negotiate_water";
+        public const string ShareWaterAction = "regional_share_water";
+        public const string CompensateWaterAction = "regional_compensate_water";
         public const string RejectWaterAction = "regional_reject_water";
         public const string AcceptMigrationAction = "regional_accept_migration";
         public const string RejectMigrationAction = "regional_reject_migration";
@@ -246,6 +268,37 @@ namespace HexCiv.Core
             progress.waterDisputes ??= Array.Empty<UrukWaterDisputeState>();
             if (progress.nextRegionalId <= 0) progress.nextRegionalId = 1;
             SyncHumanFaction(progress);
+        }
+
+        public static void MigrateWaterDisputesV6(UrukCampaignProgress progress)
+        {
+            if (progress == null) throw new ArgumentNullException(nameof(progress));
+            progress.waterDisputes ??= Array.Empty<UrukWaterDisputeState>();
+            foreach (var dispute in progress.waterDisputes)
+            {
+                if (dispute == null) continue;
+                if (string.IsNullOrWhiteSpace(dispute.claimantFarmId))
+                    dispute.claimantFarmId = "lagash_hinterland_farm";
+                if (string.IsNullOrWhiteSpace(dispute.claimantSegmentId))
+                    dispute.claimantSegmentId = "lagash_tigris_branch";
+                if (string.IsNullOrWhiteSpace(dispute.confidence))
+                    dispute.confidence = "inferred";
+                if (dispute.trustAfter == 0)
+                    dispute.trustAfter = FindFaction(progress,
+                        dispute.claimantFactionId)?.diplomaticTrust ?? 50;
+                if (string.IsNullOrWhiteSpace(dispute.resolutionKind) &&
+                    dispute.status == "negotiated")
+                {
+                    dispute.resolutionKind = "joint_maintenance";
+                    dispute.status = "jointly_maintained";
+                    dispute.agreementSettled = true;
+                }
+                else if (dispute.status == "rejected")
+                {
+                    dispute.resolutionKind = "rejected";
+                    dispute.agreementSettled = true;
+                }
+            }
         }
 
         public static void Validate(HistoricalCampaignDefinition definition,
@@ -325,6 +378,29 @@ namespace HexCiv.Core
             if (progress.diplomaticReputation < 0 ||
                 progress.diplomaticReputation > 100)
                 throw new InvalidOperationException("外交評判が範囲外");
+            foreach (var dispute in progress.waterDisputes)
+            {
+                if (dispute == null || string.IsNullOrWhiteSpace(dispute.id) ||
+                    string.IsNullOrWhiteSpace(dispute.claimantFactionId) ||
+                    string.IsNullOrWhiteSpace(dispute.respondentFactionId) ||
+                    string.IsNullOrWhiteSpace(dispute.segmentId) ||
+                    string.IsNullOrWhiteSpace(dispute.claimantFarmId) ||
+                    string.IsNullOrWhiteSpace(dispute.claimantSegmentId) ||
+                    FindFarm(progress, dispute.claimantFarmId) == null ||
+                    FindSegment(progress, dispute.claimantSegmentId) == null ||
+                    FindSegment(progress, dispute.segmentId) == null ||
+                    dispute.claimantWaterDeficit < 0 ||
+                    dispute.claimantCanalCondition < 0 ||
+                    dispute.claimantCanalCondition > 100 ||
+                    dispute.respondentFlowAtClaim < 0 ||
+                    dispute.waterSharePerTurn < 0 ||
+                    dispute.waterShareExpectedTotal < 0 ||
+                    dispute.waterSharedTotal < 0 ||
+                    dispute.barleyTransferred < 0 || dispute.laborCommitted < 0 ||
+                    dispute.trustAfter < 0 || dispute.trustAfter > 100 ||
+                    string.IsNullOrWhiteSpace(dispute.confidence))
+                    throw new InvalidOperationException("水利紛争状態が不正");
+            }
             if (progress.lastRegionalSourceWater !=
                 progress.lastRegionalFarmWater + progress.lastRegionalLeakage +
                 progress.lastRegionalUnusedWater)
@@ -403,9 +479,17 @@ namespace HexCiv.Core
                 case OfferTributeAction:
                     return CreateTributeAgreement(progress, turn, out resultJa);
                 case NegotiateWaterAction:
-                    return ResolveFirstDispute(progress, turn, true, out resultJa);
+                    return ResolveFirstDispute(progress, turn,
+                        "joint_maintenance", out resultJa);
+                case ShareWaterAction:
+                    return ResolveFirstDispute(progress, turn,
+                        "share_water", out resultJa);
+                case CompensateWaterAction:
+                    return ResolveFirstDispute(progress, turn,
+                        "grain_compensation", out resultJa);
                 case RejectWaterAction:
-                    return ResolveFirstDispute(progress, turn, false, out resultJa);
+                    return ResolveFirstDispute(progress, turn,
+                        "rejected", out resultJa);
                 case AcceptMigrationAction:
                     return RespondToMigration(progress, turn, true, out resultJa);
                 case RejectMigrationAction:
@@ -442,7 +526,7 @@ namespace HexCiv.Core
             CommitPlans(progress, completedTurn);
             CommitAcceptedOffers(session.Definition, progress, completedTurn);
             AdvanceProjects(progress, completedTurn);
-            ResolveWater(progress);
+            ResolveWater(progress, completedTurn);
             ResolveFarms(progress);
             ResolveAiLedgers(progress, flood);
             AdvanceObligations(session.Definition, progress, completedTurn);
@@ -537,9 +621,10 @@ namespace HexCiv.Core
             return null;
         }
 
-        public static void ResolveWaterForTest(UrukCampaignProgress progress)
+        public static void ResolveWaterForTest(UrukCampaignProgress progress,
+            int turn = 0)
         {
-            ResolveWater(progress);
+            ResolveWater(progress, turn);
         }
 
         static UrukRegionalFactionState[] BuildFactions(
@@ -897,7 +982,7 @@ namespace HexCiv.Core
             }
         }
 
-        static void ResolveWater(UrukCampaignProgress progress)
+        static void ResolveWater(UrukCampaignProgress progress, int turn)
         {
             var water = new Dictionary<string, int>();
             var processed = new HashSet<string>();
@@ -956,6 +1041,7 @@ namespace HexCiv.Core
                 farmWater += received;
                 water[node] = available - received;
             }
+            ApplyWaterSharingAgreements(progress, turn);
             int unused = 0;
             foreach (var pair in water) unused += pair.Value;
             progress.lastRegionalSourceWater = sourceTotal;
@@ -1076,18 +1162,7 @@ namespace HexCiv.Core
                 });
             }
             if (turn >= 8 && progress.waterDisputes.Length == 0)
-            {
-                Append(ref progress.waterDisputes, new UrukWaterDisputeState
-                {
-                    id = "lagash_upstream_diversion",
-                    claimantFactionId = "lagash_region",
-                    respondentFactionId = HumanFactionId,
-                    segmentId = "uruk_intake_segment",
-                    causeJa = "上流取水の増加が下流利用へ与える影響を懸念。",
-                    createdTurn = turn,
-                    status = "open",
-                });
-            }
+                TryOpenObservedWaterDispute(progress, turn);
             if (turn >= 9 && progress.migrationGroups.Length == 0)
             {
                 Append(ref progress.migrationGroups, new UrukMigrationGroupState
@@ -1100,6 +1175,108 @@ namespace HexCiv.Core
                     causeJa = "湿地の洪水と食料不安による一時移住。",
                     confidence = "inferred",
                 });
+            }
+        }
+
+        static void TryOpenObservedWaterDispute(UrukCampaignProgress progress,
+            int turn)
+        {
+            var claimantFarm = FindFarm(progress, "lagash_hinterland_farm");
+            var claimantSegment = FindSegment(progress, "lagash_tigris_branch");
+            var respondentSegment = FindSegment(progress, "uruk_intake_segment");
+            if (claimantFarm == null || claimantSegment == null ||
+                respondentSegment == null)
+                return;
+            int deficit = Math.Max(0,
+                claimantFarm.waterDemand - claimantFarm.waterReceived);
+            bool claimantAtRisk = deficit > 0 || claimantSegment.condition < 45;
+            bool respondentDrawingWater = respondentSegment.currentFlow >= 3;
+            if (!claimantAtRisk || !respondentDrawingWater) return;
+
+            string cause = deficit > 0
+                ? $"ラガシュ農地で必要{claimantFarm.waterDemand}に対し" +
+                  $"取水{claimantFarm.waterReceived}（不足{deficit}）を観測。"
+                : $"ラガシュ取水路が状態{claimantSegment.condition}%まで劣化し、" +
+                  "次期の不足が懸念される。";
+            cause += $"同じ期間にウルク取水路で流量" +
+                $"{respondentSegment.currentFlow}を観測したため、分水または補償を要求。";
+            var claimant = FindFaction(progress, "lagash_region");
+            Append(ref progress.waterDisputes, new UrukWaterDisputeState
+            {
+                id = "lagash_upstream_diversion",
+                claimantFactionId = "lagash_region",
+                respondentFactionId = HumanFactionId,
+                claimantFarmId = claimantFarm.id,
+                claimantSegmentId = claimantSegment.id,
+                segmentId = respondentSegment.id,
+                causeJa = cause,
+                createdTurn = turn,
+                claimantWaterDeficit = deficit,
+                claimantCanalCondition = claimantSegment.condition,
+                respondentFlowAtClaim = respondentSegment.currentFlow,
+                trustAfter = claimant?.diplomaticTrust ?? 50,
+                confidence = "inferred",
+                status = "open",
+            });
+        }
+
+        static void ApplyWaterSharingAgreements(UrukCampaignProgress progress,
+            int turn)
+        {
+            foreach (var dispute in progress.waterDisputes)
+            {
+                if (dispute == null || dispute.resolutionKind != "share_water" ||
+                    dispute.status != "shared" || dispute.agreementSettled ||
+                    turn < dispute.agreementStartTurn)
+                    continue;
+                if (turn <= dispute.agreementUntilTurn)
+                {
+                    var target = FindFarm(progress, dispute.claimantFarmId);
+                    int needed = target == null ? 0 : Math.Min(
+                        dispute.waterSharePerTurn,
+                        Math.Max(0, target.waterDemand - target.waterReceived));
+                    dispute.waterShareExpectedTotal += needed;
+                    int remaining = needed;
+                    foreach (var donor in progress.farmPlots)
+                    {
+                        if (remaining <= 0) break;
+                        if (donor.ownerFactionId != dispute.respondentFactionId ||
+                            donor.waterReceived <= 0)
+                            continue;
+                        int shifted = Math.Min(remaining, donor.waterReceived);
+                        donor.waterReceived -= shifted;
+                        donor.irrigated = donor.waterReceived >= 3;
+                        target.waterReceived += shifted;
+                        dispute.waterSharedTotal += shifted;
+                        remaining -= shifted;
+                    }
+                    if (target != null)
+                        target.irrigated = target.waterReceived >= 3;
+                }
+                if (turn < dispute.agreementUntilTurn) continue;
+
+                dispute.agreementSettled = true;
+                bool fulfilled = dispute.waterSharedTotal >=
+                    dispute.waterShareExpectedTotal;
+                dispute.status = fulfilled ? "completed" : "defaulted";
+                var claimant = FindFaction(progress, dispute.claimantFactionId);
+                int trustDelta = fulfilled ? 4 : -8;
+                int reputationDelta = fulfilled ? 2 : -6;
+                if (claimant != null)
+                {
+                    claimant.diplomaticTrust = Math.Clamp(
+                        claimant.diplomaticTrust + trustDelta, 0, 100);
+                    dispute.trustAfter = claimant.diplomaticTrust;
+                }
+                dispute.resultJa = fulfilled
+                    ? $"分水合意を履行した（必要{dispute.waterShareExpectedTotal}／" +
+                      $"実施{dispute.waterSharedTotal}）。"
+                    : $"分水合意を履行できなかった（必要{dispute.waterShareExpectedTotal}／" +
+                      $"実施{dispute.waterSharedTotal}）。";
+                RecordDiplomaticEvent(progress, turn, "water_dispute", dispute.id,
+                    dispute.claimantFactionId,
+                    fulfilled ? "water_share_completed" : "water_share_defaulted",
+                    reputationDelta, dispute.resultJa, dispute.confidence);
             }
         }
 
@@ -1747,7 +1924,7 @@ namespace HexCiv.Core
         }
 
         static bool ResolveFirstDispute(UrukCampaignProgress progress, int turn,
-            bool negotiate, out string resultJa)
+            string resolutionKind, out string resultJa)
         {
             var dispute = FirstOpenDispute(progress);
             if (dispute == null)
@@ -1755,17 +1932,98 @@ namespace HexCiv.Core
                 resultJa = "交渉可能な水利問題がない。";
                 return false;
             }
-            dispute.status = negotiate ? "negotiated" : "rejected";
-            dispute.resultJa = negotiate
-                ? "取水量の事前通知と共同維持を合意した。"
-                : "要求を拒否し、水利関係が悪化した。";
             var claimant = FindFaction(progress, dispute.claimantFactionId);
+            int trustDelta;
+            int reputationDelta;
+            string outcome;
+            switch (resolutionKind)
+            {
+                case "share_water":
+                    dispute.status = "shared";
+                    dispute.agreementStartTurn = turn;
+                    dispute.agreementUntilTurn = turn + 2;
+                    dispute.waterSharePerTurn = 2;
+                    dispute.resultJa =
+                        "3期間、ウルク農地の取水から毎期2単位をラガシュ農地へ分けることで合意した。";
+                    trustDelta = 12;
+                    reputationDelta = 5;
+                    outcome = "water_shared";
+                    break;
+                case "grain_compensation":
+                    const int barley = 2;
+                    if (AvailableFactionGood(progress, HumanFactionId, "barley") <
+                        barley)
+                    {
+                        resultJa = "補償に必要な大麦2がない。";
+                        return false;
+                    }
+                    ConsumeFactionGood(progress, HumanFactionId, "barley", barley);
+                    AddFactionGood(progress, dispute.claimantFactionId,
+                        "barley", barley);
+                    dispute.barleyTransferred = barley;
+                    dispute.status = "compensated";
+                    dispute.agreementSettled = true;
+                    dispute.resultJa =
+                        "取水への補償として大麦2をラガシュへ引き渡した。";
+                    trustDelta = 8;
+                    reputationDelta = 3;
+                    outcome = "compensated";
+                    break;
+                case "joint_maintenance":
+                    if (AvailableFactionGood(progress, HumanFactionId, "reeds") < 1)
+                    {
+                        resultJa = "共同補修に必要な葦1がない。";
+                        return false;
+                    }
+                    if (progress.labor.canal < 10)
+                    {
+                        resultJa = "共同補修には水利労働を10%以上配分する必要がある。";
+                        return false;
+                    }
+                    var claimantSegment = FindSegment(progress,
+                        dispute.claimantSegmentId);
+                    if (claimantSegment == null)
+                    {
+                        resultJa = "共同補修の対象水路を確認できない。";
+                        return false;
+                    }
+                    ConsumeFactionGood(progress, HumanFactionId, "reeds", 1);
+                    dispute.laborCommitted = 10;
+                    claimantSegment.condition = Math.Clamp(
+                        claimantSegment.condition + 15, 0, 100);
+                    claimantSegment.silt = Math.Max(0,
+                        claimantSegment.silt - 15);
+                    claimantSegment.lastMaintainedTurn = turn;
+                    dispute.status = "jointly_maintained";
+                    dispute.agreementSettled = true;
+                    dispute.resultJa =
+                        "ウルクが葦1と水利労働10%を出し、ラガシュ取水路を共同補修した。";
+                    trustDelta = 10;
+                    reputationDelta = 4;
+                    outcome = "joint_maintenance";
+                    break;
+                case "rejected":
+                    dispute.status = "rejected";
+                    dispute.agreementSettled = true;
+                    dispute.resultJa = "要求を拒否し、水利関係が悪化した。";
+                    trustDelta = -12;
+                    reputationDelta = -4;
+                    outcome = "rejected";
+                    break;
+                default:
+                    resultJa = "不明な水利紛争解決案。";
+                    return false;
+            }
+            dispute.resolutionKind = resolutionKind;
             if (claimant != null)
-                claimant.diplomaticTrust = Math.Clamp(claimant.diplomaticTrust +
-                    (negotiate ? 8 : -12), 0, 100);
+            {
+                claimant.diplomaticTrust = Math.Clamp(
+                    claimant.diplomaticTrust + trustDelta, 0, 100);
+                dispute.trustAfter = claimant.diplomaticTrust;
+            }
             RecordDiplomaticEvent(progress, turn, "water_dispute", dispute.id,
-                dispute.claimantFactionId, negotiate ? "negotiated" : "rejected",
-                negotiate ? 3 : -4, dispute.resultJa, "inferred");
+                dispute.claimantFactionId, outcome, reputationDelta,
+                dispute.resultJa, dispute.confidence);
             resultJa = dispute.resultJa;
             return true;
         }
@@ -2058,6 +2316,15 @@ namespace HexCiv.Core
                         return farm;
             foreach (var farm in progress.farmPlots)
                 if (farm.ownerFactionId == HumanFactionId) return farm;
+            return null;
+        }
+
+        static UrukFarmPlotState FindFarm(UrukCampaignProgress progress,
+            string id)
+        {
+            if (string.IsNullOrWhiteSpace(id)) return null;
+            foreach (var farm in progress.farmPlots)
+                if (farm.id == id) return farm;
             return null;
         }
 

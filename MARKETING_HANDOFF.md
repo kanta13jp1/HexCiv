@@ -82,6 +82,12 @@ itch.io説明欄から自サイトへ戻すリンクは次のUTMを使います�
 
 `https://my-web-app-b67f4.web.app/shop/hexciv?utm_source=itch_io&utm_campaign=h9_demo`
 
+## H4/H7投稿実験
+
+X投稿12本の事前登録下書きと2×2実験設計は
+`MARKETING_EXPERIMENT_H4_H7.md` に保存した。P1本番行確認とP2画像公開が終わるまでは
+投稿せず、開始後は価格・商品ページ見出し・購入ボタンを同時変更しない。
+
 ## Claude Codeの次アクション
 
 1. 自サイトの商品ページへ実ゲーム画像3枚を追加するPR [#4408](https://github.com/kanta13jp1/my_web_app/pull/4408) は、12件の画面テストと主要CIを通過済み。必須 `release-notes-data` は最新main取り込み後の生成JSONが古いことだけで失敗しているため、承認後に `scripts/generate_release_notes.py` を実行し、生成差分だけを追加してマージする。

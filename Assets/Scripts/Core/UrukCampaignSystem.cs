@@ -28,7 +28,7 @@ namespace HexCiv.Core
     [Serializable]
     public sealed class UrukCampaignProgress
     {
-        public int version = 5;
+        public int version = 6;
         public int actualPopulation;
         public HistoricalPopulationRoles roles;
         public HistoricalPopulationStatuses statuses;
@@ -136,7 +136,7 @@ namespace HexCiv.Core
             var starting = definition.startingScenario;
             var progress = new UrukCampaignProgress
             {
-                version = 5,
+                version = 6,
                 actualPopulation = starting.actualPopulation,
                 roles = CopyRoles(starting.roles),
                 statuses = CopyStatuses(starting.statuses),
@@ -203,6 +203,11 @@ namespace HexCiv.Core
                 progress.diplomaticReputation = 50;
                 progress.version = 5;
             }
+            if (progress.version == 5)
+            {
+                UrukRegionalSystem.MigrateWaterDisputesV6(progress);
+                progress.version = 6;
+            }
             UrukSubsistenceSystem.EnsureDefaults(progress);
             UrukRegionalSystem.EnsureInitialized(definition, progress);
         }
@@ -212,7 +217,7 @@ namespace HexCiv.Core
         {
             if (definition == null) throw new ArgumentNullException(nameof(definition));
             if (progress == null) throw new ArgumentNullException(nameof(progress));
-            if (progress.version != 5)
+            if (progress.version != 6)
                 throw new InvalidOperationException("ウルク進捗versionが不正");
             if (progress.actualPopulation < 0)
                 throw new InvalidOperationException("実人口が負数");

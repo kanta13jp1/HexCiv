@@ -21,6 +21,8 @@ namespace HexCiv.UI
         Button cancelButton;
         Button acceptOfferButton;
         Button negotiateButton;
+        Button shareWaterButton;
+        Button compensateWaterButton;
         Button rejectWaterButton;
         Button acceptMigrationButton;
         Button rejectMigrationButton;
@@ -71,6 +73,12 @@ namespace HexCiv.UI
                   $"{DiplomaticOutcomeJa(latestDiplomacy.outcome)}" +
                   $"（評判{Signed(latestDiplomacy.reputationDelta)}）: " +
                   latestDiplomacy.summaryJa;
+            string disputeText = dispute == null
+                ? "水利紛争なし"
+                : $"水利要求: {FactionName(progress, dispute.claimantFactionId)}　" +
+                  $"不足{dispute.claimantWaterDeficit}／相手水路" +
+                  $"{dispute.claimantCanalCondition}%／ウルク流量" +
+                  $"{dispute.respondentFlowAtClaim}　{dispute.causeJa}";
             statusText.text =
                 $"水源 {progress.lastRegionalSourceWater}　農地 {progress.lastRegionalFarmWater}　" +
                 $"漏水 {progress.lastRegionalLeakage}　未使用 {progress.lastRegionalUnusedWater}\n" +
@@ -78,8 +86,8 @@ namespace HexCiv.UI
                 $"水路計画 {planned}／工事中 {active}　予約 粘土{progress.reservedClay}・" +
                 $"葦{progress.reservedReeds}　予測{progress.estimatedCanalTurns}期\n" +
                 $"{offerText}　輸送中{enRoute}\n{obligationText}　" +
-                $"水利紛争{(dispute == null ? "なし" : "交渉可")}　" +
                 $"移住{(migration == null ? "なし" : migration.people + "人")}\n" +
+                $"{disputeText}\n" +
                 $"外交評判 {progress.diplomaticReputation}/100　{diplomacyText}";
 
             bool enabled = !session.State.IsGameOver;
@@ -91,6 +99,9 @@ namespace HexCiv.UI
             cancelButton.interactable = enabled && planned > 0;
             acceptOfferButton.interactable = enabled && offer != null;
             negotiateButton.interactable = enabled && dispute != null;
+            shareWaterButton.interactable = enabled && dispute != null;
+            compensateWaterButton.interactable = enabled && dispute != null &&
+                UrukCampaignSystem.GoodAmount(progress, "barley") >= 2;
             rejectWaterButton.interactable = enabled && dispute != null;
             acceptMigrationButton.interactable = enabled && migration != null;
             rejectMigrationButton.interactable = enabled && migration != null;
@@ -125,7 +136,7 @@ namespace HexCiv.UI
             body = UIStyle.CreatePanel(canvasGo.transform, "RegionalBody",
                 new Color(0.025f, 0.04f, 0.07f, 0.95f));
             UIStyle.SetRect(body, new Vector2(0f, 0f), new Vector2(0f, 0f),
-                new Vector2(0f, 0f), new Vector2(18f, 18f), new Vector2(720f, 370f));
+                new Vector2(0f, 0f), new Vector2(18f, 18f), new Vector2(720f, 406f));
 
             var title = UIStyle.CreateText(body.transform, "Title",
                 "南メソポタミア地域管理　—　水利・農業・移動", 17,
@@ -147,7 +158,7 @@ namespace HexCiv.UI
             statusText.resizeTextMinSize = 10;
             UIStyle.SetRect(statusText.gameObject, new Vector2(0f, 1f),
                 new Vector2(1f, 1f), new Vector2(0.5f, 1f),
-                new Vector2(0f, -43f), new Vector2(-24f, 116f));
+                new Vector2(0f, -43f), new Vector2(-24f, 152f));
 
             string[] overlayNames = { "通常", "水利", "農地", "物流" };
             string[] overlayIds =
@@ -185,12 +196,6 @@ namespace HexCiv.UI
                 () => Apply(UrukRegionalSystem.SendGiftAction));
             CreateButton(body.transform, "Barter", "物々交換", 460f, 140f, 92f,
                 () => Apply(UrukRegionalSystem.OfferBarterAction));
-            negotiateButton = CreateButton(body.transform, "Negotiate", "水利交渉",
-                558f, 140f, 92f,
-                () => Apply(UrukRegionalSystem.NegotiateWaterAction));
-            rejectWaterButton = CreateButton(body.transform, "RejectWater", "拒否",
-                656f, 140f, 52f,
-                () => Apply(UrukRegionalSystem.RejectWaterAction));
 
             CreateButton(body.transform, "Loan", "穀物貸付", 12f, 96f, 104f,
                 () => Apply(UrukRegionalSystem.RequestLoanAction));
@@ -213,12 +218,24 @@ namespace HexCiv.UI
             rejectMigrationButton = CreateButton(body.transform, "RejectMigration",
                 "移住を拒否", 122f, 44f, 104f,
                 () => Apply(UrukRegionalSystem.RejectMigrationAction));
+            shareWaterButton = CreateButton(body.transform, "ShareWater",
+                "分水", 232f, 44f, 74f,
+                () => Apply(UrukRegionalSystem.ShareWaterAction));
+            compensateWaterButton = CreateButton(body.transform, "CompensateWater",
+                "穀物補償", 312f, 44f, 92f,
+                () => Apply(UrukRegionalSystem.CompensateWaterAction));
+            negotiateButton = CreateButton(body.transform, "JointMaintenance",
+                "共同補修", 410f, 44f, 92f,
+                () => Apply(UrukRegionalSystem.NegotiateWaterAction));
+            rejectWaterButton = CreateButton(body.transform, "RejectWater", "拒否",
+                508f, 44f, 64f,
+                () => Apply(UrukRegionalSystem.RejectWaterAction));
             var note = UIStyle.CreateText(body.transform, "RegionalNote",
-                "計画はターン終了まで取消可能。資源は予約され、確定後に消費されます。",
-                11, TextAnchor.MiddleLeft, UIStyle.TextDim);
-            UIStyle.SetRect(note.gameObject, new Vector2(0f, 0f), new Vector2(1f, 0f),
-                new Vector2(0.5f, 0f), new Vector2(232f, 10f),
-                new Vector2(-250f, 28f));
+                "紛争案は史料上の確定事実でなく復元モデル", 9,
+                TextAnchor.MiddleLeft, UIStyle.TextDim);
+            UIStyle.SetRect(note.gameObject, new Vector2(0f, 0f),
+                new Vector2(0f, 0f), new Vector2(0f, 0f),
+                new Vector2(580f, 44f), new Vector2(128f, 36f));
         }
 
         Button CreateButton(Transform parent, string name, string label, float x,
@@ -376,6 +393,11 @@ namespace HexCiv.UI
             "defaulted" => "不履行",
             "expired" => "期限満了",
             "negotiated" => "交渉成立",
+            "water_shared" => "分水合意",
+            "compensated" => "穀物補償",
+            "joint_maintenance" => "共同補修",
+            "water_share_completed" => "分水履行",
+            "water_share_defaulted" => "分水不履行",
             "rejected" => "要求拒否",
             _ => outcome,
         };
