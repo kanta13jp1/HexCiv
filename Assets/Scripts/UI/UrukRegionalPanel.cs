@@ -7,7 +7,7 @@ using HexCiv.Core;
 namespace HexCiv.UI
 {
     /// <summary>
-    /// ウルク編 Stage 4A の水利・作付け・地域交流を操作する簡潔な常設パネル。
+    /// ウルク編の水利・作付け・地域交流・水利外交を操作する簡潔な常設パネル。
     /// 史実確度と予測値を同じ場所に示し、詳細計算は Core に委譲する。
     /// </summary>
     public sealed class UrukRegionalPanel : MonoBehaviour
@@ -24,6 +24,8 @@ namespace HexCiv.UI
         Button shareWaterButton;
         Button compensateWaterButton;
         Button rejectWaterButton;
+        Button breachWaterButton;
+        Button renegotiateWaterButton;
         Button acceptMigrationButton;
         Button rejectMigrationButton;
         readonly Button[] overlayButtons = new Button[4];
@@ -49,7 +51,12 @@ namespace HexCiv.UI
             var obligation = UrukRegionalSystem.FirstHumanObligation(progress);
             var latestDiplomacy =
                 UrukRegionalSystem.LatestHumanDiplomaticRecord(progress);
-            var dispute = UrukRegionalSystem.FirstOpenDispute(progress);
+            var openDispute = UrukRegionalSystem.FirstOpenDispute(progress);
+            var activeAgreement =
+                UrukRegionalSystem.FirstActiveWaterAgreement(progress);
+            var recoverableDispute =
+                UrukRegionalSystem.LatestRecoverableWaterDispute(progress);
+            var dispute = openDispute ?? activeAgreement ?? recoverableDispute;
             var migration = UrukRegionalSystem.FirstWaitingMigration(progress);
             int enRoute = CountTransports(progress, "en_route");
 
@@ -75,10 +82,14 @@ namespace HexCiv.UI
                   latestDiplomacy.summaryJa;
             string disputeText = dispute == null
                 ? "水利紛争なし"
-                : $"水利要求: {FactionName(progress, dispute.claimantFactionId)}　" +
-                  $"不足{dispute.claimantWaterDeficit}／相手水路" +
-                  $"{dispute.claimantCanalCondition}%／ウルク流量" +
-                  $"{dispute.respondentFlowAtClaim}　{dispute.causeJa}";
+                : $"水利{WaterStatusJa(dispute.status)}: " +
+                  $"{FactionName(progress, dispute.claimantFactionId)}　" +
+                   $"不足{dispute.claimantWaterDeficit}／相手水路" +
+                   $"{dispute.claimantCanalCondition}%／ウルク流量" +
+                   $"{dispute.respondentFlowAtClaim}　" +
+                   (openDispute != null ? dispute.causeJa : dispute.resultJa) +
+                   (string.IsNullOrWhiteSpace(dispute.retaliationJa)
+                       ? "" : "　" + dispute.retaliationJa);
             statusText.text =
                 $"水源 {progress.lastRegionalSourceWater}　農地 {progress.lastRegionalFarmWater}　" +
                 $"漏水 {progress.lastRegionalLeakage}　未使用 {progress.lastRegionalUnusedWater}\n" +
@@ -98,11 +109,16 @@ namespace HexCiv.UI
                     progress.reservedReeds >= 1;
             cancelButton.interactable = enabled && planned > 0;
             acceptOfferButton.interactable = enabled && offer != null;
-            negotiateButton.interactable = enabled && dispute != null;
-            shareWaterButton.interactable = enabled && dispute != null;
-            compensateWaterButton.interactable = enabled && dispute != null &&
+            negotiateButton.interactable = enabled && openDispute != null;
+            shareWaterButton.interactable = enabled && openDispute != null;
+            compensateWaterButton.interactable = enabled && openDispute != null &&
                 UrukCampaignSystem.GoodAmount(progress, "barley") >= 2;
-            rejectWaterButton.interactable = enabled && dispute != null;
+            rejectWaterButton.interactable = enabled && openDispute != null;
+            breachWaterButton.interactable = enabled && activeAgreement != null;
+            renegotiateWaterButton.interactable = enabled &&
+                recoverableDispute != null &&
+                UrukCampaignSystem.GoodAmount(progress, "barley") >= 1 &&
+                UrukCampaignSystem.GoodAmount(progress, "reeds") >= 1;
             acceptMigrationButton.interactable = enabled && migration != null;
             rejectMigrationButton.interactable = enabled && migration != null;
             for (int i = 0; i < overlayButtons.Length; i++)
@@ -225,17 +241,17 @@ namespace HexCiv.UI
                 "穀物補償", 312f, 44f, 92f,
                 () => Apply(UrukRegionalSystem.CompensateWaterAction));
             negotiateButton = CreateButton(body.transform, "JointMaintenance",
-                "共同補修", 410f, 44f, 92f,
+                "共同管理", 410f, 44f, 92f,
                 () => Apply(UrukRegionalSystem.NegotiateWaterAction));
             rejectWaterButton = CreateButton(body.transform, "RejectWater", "拒否",
                 508f, 44f, 64f,
                 () => Apply(UrukRegionalSystem.RejectWaterAction));
-            var note = UIStyle.CreateText(body.transform, "RegionalNote",
-                "紛争案は史料上の確定事実でなく復元モデル", 9,
-                TextAnchor.MiddleLeft, UIStyle.TextDim);
-            UIStyle.SetRect(note.gameObject, new Vector2(0f, 0f),
-                new Vector2(0f, 0f), new Vector2(0f, 0f),
-                new Vector2(580f, 44f), new Vector2(128f, 36f));
+            breachWaterButton = CreateButton(body.transform, "BreachWater",
+                "破約", 578f, 44f, 58f,
+                () => Apply(UrukRegionalSystem.BreachWaterAgreementAction));
+            renegotiateWaterButton = CreateButton(body.transform, "RenegotiateWater",
+                "再交渉", 642f, 44f, 66f,
+                () => Apply(UrukRegionalSystem.RenegotiateWaterAction));
         }
 
         Button CreateButton(Transform parent, string name, string label, float x,
@@ -396,10 +412,27 @@ namespace HexCiv.UI
             "water_shared" => "分水合意",
             "compensated" => "穀物補償",
             "joint_maintenance" => "共同補修",
+            "joint_management_started" => "共同管理開始",
+            "joint_management_completed" => "共同管理完了",
             "water_share_completed" => "分水履行",
             "water_share_defaulted" => "分水不履行",
+            "water_agreement_breached" => "水利合意破約",
+            "water_renegotiated" => "水利再交渉",
             "rejected" => "要求拒否",
             _ => outcome,
+        };
+
+        static string WaterStatusJa(string status) => status switch
+        {
+            "open" => "要求",
+            "shared" => "分水履行中",
+            "jointly_managed" => "共同管理中",
+            "compensated" => "補償済み",
+            "rejected" => "拒否",
+            "breached" => "破約",
+            "completed" => "合意完了",
+            "defaulted" => "不履行",
+            _ => status,
         };
 
         static string Signed(int value) => value > 0 ? "+" + value : value.ToString();

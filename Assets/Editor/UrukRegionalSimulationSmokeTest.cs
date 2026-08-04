@@ -39,7 +39,7 @@ public static class UrukRegionalSimulationSmokeTest
     {
         var session = HistoricalCampaignFactory.Build(definition);
         var progress = session.Progress;
-        Require(progress.version == 6, "進捗versionが6ではない");
+        Require(progress.version == 7, "進捗versionが7ではない");
         Require(progress.obligations != null, "契約債務台帳が初期化されていない");
         Require(progress.diplomaticRecords != null &&
             progress.diplomaticReputation == 50,
@@ -283,19 +283,40 @@ public static class UrukRegionalSimulationSmokeTest
             },
         };
         UrukCampaignSystem.MigrateProgress(definition, migrated);
-        Require(migrated.version == 6 &&
+        Require(migrated.version == 7 &&
             migrated.waterDisputes[0].claimantFarmId ==
                 "lagash_hinterland_farm" &&
             migrated.waterDisputes[0].resolutionKind == "joint_maintenance" &&
-            migrated.waterDisputes[0].agreementSettled,
+            migrated.waterDisputes[0].agreementSettled &&
+            migrated.waterDisputes[0].retaliationJa == "",
             "version 5から水利紛争の原因・解決状態を補完できない");
+
+        var v6Migration = HistoricalCampaignFactory.Build(definition).Progress;
+        v6Migration.version = 6;
+        v6Migration.waterDisputes = new[]
+        {
+            new UrukWaterDisputeState
+            {
+                id = "v6_dispute",
+                claimantFactionId = "lagash_region",
+                respondentFactionId = "uruk_community",
+                status = "rejected",
+                retaliationJa = null,
+                renegotiationCount = -1,
+            },
+        };
+        UrukCampaignSystem.MigrateProgress(definition, v6Migration);
+        Require(v6Migration.version == 7 &&
+            v6Migration.waterDisputes[0].retaliationJa == "" &&
+            v6Migration.waterDisputes[0].renegotiationCount == 0,
+            "version 6から報復・再交渉状態を補完できない");
 
         var chainedMigration = HistoricalCampaignFactory.Build(definition).Progress;
         chainedMigration.version = 3;
         chainedMigration.obligations = null;
         chainedMigration.diplomaticRecords = null;
         UrukCampaignSystem.MigrateProgress(definition, chainedMigration);
-        Require(chainedMigration.version == 6 &&
+        Require(chainedMigration.version == 7 &&
             chainedMigration.obligations != null &&
             chainedMigration.diplomaticRecords != null,
             "version 3から現行versionへ連続移行できない");
@@ -356,6 +377,10 @@ public static class UrukRegionalSimulationSmokeTest
             defaultShare.waterShareExpectedTotal > 0 &&
             defaultShare.waterSharedTotal == 0 &&
             defaultShareSession.Progress.diplomaticReputation == 49 &&
+            !string.IsNullOrWhiteSpace(defaultShare.retaliationJa) &&
+            UrukRegionalSystem.WaterRetaliationRiskPenalty(
+                defaultShareSession.Progress, "uruk_community",
+                "lagash_region") == 10 &&
             HasDiplomaticOutcome(defaultShareSession.Progress,
                 "water_share_defaulted"),
             "分水不能時に不履行・信頼低下が記録されない");
@@ -389,15 +414,84 @@ public static class UrukRegionalSimulationSmokeTest
         Require(lagashBranch.condition == conditionBefore + 15 &&
             repairSession.Progress.waterDisputes[0].laborCommitted == 10 &&
             UrukCampaignSystem.GoodAmount(repairSession.Progress, "reeds") == 2 &&
-            repairSession.Progress.diplomaticReputation == 54,
-            "共同補修が水路・資材・労働・評判へ反映されない");
+            repairSession.Progress.diplomaticReputation == 54 &&
+            repairSession.Progress.waterDisputes[0].status ==
+                "jointly_managed" &&
+            HasSegmentUser(repairSession.Progress, "lagash_tigris_branch",
+                "uruk_community"),
+            "共同管理が水路・利用権・資材・労働・評判へ反映されない");
+        for (int turn = 9; turn <= 12; turn++) Advance(repairSession, turn);
+        Require(repairSession.Progress.waterDisputes[0].status == "completed" &&
+            repairSession.Progress.waterDisputes[0].agreementSettled &&
+            !HasSegmentUser(repairSession.Progress, "lagash_tigris_branch",
+                "uruk_community") &&
+            repairSession.Progress.diplomaticReputation == 56 &&
+            HasDiplomaticOutcome(repairSession.Progress,
+                "joint_management_completed"),
+            "共同管理の期限終了・利用権返還・評判が一致しない");
+
+        var breachSession = PreparedWaterDispute(definition);
+        var breachFaction = UrukRegionalSystem.FindFaction(
+            breachSession.Progress, "lagash_region");
+        int militiaBeforeBreach = breachFaction.labor.militia;
+        Require(UrukCampaignSystem.TryApplyAction(breachSession,
+            UrukRegionalSystem.ShareWaterAction, out _), "破約試験の分水合意に失敗");
+        Require(UrukCampaignSystem.TryApplyAction(breachSession,
+            UrukRegionalSystem.BreachWaterAgreementAction, out _),
+            "水利合意の破約に失敗");
+        var breached = breachSession.Progress.waterDisputes[0];
+        Require(breached.status == "breached" && breached.breached &&
+            breached.agreementSettled &&
+            !string.IsNullOrWhiteSpace(breached.retaliationJa) &&
+            breachFaction.labor.militia == militiaBeforeBreach + 10 &&
+            breachFaction.labor.Total == 100 &&
+            breachSession.Progress.diplomaticReputation == 45 &&
+            UrukRegionalSystem.WaterRetaliationRiskPenalty(
+                breachSession.Progress, "uruk_community", "lagash_region") == 10 &&
+            HasDiplomaticOutcome(breachSession.Progress,
+                "water_agreement_breached"),
+            "破約が報復AI・輸送危険度・評判へ反映されない");
 
         var rejectSession = PreparedWaterDispute(definition);
+        var rejectFaction = UrukRegionalSystem.FindFaction(
+            rejectSession.Progress, "lagash_region");
+        int militiaBeforeReject = rejectFaction.labor.militia;
         Require(UrukCampaignSystem.TryApplyAction(rejectSession,
             UrukRegionalSystem.RejectWaterAction, out _), "水利要求の拒否に失敗");
         Require(rejectSession.Progress.diplomaticReputation == 46 &&
+            rejectFaction.labor.militia == militiaBeforeReject + 10 &&
+            !string.IsNullOrWhiteSpace(
+                rejectSession.Progress.waterDisputes[0].retaliationJa) &&
             HasDiplomaticOutcome(rejectSession.Progress, "rejected"),
             "水利要求拒否が外交評判と履歴へ反映されない");
+
+        SetGood(rejectSession.Progress, "uruk_community", "barley", 3);
+        SetGood(rejectSession.Progress, "uruk_community", "reeds", 3);
+        int claimantBarleyBefore = FactionGood(rejectSession.Progress,
+            "lagash_region", "barley");
+        int claimantReedsBefore = FactionGood(rejectSession.Progress,
+            "lagash_region", "reeds");
+        Require(UrukCampaignSystem.TryApplyAction(rejectSession,
+            UrukRegionalSystem.RenegotiateWaterAction, out _),
+            "水利再交渉の開始に失敗");
+        var renegotiated = rejectSession.Progress.waterDisputes[0];
+        Require(renegotiated.status == "open" &&
+            !renegotiated.agreementSettled &&
+            renegotiated.renegotiationCount == 1 &&
+            renegotiated.retaliationJa == "" &&
+            rejectFaction.labor.militia == militiaBeforeReject + 5 &&
+            rejectFaction.labor.Total == 100 &&
+            UrukCampaignSystem.GoodAmount(rejectSession.Progress, "barley") == 2 &&
+            UrukCampaignSystem.GoodAmount(rejectSession.Progress, "reeds") == 2 &&
+            FactionGood(rejectSession.Progress, "lagash_region", "barley") ==
+                claimantBarleyBefore + 1 &&
+            FactionGood(rejectSession.Progress, "lagash_region", "reeds") ==
+                claimantReedsBefore + 1 &&
+            rejectSession.Progress.diplomaticReputation == 47 &&
+            UrukRegionalSystem.WaterRetaliationRiskPenalty(
+                rejectSession.Progress, "uruk_community", "lagash_region") == 0 &&
+            HasDiplomaticOutcome(rejectSession.Progress, "water_renegotiated"),
+            "再交渉が現物移転・報復緩和・再選択・評判へ反映されない");
     }
 
     static HistoricalCampaignSession PreparedWaterDispute(
