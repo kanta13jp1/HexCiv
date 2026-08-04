@@ -26,6 +26,35 @@ CodexとClaude Codeは、以後この `HexCiv` プロジェクトだけを更新
 
 ## 最新状況
 
+### ✅ 2026-08-05 Codex: ウルク第4B・実物資契約と販売10仮説の運用基盤
+
+**ゲーム開発**
+
+- ウルク地域シミュレーションに、既存の贈与・物々交換と同じ物資台帳を使う **貸付・労務契約・通行権・朝貢** を追加した。貨幣は導入せず、物資・労働・期限・輸送損失・履行・不履行を明示する。
+- 貸付は受領時と返済期日、労務は配分と報酬、通行権は対象水路・期間・輸送危険度軽減、朝貢は定期納入と残回数を保持する。期限超過時は安定度と信頼が低下する。
+- UIへ4種類の契約操作と現在の履行状況を追加。セーブは地域進行 version 4 とし、version 3 から債務台帳なしの状態へ移行する。
+- AI勢力も食料不足時に、余剰を持つ相手へ実物貸付を求める。人間用契約と同じ在庫・輸送・期限・不履行処理を通る。
+
+**販売促進**
+
+- `MARKETING_HANDOFF.md` に製品版・体験版・確認済みスクリーンショット3枚、販売文案、itch.io用文案、UTM付き導線、Claude/Codexの担当を集約した。
+- Obsidian の `HexCiv販売_仮説台帳.md` を、H1〜H10それぞれに実験ID・主要指標・停止条件・次の一手を持つ検証台帳へ更新した。共通基準は原則「1変数ずつ、各案100ユニーク訪問または14日」。
+- Claudeは販売サイトの本番計測・商品画像公開・itch.io非公開ページ、Codexはゲーム・体験版・配布物、Obsidianは事実と意思決定の台帳を担当する。販売サイト側リポジトリは未整理の既存変更が多いため、今回は直接変更せず引き継ぎ資料に留めた。
+
+**検証（Unity 6000.3.20f1）**
+
+- `UrukRegionalSimulationSmokeTest.Run`: `URUK REGIONAL SIMULATION SMOKE OK`。4契約の履行・不履行、輸送保存則、通行権の付与/失効、AI貸付、セーブ往復、v3→v4移行を確認。3 seed性能は0.10 ms/turn。
+- `UrukCampaignVerticalSliceSmokeTest.Run`: `URUK CAMPAIGN VERTICAL SLICE SMOKE OK`。
+- `SmokeTest.Run`: `SMOKE OK`。変更前 `Logs/g4_regression.log` と `[Smoke]` / `SMOKE` 全19行がdiff完全一致。
+- 製品版 `BUILD OK`、体験版 `DEMO BUILD OK`（各98,046,709 bytes）。両方を12秒起動しPlayer.log例外0。
+- 製品ZIP: 37,579,187 bytes、SHA256 `9f9b6647255295d0c1210dd03cef30d1ddf4dcfbacbe62716d2b2b6f33359c1e`。
+- 体験版ZIP: 37,581,892 bytes、SHA256 `bfecee1726f3c43640281fcfb88ad4fc9fd5c9a2bdcbc965a5eb95dc2ff4d1e1`。
+
+**次の担当**
+
+- Claude: `MARKETING_HANDOFF.md` の画像3枚を商品ページへ掲載し、本番ファネル行を確認して H1/H2 を開始。itch.ioは非公開ページで製品版と無料体験版を同居させ、公開前に税務・決済設定を確認する。
+- Codex: 次のウルク縦切りとして契約履歴・交渉理由の可視化、または固定史実マップの灌漑/湿地操作を進める。ゲーム変更後は製品版・体験版の両方を再生成する。
+
 ### ✅ 2026-07-31 Codex: 30ターン体験版モード（H9検証用）完了
 
 **実装**

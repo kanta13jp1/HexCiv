@@ -57,7 +57,7 @@ public static class UrukCampaignVerticalSliceSmokeTest
             UrukSubsistenceSystem.FoodReserveTenthsMonths(p) > 20 ||
             p.seedGrain != 2 || p.storageCapacityMonths != 3)
             throw new Exception("開始時の1～2か月備蓄・種籾・倉容量が不正");
-        if (p.version != 3 || p.templeStage != 0 ||
+        if (p.version != 4 || p.templeStage != 0 ||
             p.recordKnowledgeElements != 3)
             throw new Exception("第3段階の初期進捗が不正");
     }
@@ -226,7 +226,7 @@ public static class UrukCampaignVerticalSliceSmokeTest
         progress.recordKnowledgeElements = 0;
         UrukCampaignSystem.MigrateProgress(definition, progress);
         UrukCampaignSystem.ValidateProgress(definition, progress);
-        if (progress.version != 3 || progress.labor.Total != 100 ||
+        if (progress.version != 4 || progress.labor.Total != 100 ||
             progress.seedGrain != 2 || progress.storageCapacityMonths != 3 ||
             progress.events == null)
             throw new Exception("version 1から第3段階への進捗移行に失敗");

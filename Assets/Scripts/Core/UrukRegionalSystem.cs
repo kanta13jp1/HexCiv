@@ -97,11 +97,15 @@ namespace HexCiv.Core
         public int offeredAmount;
         public string requestedGoodId;
         public int requestedAmount;
-        /// <summary>open / accepted_pending / departed / completed / rejected / expired。</summary>
+        /// <summary>open / accepted_pending / departed / active / completed / defaulted / rejected / expired。</summary>
         public string status;
         public int createdTurn;
         public int expiresTurn;
         public string contractKind;
+        public string targetId;
+        public int durationTurns;
+        public int intervalTurns;
+        public int installmentCount;
         public string reasonJa;
         public string confidence;
     }
@@ -111,6 +115,7 @@ namespace HexCiv.Core
     {
         public string id;
         public string contractId;
+        public string obligationId;
         public string originFactionId;
         public string destinationFactionId;
         public string goodId;
@@ -125,6 +130,29 @@ namespace HexCiv.Core
         public string status;
         public int riskPercent;
         public HistoricalMapPoint[] path;
+    }
+
+    [Serializable]
+    public sealed class UrukObligationState
+    {
+        public string id;
+        public string contractId;
+        /// <summary>loan_repayment / labor_service / access_right / tribute。</summary>
+        public string kind;
+        public string debtorFactionId;
+        public string creditorFactionId;
+        public string goodId;
+        public int amountPerInstallment;
+        public int remainingInstallments;
+        public int dueTurn;
+        public int intervalTurns;
+        public string targetId;
+        public int fulfilledAmount;
+        public int missedPayments;
+        /// <summary>active / in_transit / completed / defaulted / expired。</summary>
+        public string status;
+        public string lastResultJa;
+        public string confidence;
     }
 
     [Serializable]
@@ -172,6 +200,10 @@ namespace HexCiv.Core
         public const string AcceptOfferAction = "regional_accept_offer";
         public const string SendGiftAction = "regional_send_gift";
         public const string OfferBarterAction = "regional_offer_barter";
+        public const string RequestLoanAction = "regional_request_loan";
+        public const string OfferLaborAction = "regional_offer_labor";
+        public const string AcquireAccessAction = "regional_acquire_access";
+        public const string OfferTributeAction = "regional_offer_tribute";
         public const string NegotiateWaterAction = "regional_negotiate_water";
         public const string AcceptMigrationAction = "regional_accept_migration";
         public const string RejectMigrationAction = "regional_reject_migration";
@@ -189,6 +221,7 @@ namespace HexCiv.Core
             progress.constructionProjects ??= Array.Empty<UrukConstructionProjectState>();
             progress.tradeOffers ??= Array.Empty<UrukTradeOfferState>();
             progress.transports ??= Array.Empty<UrukTransportState>();
+            progress.obligations ??= Array.Empty<UrukObligationState>();
             progress.migrationGroups ??= Array.Empty<UrukMigrationGroupState>();
             progress.waterDisputes ??= Array.Empty<UrukWaterDisputeState>();
             if (progress.nextRegionalId <= 0) progress.nextRegionalId = 1;
@@ -243,6 +276,20 @@ namespace HexCiv.Core
                     transport.remainingAmount + transport.lostAmount +
                         transport.deliveredAmount != transport.shippedAmount)
                     throw new InvalidOperationException("輸送物資の保存則違反");
+            }
+            foreach (var obligation in progress.obligations)
+            {
+                if (obligation == null || string.IsNullOrWhiteSpace(obligation.id) ||
+                    !factionIds.Contains(obligation.debtorFactionId) ||
+                    !factionIds.Contains(obligation.creditorFactionId) ||
+                    obligation.amountPerInstallment < 0 ||
+                    obligation.remainingInstallments < 0 ||
+                    obligation.fulfilledAmount < 0 || obligation.missedPayments < 0 ||
+                    (obligation.kind != "loan_repayment" &&
+                     obligation.kind != "labor_service" &&
+                     obligation.kind != "access_right" &&
+                     obligation.kind != "tribute"))
+                    throw new InvalidOperationException("地域契約債務が不正");
             }
             if (progress.lastRegionalSourceWater !=
                 progress.lastRegionalFarmWater + progress.lastRegionalLeakage +
@@ -313,6 +360,14 @@ namespace HexCiv.Core
                     return CreateGift(progress, turn, out resultJa);
                 case OfferBarterAction:
                     return CreateHumanBarter(progress, turn, out resultJa);
+                case RequestLoanAction:
+                    return CreateLoanRequest(progress, turn, out resultJa);
+                case OfferLaborAction:
+                    return CreateLaborOffer(progress, turn, out resultJa);
+                case AcquireAccessAction:
+                    return CreateAccessAgreement(progress, turn, out resultJa);
+                case OfferTributeAction:
+                    return CreateTributeAgreement(progress, turn, out resultJa);
                 case NegotiateWaterAction:
                     return ResolveFirstDispute(progress, true, out resultJa);
                 case AcceptMigrationAction:
@@ -354,6 +409,7 @@ namespace HexCiv.Core
             ResolveWater(progress);
             ResolveFarms(progress);
             ResolveAiLedgers(progress, flood);
+            AdvanceObligations(session.Definition, progress, completedTurn);
             AdvanceTransports(progress, completedTurn);
             AdvanceMigrations(progress, completedTurn);
             PlanAi(session.Definition, progress, completedTurn);
@@ -397,6 +453,19 @@ namespace HexCiv.Core
             foreach (var offer in progress.tradeOffers)
                 if (offer.receiverFactionId == HumanFactionId &&
                     offer.status == "open") return offer;
+            return null;
+        }
+
+        public static UrukObligationState FirstHumanObligation(
+            UrukCampaignProgress progress)
+        {
+            if (progress?.obligations == null) return null;
+            foreach (var obligation in progress.obligations)
+                if ((obligation.debtorFactionId == HumanFactionId ||
+                     obligation.creditorFactionId == HumanFactionId) &&
+                    (obligation.status == "active" ||
+                     obligation.status == "in_transit"))
+                    return obligation;
             return null;
         }
 
@@ -936,6 +1005,7 @@ namespace HexCiv.Core
                     faction.knownReasonJa = "接触済み情報から推定。";
                 }
                 TryScheduleAiRepair(progress, faction, turn);
+                TryScheduleAiEmergencyLoan(progress, faction, turn);
             }
 
             if (turn >= 6 && !HasOffer(progress, "eridu_relief_barter"))
@@ -1017,6 +1087,45 @@ namespace HexCiv.Core
             }
         }
 
+        static void TryScheduleAiEmergencyLoan(UrukCampaignProgress progress,
+            UrukRegionalFactionState borrower, int turn)
+        {
+            if (borrower.lastFoodShortage <= 0 ||
+                HasLiveContractBetween(progress, "loan", borrower.factionId))
+                return;
+            UrukRegionalFactionState lender = null;
+            int lenderGrain = 0;
+            foreach (var candidate in progress.regionalFactions)
+            {
+                if (candidate.factionId == borrower.factionId) continue;
+                int grain = FactionGood(progress, candidate.factionId, "barley");
+                if (grain < 5 || grain <= lenderGrain) continue;
+                lender = candidate;
+                lenderGrain = grain;
+            }
+            if (lender == null) return;
+            Append(ref progress.tradeOffers, new UrukTradeOfferState
+            {
+                id = NextId(progress, "ai_loan"),
+                proposerFactionId = lender.factionId,
+                receiverFactionId = borrower.factionId,
+                offeredGoodId = "barley",
+                offeredAmount = 2,
+                requestedGoodId = "barley",
+                requestedAmount = 3,
+                status = "accepted_pending",
+                createdTurn = turn,
+                expiresTurn = turn + 1,
+                contractKind = "loan",
+                durationTurns = 3,
+                installmentCount = 1,
+                reasonJa = "食料不足への現物貸付。備蓄余力と関係から受諾した。",
+                confidence = "inferred",
+            });
+            borrower.lastDecisionJa =
+                $"{lender.nameJa}から食料2単位を借り、3期後の現物返済を約した。";
+        }
+
         static void DegradeCanals(UrukCampaignProgress progress, int turn,
             UrukFloodTrend flood)
         {
@@ -1039,14 +1148,22 @@ namespace HexCiv.Core
                 resultJa = "受諾できる交易提案がない。";
                 return false;
             }
-            if (AvailableFactionGood(progress, offer.receiverFactionId,
-                offer.requestedGoodId) < offer.requestedAmount)
+            bool immediatePayment = offer.contractKind == "barter" ||
+                offer.contractKind == "gift";
+            if (immediatePayment && AvailableFactionGood(progress,
+                offer.receiverFactionId, offer.requestedGoodId) <
+                offer.requestedAmount)
             {
                 resultJa = "相手が求める物資を用意できない。";
                 return false;
             }
             offer.status = "accepted_pending";
-            resultJa = "物々交換を受諾した。ターン終了時に双方の物資を積み出す。";
+            resultJa = offer.contractKind switch
+            {
+                "loan" => "貸付条件を受諾した。元本到着後、期限までに現物で返済する。",
+                "tribute" => "朝貢条件を受諾した。定めた間隔で現物を積み出す。",
+                _ => "物々交換を受諾した。ターン終了時に双方の物資を積み出す。",
+            };
             return true;
         }
 
@@ -1107,20 +1224,369 @@ namespace HexCiv.Core
             return true;
         }
 
+        static bool CreateLoanRequest(UrukCampaignProgress progress, int turn,
+            out string resultJa)
+        {
+            if (HasLiveContractBetween(progress, "loan", HumanFactionId))
+            {
+                resultJa = "履行中の貸付がある。返済後に新しい貸付を求めてください。";
+                return false;
+            }
+            if (FactionGood(progress, "eridu_community", "barley") < 2)
+            {
+                resultJa = "エリドゥに貸し出せる穀物余力がない。";
+                return false;
+            }
+            Append(ref progress.tradeOffers, new UrukTradeOfferState
+            {
+                id = NextId(progress, "loan"),
+                proposerFactionId = "eridu_community",
+                receiverFactionId = HumanFactionId,
+                offeredGoodId = "barley",
+                offeredAmount = 2,
+                requestedGoodId = "barley",
+                requestedAmount = 3,
+                status = "accepted_pending",
+                createdTurn = turn,
+                expiresTurn = turn + 1,
+                contractKind = "loan",
+                durationTurns = 4,
+                installmentCount = 1,
+                reasonJa = "食料2単位を受け取り、4期後に大麦3単位を現物返済する。",
+                confidence = "inferred",
+            });
+            resultJa = "エリドゥとの穀物貸付を合意した。返済期限は4期後。";
+            return true;
+        }
+
+        static bool CreateLaborOffer(UrukCampaignProgress progress, int turn,
+            out string resultJa)
+        {
+            if (HasLiveContractBetween(progress, "labor", HumanFactionId))
+            {
+                resultJa = "履行中の労務契約がある。";
+                return false;
+            }
+            if (progress.labor.trade < 10)
+            {
+                resultJa = "労務契約には交易労働10%以上が必要。人口配分を調整してください。";
+                return false;
+            }
+            if (FactionGood(progress, "eridu_community", "barley") < 1)
+            {
+                resultJa = "エリドゥに報酬として渡せる大麦がない。";
+                return false;
+            }
+            Append(ref progress.tradeOffers, new UrukTradeOfferState
+            {
+                id = NextId(progress, "labor"),
+                proposerFactionId = HumanFactionId,
+                receiverFactionId = "eridu_community",
+                offeredGoodId = "labor_service",
+                offeredAmount = 10,
+                requestedGoodId = "barley",
+                requestedAmount = 1,
+                status = "accepted_pending",
+                createdTurn = turn,
+                expiresTurn = turn + 1,
+                contractKind = "labor",
+                durationTurns = 1,
+                installmentCount = 1,
+                reasonJa = "共同体が自発的に水路労務を提供し、大麦1単位を受け取る。",
+                confidence = "inferred",
+            });
+            resultJa = "エリドゥの水路整備へ労務10を提供する契約を結んだ。";
+            return true;
+        }
+
+        static bool CreateAccessAgreement(UrukCampaignProgress progress, int turn,
+            out string resultJa)
+        {
+            if (HasLiveContractBetween(progress, "access", HumanFactionId))
+            {
+                resultJa = "有効な通行権契約がある。";
+                return false;
+            }
+            if (AvailableFactionGood(progress, HumanFactionId, "reeds") < 1)
+            {
+                resultJa = "通行権の対価にする葦がない。";
+                return false;
+            }
+            if (FindSegment(progress, "eridu_wetland_intake") == null)
+            {
+                resultJa = "対象水路が存在しない。";
+                return false;
+            }
+            Append(ref progress.tradeOffers, new UrukTradeOfferState
+            {
+                id = NextId(progress, "access"),
+                proposerFactionId = HumanFactionId,
+                receiverFactionId = "eridu_community",
+                offeredGoodId = "reeds",
+                offeredAmount = 1,
+                requestedGoodId = "access_right",
+                requestedAmount = 0,
+                status = "accepted_pending",
+                createdTurn = turn,
+                expiresTurn = turn + 1,
+                contractKind = "access",
+                targetId = "eridu_wetland_intake",
+                durationTurns = 4,
+                installmentCount = 1,
+                reasonJa = "葦1単位を対価に、水路と舟運路の共同利用権を4期得る。",
+                confidence = "inferred",
+            });
+            resultJa = "エリドゥ水路の4期通行権を合意した。";
+            return true;
+        }
+
+        static bool CreateTributeAgreement(UrukCampaignProgress progress, int turn,
+            out string resultJa)
+        {
+            if (HasLiveContractBetween(progress, "tribute", HumanFactionId))
+            {
+                resultJa = "履行中の朝貢合意がある。";
+                return false;
+            }
+            if (AvailableFactionGood(progress, HumanFactionId, "barley") < 1)
+            {
+                resultJa = "朝貢に充てる大麦がない。";
+                return false;
+            }
+            Append(ref progress.tradeOffers, new UrukTradeOfferState
+            {
+                id = NextId(progress, "tribute"),
+                proposerFactionId = HumanFactionId,
+                receiverFactionId = "ur_community",
+                offeredGoodId = "barley",
+                offeredAmount = 1,
+                requestedGoodId = "",
+                requestedAmount = 0,
+                status = "accepted_pending",
+                createdTurn = turn,
+                expiresTurn = turn + 1,
+                contractKind = "tribute",
+                intervalTurns = 2,
+                installmentCount = 3,
+                reasonJa = "ウル共同体へ2期ごとに大麦1単位を計3回送る。",
+                confidence = "inferred",
+            });
+            resultJa = "ウル共同体へ3回の現物朝貢を行う合意を結んだ。";
+            return true;
+        }
+
+        static bool CanCommitOffer(UrukCampaignProgress progress,
+            UrukTradeOfferState offer)
+        {
+            if (offer.contractKind == "loan")
+                return FactionGood(progress, offer.proposerFactionId,
+                    offer.offeredGoodId) >= offer.offeredAmount;
+            if (offer.contractKind == "labor")
+                return LaborCapacity(progress, offer.proposerFactionId) >=
+                    offer.offeredAmount &&
+                    FactionGood(progress, offer.receiverFactionId,
+                        offer.requestedGoodId) >= offer.requestedAmount;
+            if (offer.contractKind == "access")
+                return FactionGood(progress, offer.proposerFactionId,
+                    offer.offeredGoodId) >= offer.offeredAmount &&
+                    FindSegment(progress, offer.targetId) != null;
+            if (offer.contractKind == "tribute")
+                return FactionGood(progress, offer.proposerFactionId,
+                    offer.offeredGoodId) >= offer.offeredAmount;
+            return FactionGood(progress, offer.proposerFactionId,
+                       offer.offeredGoodId) >= offer.offeredAmount &&
+                   FactionGood(progress, offer.receiverFactionId,
+                       offer.requestedGoodId) >= offer.requestedAmount;
+        }
+
+        static void CreateObligation(UrukCampaignProgress progress,
+            UrukTradeOfferState offer, string kind, string debtor,
+            string creditor, string goodId, int amount, int installments,
+            int dueTurn)
+        {
+            Append(ref progress.obligations, new UrukObligationState
+            {
+                id = NextId(progress, "obligation"),
+                contractId = offer.id,
+                kind = kind,
+                debtorFactionId = debtor,
+                creditorFactionId = creditor,
+                goodId = goodId,
+                amountPerInstallment = amount,
+                remainingInstallments = installments,
+                dueTurn = dueTurn,
+                intervalTurns = Math.Max(1, offer.intervalTurns),
+                targetId = offer.targetId,
+                status = "active",
+                lastResultJa = kind == "access_right"
+                    ? "期限付き利用権が有効。" : "履行期限を待っている。",
+                confidence = offer.confidence,
+            });
+        }
+
+        static void AdvanceObligations(HistoricalCampaignDefinition definition,
+            UrukCampaignProgress progress, int turn)
+        {
+            foreach (var obligation in progress.obligations)
+            {
+                if (obligation.status != "active" || turn < obligation.dueTurn)
+                    continue;
+                if (obligation.kind == "access_right")
+                {
+                    RemoveSegmentUser(progress, obligation.targetId,
+                        obligation.creditorFactionId);
+                    obligation.status = "expired";
+                    obligation.lastResultJa = "期限満了により通行権を返還した。";
+                    UpdateOfferStatus(progress, obligation.contractId);
+                    continue;
+                }
+                if (obligation.kind == "labor_service")
+                {
+                    // 受諾時に確保した共同体労務。食料安全の自動配分が次期開始時に
+                    // trade比率を戻しても、明示契約済みの1回分は勝手に破棄しない。
+                    obligation.fulfilledAmount += obligation.amountPerInstallment;
+                    obligation.remainingInstallments = 0;
+                    obligation.status = "completed";
+                    obligation.lastResultJa =
+                        $"水路労務{obligation.amountPerInstallment}を履行した。";
+                    AdjustCounterpartyTrust(progress, obligation, 4);
+                    UpdateOfferStatus(progress, obligation.contractId);
+                    continue;
+                }
+                if (FactionGood(progress, obligation.debtorFactionId,
+                        obligation.goodId) < obligation.amountPerInstallment)
+                {
+                    DefaultObligation(progress, obligation,
+                        obligation.kind == "loan_repayment"
+                            ? "期限までに返済用の現物を用意できなかった。"
+                            : "期日の朝貢物資を用意できなかった。");
+                    continue;
+                }
+                ConsumeFactionGood(progress, obligation.debtorFactionId,
+                    obligation.goodId, obligation.amountPerInstallment);
+                CreateTransport(definition, progress, obligation.contractId,
+                    obligation.debtorFactionId, obligation.creditorFactionId,
+                    obligation.goodId, obligation.amountPerInstallment, turn,
+                    obligation.id);
+                obligation.status = "in_transit";
+                obligation.lastResultJa =
+                    $"{obligation.goodId} {obligation.amountPerInstallment}を積み出した。";
+                UpdateOfferStatus(progress, obligation.contractId);
+            }
+        }
+
+        static void CompleteObligationDelivery(UrukCampaignProgress progress,
+            UrukTransportState transport, int turn)
+        {
+            var obligation = FindObligation(progress, transport.obligationId);
+            if (obligation == null || obligation.status != "in_transit") return;
+            obligation.fulfilledAmount += transport.deliveredAmount;
+            obligation.remainingInstallments = Math.Max(0,
+                obligation.remainingInstallments - 1);
+            string loss = transport.lostAmount > 0
+                ? $"（輸送中に{transport.lostAmount}損失、共同負担）" : "";
+            if (obligation.remainingInstallments > 0)
+            {
+                obligation.status = "active";
+                obligation.dueTurn = turn + Math.Max(1, obligation.intervalTurns);
+                obligation.lastResultJa =
+                    $"第1回分が到着{loss}。次回期限は第{obligation.dueTurn}期。";
+            }
+            else
+            {
+                obligation.status = "completed";
+                obligation.lastResultJa = "契約物資の到着を確認し、履行完了。" + loss;
+                AdjustCounterpartyTrust(progress, obligation, 6);
+            }
+        }
+
+        static void DefaultObligation(UrukCampaignProgress progress,
+            UrukObligationState obligation, string reasonJa)
+        {
+            obligation.missedPayments++;
+            obligation.status = "defaulted";
+            obligation.lastResultJa = reasonJa;
+            if (obligation.debtorFactionId == HumanFactionId)
+            {
+                progress.stability = Math.Max(0, progress.stability - 5);
+                var creditor = FindFaction(progress, obligation.creditorFactionId);
+                if (creditor != null)
+                    creditor.diplomaticTrust = Math.Max(0,
+                        creditor.diplomaticTrust - 15);
+            }
+            else
+            {
+                var debtor = FindFaction(progress, obligation.debtorFactionId);
+                if (debtor != null) debtor.stability = Math.Max(0,
+                    debtor.stability - 5);
+            }
+            UpdateOfferStatus(progress, obligation.contractId);
+        }
+
         static void CommitAcceptedOffers(HistoricalCampaignDefinition definition,
             UrukCampaignProgress progress, int turn)
         {
             foreach (var offer in progress.tradeOffers)
             {
                 if (offer.status != "accepted_pending") continue;
-                if (FactionGood(progress, offer.proposerFactionId,
-                        offer.offeredGoodId) < offer.offeredAmount ||
-                    FactionGood(progress, offer.receiverFactionId,
-                        offer.requestedGoodId) < offer.requestedAmount)
+                if (!CanCommitOffer(progress, offer))
                 {
                     offer.status = "rejected";
                     continue;
                 }
+
+                if (offer.contractKind == "loan")
+                {
+                    ConsumeFactionGood(progress, offer.proposerFactionId,
+                        offer.offeredGoodId, offer.offeredAmount);
+                    CreateTransport(definition, progress, offer.id,
+                        offer.proposerFactionId, offer.receiverFactionId,
+                        offer.offeredGoodId, offer.offeredAmount, turn);
+                    CreateObligation(progress, offer, "loan_repayment",
+                        offer.receiverFactionId, offer.proposerFactionId,
+                        offer.requestedGoodId, offer.requestedAmount, 1,
+                        turn + Math.Max(1, offer.durationTurns));
+                    offer.status = "departed";
+                    continue;
+                }
+                if (offer.contractKind == "labor")
+                {
+                    ConsumeFactionGood(progress, offer.receiverFactionId,
+                        offer.requestedGoodId, offer.requestedAmount);
+                    CreateTransport(definition, progress, offer.id,
+                        offer.receiverFactionId, offer.proposerFactionId,
+                        offer.requestedGoodId, offer.requestedAmount, turn);
+                    CreateObligation(progress, offer, "labor_service",
+                        offer.proposerFactionId, offer.receiverFactionId,
+                        "labor_service", offer.offeredAmount, 1, turn + 1);
+                    offer.status = "active";
+                    continue;
+                }
+                if (offer.contractKind == "access")
+                {
+                    ConsumeFactionGood(progress, offer.proposerFactionId,
+                        offer.offeredGoodId, offer.offeredAmount);
+                    CreateTransport(definition, progress, offer.id,
+                        offer.proposerFactionId, offer.receiverFactionId,
+                        offer.offeredGoodId, offer.offeredAmount, turn);
+                    AddSegmentUser(progress, offer.targetId,
+                        offer.proposerFactionId);
+                    CreateObligation(progress, offer, "access_right",
+                        offer.receiverFactionId, offer.proposerFactionId, "", 0, 0,
+                        turn + Math.Max(1, offer.durationTurns));
+                    offer.status = "active";
+                    continue;
+                }
+                if (offer.contractKind == "tribute")
+                {
+                    CreateObligation(progress, offer, "tribute",
+                        offer.proposerFactionId, offer.receiverFactionId,
+                        offer.offeredGoodId, offer.offeredAmount,
+                        Math.Max(1, offer.installmentCount), turn + 1);
+                    offer.status = "active";
+                    continue;
+                }
+
                 ConsumeFactionGood(progress, offer.proposerFactionId,
                     offer.offeredGoodId, offer.offeredAmount);
                 ConsumeFactionGood(progress, offer.receiverFactionId,
@@ -1138,19 +1604,23 @@ namespace HexCiv.Core
 
         static void CreateTransport(HistoricalCampaignDefinition definition,
             UrukCampaignProgress progress, string contractId, string origin,
-            string destination, string goodId, int amount, int turn)
+            string destination, string goodId, int amount, int turn,
+            string obligationId = null)
         {
             if (amount <= 0) return;
             var from = FindFaction(progress, origin);
             var to = FindFaction(progress, destination);
             string id = NextId(progress, "transport");
             int risk = 8 + StableHash(definition.seed, id, turn) % 13;
+            if (HasActiveAccessRight(progress, origin, destination))
+                risk = Math.Max(2, risk - 6);
             int lost = StableHash(definition.seed + 17, id, turn) % 100 < risk
                 ? Math.Min(1, amount) : 0;
             Append(ref progress.transports, new UrukTransportState
             {
                 id = id,
                 contractId = contractId,
+                obligationId = obligationId,
                 originFactionId = origin,
                 destinationFactionId = destination,
                 goodId = goodId,
@@ -1183,10 +1653,9 @@ namespace HexCiv.Core
                 transport.deliveredAmount = delivered;
                 transport.remainingAmount = 0;
                 transport.status = "arrived";
-                foreach (var offer in progress.tradeOffers)
-                    if (offer.id == transport.contractId &&
-                        ContractArrived(progress, offer.id))
-                        offer.status = "completed";
+                if (!string.IsNullOrWhiteSpace(transport.obligationId))
+                    CompleteObligationDelivery(progress, transport, turn);
+                UpdateOfferStatus(progress, transport.contractId);
             }
         }
 
@@ -1258,6 +1727,114 @@ namespace HexCiv.Core
                 group.arrivedPeople = group.departedPeople;
                 group.status = "settled";
             }
+        }
+
+        static bool HasLiveContractBetween(UrukCampaignProgress progress,
+            string kind, string factionId)
+        {
+            foreach (var offer in progress.tradeOffers)
+                if (offer.contractKind == kind &&
+                    (offer.proposerFactionId == factionId ||
+                     offer.receiverFactionId == factionId) &&
+                    (offer.status == "accepted_pending" ||
+                     offer.status == "departed" || offer.status == "active"))
+                    return true;
+            return false;
+        }
+
+        static UrukObligationState FindObligation(UrukCampaignProgress progress,
+            string id)
+        {
+            if (string.IsNullOrWhiteSpace(id)) return null;
+            foreach (var obligation in progress.obligations)
+                if (obligation.id == id) return obligation;
+            return null;
+        }
+
+        static int LaborCapacity(UrukCampaignProgress progress, string factionId)
+        {
+            return factionId == HumanFactionId
+                ? progress.labor.trade
+                : FindFaction(progress, factionId)?.labor?.trade ?? 0;
+        }
+
+        static void AddSegmentUser(UrukCampaignProgress progress, string segmentId,
+            string factionId)
+        {
+            var segment = FindSegment(progress, segmentId);
+            if (segment == null) return;
+            var users = new List<string>(segment.userFactionIds ??
+                Array.Empty<string>());
+            if (!users.Contains(factionId)) users.Add(factionId);
+            segment.userFactionIds = users.ToArray();
+        }
+
+        static void RemoveSegmentUser(UrukCampaignProgress progress,
+            string segmentId, string factionId)
+        {
+            var segment = FindSegment(progress, segmentId);
+            if (segment == null) return;
+            var users = new List<string>();
+            foreach (string user in segment.userFactionIds ?? Array.Empty<string>())
+                if (user != factionId) users.Add(user);
+            segment.userFactionIds = users.ToArray();
+        }
+
+        static bool HasActiveAccessRight(UrukCampaignProgress progress,
+            string origin, string destination)
+        {
+            foreach (var obligation in progress.obligations)
+            {
+                if (obligation.kind != "access_right" ||
+                    obligation.status != "active") continue;
+                if ((obligation.creditorFactionId == origin &&
+                     obligation.debtorFactionId == destination) ||
+                    (obligation.creditorFactionId == destination &&
+                     obligation.debtorFactionId == origin))
+                    return true;
+            }
+            return false;
+        }
+
+        static void AdjustCounterpartyTrust(UrukCampaignProgress progress,
+            UrukObligationState obligation, int amount)
+        {
+            string other = obligation.debtorFactionId == HumanFactionId
+                ? obligation.creditorFactionId :
+                obligation.creditorFactionId == HumanFactionId
+                    ? obligation.debtorFactionId : null;
+            var faction = FindFaction(progress, other);
+            if (faction != null)
+                faction.diplomaticTrust = Math.Clamp(
+                    faction.diplomaticTrust + amount, 0, 100);
+        }
+
+        static void UpdateOfferStatus(UrukCampaignProgress progress,
+            string contractId)
+        {
+            UrukTradeOfferState offer = null;
+            foreach (var candidate in progress.tradeOffers)
+                if (candidate.id == contractId)
+                {
+                    offer = candidate;
+                    break;
+                }
+            if (offer == null) return;
+            bool hasObligation = false;
+            bool active = false;
+            bool defaulted = false;
+            foreach (var obligation in progress.obligations)
+            {
+                if (obligation.contractId != contractId) continue;
+                hasObligation = true;
+                if (obligation.status == "active" ||
+                    obligation.status == "in_transit") active = true;
+                if (obligation.status == "defaulted") defaulted = true;
+            }
+            if (defaulted) offer.status = "defaulted";
+            else if (active) offer.status = "active";
+            else if (hasObligation || ContractArrived(progress, contractId))
+                offer.status = "completed";
         }
 
         static bool HasOffer(UrukCampaignProgress progress, string id)

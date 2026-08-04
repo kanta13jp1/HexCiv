@@ -28,7 +28,7 @@ namespace HexCiv.Core
     [Serializable]
     public sealed class UrukCampaignProgress
     {
-        public int version = 3;
+        public int version = 4;
         public int actualPopulation;
         public HistoricalPopulationRoles roles;
         public HistoricalPopulationStatuses statuses;
@@ -46,6 +46,7 @@ namespace HexCiv.Core
         public UrukConstructionProjectState[] constructionProjects;
         public UrukTradeOfferState[] tradeOffers;
         public UrukTransportState[] transports;
+        public UrukObligationState[] obligations;
         public UrukMigrationGroupState[] migrationGroups;
         public UrukWaterDisputeState[] waterDisputes;
         public int nextRegionalId = 1;
@@ -133,7 +134,7 @@ namespace HexCiv.Core
             var starting = definition.startingScenario;
             var progress = new UrukCampaignProgress
             {
-                version = 3,
+                version = 4,
                 actualPopulation = starting.actualPopulation,
                 roles = CopyRoles(starting.roles),
                 statuses = CopyStatuses(starting.statuses),
@@ -160,7 +161,7 @@ namespace HexCiv.Core
         }
 
         /// <summary>
-        /// 第2基盤（progress version 1）のセーブを、推定値を明示した第3段階へ補完する。
+        /// 旧セーブを、推定値を明示した現行地域運営段階へ補完する。
         /// 旧JSONに存在しない値だけを設定し、既存人口・備蓄・施設進捗は保持する。
         /// </summary>
         public static void MigrateProgress(HistoricalCampaignDefinition definition,
@@ -187,6 +188,11 @@ namespace HexCiv.Core
             }
             if (progress.version == 1 || progress.version == 2)
                 progress.version = 3;
+            if (progress.version == 3)
+            {
+                progress.obligations = Array.Empty<UrukObligationState>();
+                progress.version = 4;
+            }
             UrukSubsistenceSystem.EnsureDefaults(progress);
             UrukRegionalSystem.EnsureInitialized(definition, progress);
         }
@@ -196,7 +202,7 @@ namespace HexCiv.Core
         {
             if (definition == null) throw new ArgumentNullException(nameof(definition));
             if (progress == null) throw new ArgumentNullException(nameof(progress));
-            if (progress.version != 3)
+            if (progress.version != 4)
                 throw new InvalidOperationException("ウルク進捗versionが不正");
             if (progress.actualPopulation < 0)
                 throw new InvalidOperationException("実人口が負数");

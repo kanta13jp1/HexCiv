@@ -19,6 +19,7 @@ public static class UrukRegionalSimulationSmokeTest
                 HistoricalCampaignRepository.Uruk4000Id);
             ValidateInitialLedgers(definition);
             ValidateBrokenCanal(definition);
+            ValidateContractSuite(definition);
             ValidatePlayerSequence(definition);
             ValidateThreeSeedDeterminism();
             UnityEngine.Debug.Log("URUK REGIONAL SIMULATION SMOKE OK");
@@ -37,7 +38,8 @@ public static class UrukRegionalSimulationSmokeTest
     {
         var session = HistoricalCampaignFactory.Build(definition);
         var progress = session.Progress;
-        Require(progress.version == 3, "進捗versionが3ではない");
+        Require(progress.version == 4, "進捗versionが4ではない");
+        Require(progress.obligations != null, "契約債務台帳が初期化されていない");
         Require(progress.regionalFactions.Length == 8, "8勢力台帳がない");
         Require(progress.farmPlots.Length == definition.farmPlots.Length,
             "農地定義が状態へ反映されていない");
@@ -173,6 +175,88 @@ public static class UrukRegionalSimulationSmokeTest
         ValidateConservation(definition, loaded.Progress);
     }
 
+    static void ValidateContractSuite(HistoricalCampaignDefinition definition)
+    {
+        var session = HistoricalCampaignFactory.Build(definition);
+        var progress = session.Progress;
+        SetGood(progress, "uruk_community", "barley", 20);
+        SetGood(progress, "uruk_community", "reeds", 8);
+        SetGood(progress, "eridu_community", "barley", 20);
+        progress.labor.food = 50;
+        progress.labor.trade = 10;
+
+        Require(UrukCampaignSystem.TryApplyAction(session,
+            UrukRegionalSystem.RequestLoanAction, out _), "貸付契約の作成に失敗");
+        Require(UrukCampaignSystem.TryApplyAction(session,
+            UrukRegionalSystem.OfferLaborAction, out _), "労務契約の作成に失敗");
+        Require(UrukCampaignSystem.TryApplyAction(session,
+            UrukRegionalSystem.AcquireAccessAction, out _), "通行権契約の作成に失敗");
+        Require(UrukCampaignSystem.TryApplyAction(session,
+            UrukRegionalSystem.OfferTributeAction, out _), "朝貢契約の作成に失敗");
+
+        Advance(session, 1);
+        Require(progress.obligations.Length == 4,
+            "4種の契約債務が生成されていない");
+        Require(HasSegmentUser(progress, "eridu_wetland_intake",
+            "uruk_community"), "契約後も水路通行権が付与されていない");
+
+        for (int turn = 2; turn <= 12; turn++)
+        {
+            if (UrukCampaignSystem.GoodAmount(progress, "barley") < 8)
+                SetGood(progress, "uruk_community", "barley", 20);
+            Advance(session, turn);
+            ValidateConservation(definition, progress);
+        }
+
+        Require(Obligation(progress, "loan_repayment").status == "completed",
+            "貸付の現物返済が完了していない");
+        Require(Obligation(progress, "labor_service").status == "completed",
+            "労務契約が完了していない");
+        Require(Obligation(progress, "access_right").status == "expired",
+            "通行権が期限満了していない");
+        Require(!HasSegmentUser(progress, "eridu_wetland_intake",
+            "uruk_community"), "期限後も水路通行権が残っている");
+        Require(Obligation(progress, "tribute").status == "completed" &&
+            Obligation(progress, "tribute").remainingInstallments == 0,
+            "3回の朝貢が完了していない");
+
+        string save = HistoricalCampaignSave.Serialize(session);
+        var loaded = HistoricalCampaignSave.Deserialize(save,
+            id => id == definition.id ? definition : null);
+        Require(JsonUtility.ToJson(progress) == JsonUtility.ToJson(loaded.Progress),
+            "契約台帳のセーブ往復が一致しない");
+
+        var defaultSession = HistoricalCampaignFactory.Build(definition);
+        SetGood(defaultSession.Progress, "uruk_community", "barley", 1);
+        Require(UrukCampaignSystem.TryApplyAction(defaultSession,
+            UrukRegionalSystem.OfferTributeAction, out _), "不履行試験の契約作成に失敗");
+        Advance(defaultSession, 1);
+        SetGood(defaultSession.Progress, "uruk_community", "barley", 0);
+        Advance(defaultSession, 2);
+        Require(Obligation(defaultSession.Progress, "tribute").status == "defaulted",
+            "物資不足でも朝貢が不履行にならない");
+
+        var migrated = HistoricalCampaignFactory.Build(definition).Progress;
+        migrated.version = 3;
+        migrated.obligations = null;
+        UrukCampaignSystem.MigrateProgress(definition, migrated);
+        Require(migrated.version == 4 && migrated.obligations != null,
+            "version 3から契約台帳を補完できない");
+
+        var aiSession = HistoricalCampaignFactory.Build(definition);
+        SetGood(aiSession.Progress, "lagash_region", "barley", 0);
+        SetGood(aiSession.Progress, "lagash_region", "emmer_wheat", 0);
+        SetGood(aiSession.Progress, "lagash_region", "fish", 0);
+        foreach (var farm in aiSession.Progress.farmPlots)
+            if (farm.ownerFactionId == "lagash_region") farm.crop = "fallow";
+        Advance(aiSession, 1);
+        bool aiLoan = false;
+        foreach (var offer in aiSession.Progress.tradeOffers)
+            if (offer.contractKind == "loan" &&
+                offer.receiverFactionId == "lagash_region") aiLoan = true;
+        Require(aiLoan, "食料不足AIが余剰勢力へ現物貸付を求めない");
+    }
+
     static void ValidateThreeSeedDeterminism()
     {
         int[] seeds = { 4107, 5209, 6401 };
@@ -248,6 +332,43 @@ public static class UrukRegionalSimulationSmokeTest
         foreach (var farm in progress.farmPlots)
             if (farm.id == id) return farm;
         throw new Exception("農地が見つからない: " + id);
+    }
+
+    static UrukObligationState Obligation(UrukCampaignProgress progress,
+        string kind)
+    {
+        foreach (var obligation in progress.obligations)
+            if (obligation.kind == kind) return obligation;
+        throw new Exception("契約債務が見つからない: " + kind);
+    }
+
+    static bool HasSegmentUser(UrukCampaignProgress progress, string segmentId,
+        string factionId)
+    {
+        var segment = Segment(progress, segmentId);
+        foreach (string user in segment.userFactionIds)
+            if (user == factionId) return true;
+        return false;
+    }
+
+    static void SetGood(UrukCampaignProgress progress, string factionId,
+        string goodId, int amount)
+    {
+        HistoricalGoodAmount[] goods;
+        if (factionId == "uruk_community") goods = progress.stockpiles;
+        else
+        {
+            var faction = UrukRegionalSystem.FindFaction(progress, factionId);
+            if (faction == null) throw new Exception("勢力が見つからない: " + factionId);
+            goods = faction.stockpiles;
+        }
+        foreach (var good in goods)
+            if (good.id == goodId)
+            {
+                good.amount = amount;
+                return;
+            }
+        throw new Exception("物資が見つからない: " + goodId);
     }
 
     static void Require(bool condition, string message)
