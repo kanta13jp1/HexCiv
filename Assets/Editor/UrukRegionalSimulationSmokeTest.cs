@@ -21,6 +21,7 @@ public static class UrukRegionalSimulationSmokeTest
             ValidateBrokenCanal(definition);
             ValidateContractSuite(definition);
             ValidateWaterDisputeChoices(definition);
+            ValidateMultipleWaterArbitration(definition);
             ValidatePlayerSequence(definition);
             ValidateThreeSeedDeterminism();
             UnityEngine.Debug.Log("URUK REGIONAL SIMULATION SMOKE OK");
@@ -39,7 +40,7 @@ public static class UrukRegionalSimulationSmokeTest
     {
         var session = HistoricalCampaignFactory.Build(definition);
         var progress = session.Progress;
-        Require(progress.version == 7, "進捗versionが7ではない");
+        Require(progress.version == 8, "進捗versionが8ではない");
         Require(progress.obligations != null, "契約債務台帳が初期化されていない");
         Require(progress.diplomaticRecords != null &&
             progress.diplomaticReputation == 50,
@@ -283,7 +284,7 @@ public static class UrukRegionalSimulationSmokeTest
             },
         };
         UrukCampaignSystem.MigrateProgress(definition, migrated);
-        Require(migrated.version == 7 &&
+        Require(migrated.version == 8 &&
             migrated.waterDisputes[0].claimantFarmId ==
                 "lagash_hinterland_farm" &&
             migrated.waterDisputes[0].resolutionKind == "joint_maintenance" &&
@@ -306,17 +307,47 @@ public static class UrukRegionalSimulationSmokeTest
             },
         };
         UrukCampaignSystem.MigrateProgress(definition, v6Migration);
-        Require(v6Migration.version == 7 &&
+        Require(v6Migration.version == 8 &&
             v6Migration.waterDisputes[0].retaliationJa == "" &&
             v6Migration.waterDisputes[0].renegotiationCount == 0,
             "version 6から報復・再交渉状態を補完できない");
+
+        var v7Migration = HistoricalCampaignFactory.Build(definition).Progress;
+        v7Migration.version = 7;
+        v7Migration.selectedWaterDisputeId = null;
+        v7Migration.waterDisputes = new[]
+        {
+            new UrukWaterDisputeState
+            {
+                id = "v7_dispute",
+                claimantFactionId = "lagash_region",
+                respondentFactionId = "uruk_community",
+                claimantFarmId = "lagash_hinterland_farm",
+                claimantSegmentId = "lagash_tigris_branch",
+                segmentId = "uruk_intake_segment",
+                status = "open",
+                confidence = "inferred",
+                retaliationJa = "",
+            },
+        };
+        UrukCampaignSystem.MigrateProgress(definition, v7Migration);
+        Require(v7Migration.version == 8 &&
+            v7Migration.waterDisputes[0].basinId ==
+                "lower_alluvial_wetland_network" &&
+            v7Migration.waterDisputes[0].upstreamFactionId ==
+                "uruk_community" &&
+            v7Migration.waterDisputes[0].downstreamFactionId ==
+                "lagash_region" &&
+            v7Migration.waterDisputes[0].arbitratorFactionId == "" &&
+            v7Migration.selectedWaterDisputeId == "v7_dispute",
+            "version 7から水系関係・仲裁・選択案件を補完できない");
 
         var chainedMigration = HistoricalCampaignFactory.Build(definition).Progress;
         chainedMigration.version = 3;
         chainedMigration.obligations = null;
         chainedMigration.diplomaticRecords = null;
         UrukCampaignSystem.MigrateProgress(definition, chainedMigration);
-        Require(chainedMigration.version == 7 &&
+        Require(chainedMigration.version == 8 &&
             chainedMigration.obligations != null &&
             chainedMigration.diplomaticRecords != null,
             "version 3から現行versionへ連続移行できない");
@@ -492,6 +523,81 @@ public static class UrukRegionalSimulationSmokeTest
                 rejectSession.Progress, "uruk_community", "lagash_region") == 0 &&
             HasDiplomaticOutcome(rejectSession.Progress, "water_renegotiated"),
             "再交渉が現物移転・報復緩和・再選択・評判へ反映されない");
+    }
+
+    static void ValidateMultipleWaterArbitration(
+        HistoricalCampaignDefinition definition)
+    {
+        var session = HistoricalCampaignFactory.Build(definition);
+        var progress = session.Progress;
+        var intake = Segment(progress, "uruk_intake_segment");
+        var branch = Segment(progress, "uruk_north_branch");
+        intake.condition = 80;
+        branch.completed = true;
+        branch.condition = 80;
+        Segment(progress, "lagash_tigris_branch").condition = 0;
+        Segment(progress, "eridu_wetland_intake").condition = 0;
+        Segment(progress, "ur_marsh_branch").condition = 0;
+
+        Advance(session, 12);
+        Require(UrukRegionalSystem.OpenWaterDisputeCount(progress) == 3,
+            "異なる地理条件から複数の水利要求が同時生成されない");
+        var first = UrukRegionalSystem.SelectedOpenDispute(progress);
+        Require(first != null && first.upstreamFactionId == "uruk_community" &&
+            first.downstreamFactionId == first.claimantFactionId &&
+            first.basinId == "lower_alluvial_wetland_network" &&
+            first.confidence == "inferred",
+            "上下流関係・推定水系・確度が水利案件へ保存されていない");
+        Require(UrukCampaignSystem.TryApplyAction(session,
+            UrukRegionalSystem.NextWaterDisputeAction, out _),
+            "複数水利案件の表示切替に失敗");
+        Require(UrukRegionalSystem.SelectedOpenDispute(progress)?.id != first.id,
+            "水利案件を切り替えても選択が変わらない");
+
+        SetGood(progress, "uruk_community", "barley", 5);
+        int nippurBarley = FactionGood(progress, "nippur_community", "barley");
+        Require(UrukCampaignSystem.TryApplyAction(session,
+            UrukRegionalSystem.ArbitrateWaterDisputesAction, out _),
+            "競合する水利要求の第三者仲裁に失敗");
+        Require(UrukRegionalSystem.OpenWaterDisputeCount(progress) == 0 &&
+            progress.selectedWaterDisputeId == "" &&
+            UrukCampaignSystem.GoodAmount(progress, "barley") == 4 &&
+            FactionGood(progress, "nippur_community", "barley") ==
+                nippurBarley + 1 && progress.diplomaticReputation == 53,
+            "仲裁が案件選択・現物共同食・外交評判へ反映されない");
+        foreach (var dispute in progress.waterDisputes)
+            Require(dispute.resolutionKind == "arbitrated_share" &&
+                dispute.status == "shared" &&
+                dispute.arbitratorFactionId == "nippur_community" &&
+                dispute.arbitrationTurn == 13 &&
+                !string.IsNullOrWhiteSpace(dispute.arbitrationReasonJa) &&
+                dispute.waterSharePerTurn == 1,
+                dispute.id + "に第三者裁定と期限付き分水が保存されない");
+        Require(CountDiplomaticOutcome(progress,
+                "water_arbitration_award") == 3,
+            "各請求側への仲裁裁定が外交履歴へ残らない");
+
+        Advance(session, 13);
+        var nippur = UrukRegionalSystem.FindFaction(progress, "nippur_community");
+        Require(nippur.currentGoalJa == "複数水利要求の仲裁",
+            "仲介勢力AIが仲裁の履行を目的として保持しない");
+        Advance(session, 14);
+        foreach (var dispute in progress.waterDisputes)
+            Require(dispute.status == "completed" && dispute.agreementSettled &&
+                dispute.waterShareExpectedTotal > 0 &&
+                dispute.waterSharedTotal == dispute.waterShareExpectedTotal,
+                dispute.id + "の仲裁分水が物理水量で履行されない");
+        Require(CountDiplomaticOutcome(progress,
+                "water_arbitration_completed") == 3 &&
+            progress.diplomaticReputation == 56,
+            "仲裁分水の完了と長期評判が一致しない");
+        ValidateConservation(definition, progress);
+
+        string save = HistoricalCampaignSave.Serialize(session);
+        var loaded = HistoricalCampaignSave.Deserialize(save,
+            id => id == definition.id ? definition : null);
+        Require(JsonUtility.ToJson(progress) == JsonUtility.ToJson(loaded.Progress),
+            "複数水利案件・仲裁状態のセーブ往復が一致しない");
     }
 
     static HistoricalCampaignSession PreparedWaterDispute(

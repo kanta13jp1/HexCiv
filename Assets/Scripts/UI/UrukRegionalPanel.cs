@@ -26,6 +26,8 @@ namespace HexCiv.UI
         Button rejectWaterButton;
         Button breachWaterButton;
         Button renegotiateWaterButton;
+        Button nextWaterDisputeButton;
+        Button arbitrateWaterButton;
         Button acceptMigrationButton;
         Button rejectMigrationButton;
         readonly Button[] overlayButtons = new Button[4];
@@ -51,7 +53,9 @@ namespace HexCiv.UI
             var obligation = UrukRegionalSystem.FirstHumanObligation(progress);
             var latestDiplomacy =
                 UrukRegionalSystem.LatestHumanDiplomaticRecord(progress);
-            var openDispute = UrukRegionalSystem.FirstOpenDispute(progress);
+            var openDispute = UrukRegionalSystem.SelectedOpenDispute(progress);
+            int openDisputeCount =
+                UrukRegionalSystem.OpenWaterDisputeCount(progress);
             var activeAgreement =
                 UrukRegionalSystem.FirstActiveWaterAgreement(progress);
             var recoverableDispute =
@@ -82,12 +86,19 @@ namespace HexCiv.UI
                   latestDiplomacy.summaryJa;
             string disputeText = dispute == null
                 ? "水利紛争なし"
-                : $"水利{WaterStatusJa(dispute.status)}: " +
-                  $"{FactionName(progress, dispute.claimantFactionId)}　" +
+                : $"水利{WaterStatusJa(dispute.status)}" +
+                   (openDispute != null
+                       ? $"（案件{OpenDisputeOrdinal(progress, dispute)}/" +
+                         $"{openDisputeCount}）" : "") + ": " +
+                   $"{FactionName(progress, dispute.claimantFactionId)}　" +
                    $"不足{dispute.claimantWaterDeficit}／相手水路" +
                    $"{dispute.claimantCanalCondition}%／ウルク流量" +
                    $"{dispute.respondentFlowAtClaim}　" +
+                   $"関係:{WaterRelationJa(progress, dispute)}　" +
                    (openDispute != null ? dispute.causeJa : dispute.resultJa) +
+                   (string.IsNullOrWhiteSpace(dispute.arbitratorFactionId)
+                       ? "" : "　仲裁:" +
+                         FactionName(progress, dispute.arbitratorFactionId)) +
                    (string.IsNullOrWhiteSpace(dispute.retaliationJa)
                        ? "" : "　" + dispute.retaliationJa);
             statusText.text =
@@ -119,6 +130,10 @@ namespace HexCiv.UI
                 recoverableDispute != null &&
                 UrukCampaignSystem.GoodAmount(progress, "barley") >= 1 &&
                 UrukCampaignSystem.GoodAmount(progress, "reeds") >= 1;
+            nextWaterDisputeButton.interactable = enabled && openDisputeCount > 1;
+            arbitrateWaterButton.interactable = enabled && openDisputeCount > 1 &&
+                progress.diplomaticReputation >= 25 &&
+                UrukCampaignSystem.GoodAmount(progress, "barley") >= 1;
             acceptMigrationButton.interactable = enabled && migration != null;
             rejectMigrationButton.interactable = enabled && migration != null;
             for (int i = 0; i < overlayButtons.Length; i++)
@@ -221,12 +236,12 @@ namespace HexCiv.UI
                 () => Apply(UrukRegionalSystem.AcquireAccessAction));
             CreateButton(body.transform, "Tribute", "朝貢を約す", 330f, 96f, 104f,
                 () => Apply(UrukRegionalSystem.OfferTributeAction));
-            var contractNote = UIStyle.CreateText(body.transform, "ContractNote",
-                "貨幣なし：現物・労務・期限・輸送損失を契約ごとに記録", 10,
-                TextAnchor.MiddleLeft, UIStyle.TextDim);
-            UIStyle.SetRect(contractNote.gameObject, new Vector2(0f, 0f),
-                new Vector2(0f, 0f), new Vector2(0f, 0f),
-                new Vector2(444f, 96f), new Vector2(214f, 36f));
+            nextWaterDisputeButton = CreateButton(body.transform,
+                "NextWaterDispute", "水利案件切替", 444f, 96f, 106f,
+                () => Apply(UrukRegionalSystem.NextWaterDisputeAction));
+            arbitrateWaterButton = CreateButton(body.transform,
+                "ArbitrateWater", "第三者仲裁", 556f, 96f, 102f,
+                () => Apply(UrukRegionalSystem.ArbitrateWaterDisputesAction));
 
             acceptMigrationButton = CreateButton(body.transform, "AcceptMigration",
                 "移住を受入", 12f, 44f, 104f,
@@ -418,9 +433,35 @@ namespace HexCiv.UI
             "water_share_defaulted" => "分水不履行",
             "water_agreement_breached" => "水利合意破約",
             "water_renegotiated" => "水利再交渉",
+            "water_arbitration_award" => "第三者仲裁",
+            "water_arbitration_completed" => "仲裁分水履行",
+            "water_arbitration_defaulted" => "仲裁分水不履行",
             "rejected" => "要求拒否",
             _ => outcome,
         };
+
+        static int OpenDisputeOrdinal(UrukCampaignProgress progress,
+            UrukWaterDisputeState selected)
+        {
+            int ordinal = 0;
+            foreach (var dispute in progress.waterDisputes)
+            {
+                if (dispute == null || dispute.respondentFactionId !=
+                        "uruk_community" || dispute.status != "open") continue;
+                ordinal++;
+                if (dispute == selected) return ordinal;
+            }
+            return Math.Max(1, ordinal);
+        }
+
+        static string WaterRelationJa(UrukCampaignProgress progress,
+            UrukWaterDisputeState dispute)
+        {
+            if (dispute == null) return "不明";
+            return $"{FactionName(progress, dispute.upstreamFactionId)}上流→" +
+                $"{FactionName(progress, dispute.downstreamFactionId)}下流" +
+                $"（{ConfidenceJa(dispute.confidence)}）";
+        }
 
         static string WaterStatusJa(string status) => status switch
         {

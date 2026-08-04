@@ -26,6 +26,37 @@ CodexとClaude Codeは、以後この `HexCiv` プロジェクトだけを更新
 
 ## 最新状況
 
+### ✅ 2026-08-05 Codex: ウルク第4F・複数水利要求／第三者仲裁と更新素材
+
+**ゲーム開発**
+
+- ラガシュ地域、エリドゥ、ウルについて、農地不足または水路劣化と同期間のウルク取水を個別観測し、最大3件の水利要求を同時に保持するよう拡張した。固定ID・発生順・選択中案件を保存し、地域UIから案件を切り替えて個別判断できる。
+- 各案件へ推定共有水系、上流側、下流側を追加した。個別河道・政治的水利権の確定再現ではないため、表示と保存確度は `inferred`。既存version 7案件は応答側を上流、請求側を下流として補完する。
+- 2件以上の要求が競合すると、ニップール共同体へ第三者仲裁を依頼できる。共同食の大麦1を実備蓄間で移し、各請求側へ2期間・毎期1水量を裁定する。実水量の履行／不履行、信頼、評判、報復、外交履歴を通常分水と同じ経路で処理する。
+- 期間中の請求側AIは仲裁分水の履行監視、ニップールAIは複数要求の仲裁を目的として保持する。地域UIへ案件番号、推定上下流関係、仲裁者、「水利案件切替」「第三者仲裁」を追加した。
+- 史実キャンペーン進捗をversion 8へ更新。version 7→8とversion 1からの連鎖移行、選択案件、仲裁状態のセーブ往復を追加検証した。Core純度と決定性を維持する。
+
+**販売促進**
+
+- `UrukRegionalScreenshot.CaptureArbitrationCandidate` を追加し、実キャンペーン状態から案件3件と仲裁ボタンを含む760×446 PNGを再生成可能にした。生成画像は `Logs/marketing/uruk_stage4f_water_arbitration.png`、69,807 bytes、SHA256 `d4854788de2c4cc041614b3e40ab1933902bc1cdab806f6c5b79403e8910fb7f`。目視で文字、案件番号、ボタン、欠けを確認した。
+- Stage 4FをH10の「開始前に完成した更新候補」へ登録した。開始ゲート前の製品準備であり、H10第1週、公開投稿、訪問、売上には数えていない。同じ機能を開始後に二重で新機能告知しない。
+- `MARKETING_HANDOFF.md` へ最新2ZIPと更新素材の再現方法を同期した。Claudeは販売ページ側、Codexはゲーム／配布物、Obsidianは分母・分子・期間・判定の正本という役割を維持する。
+
+**検証（Unity 6000.3.20f1）**
+
+- `UrukRegionalSimulationSmokeTest.Run`: `URUK REGIONAL SIMULATION SMOKE OK`。3件同時発生、案件切替、推定上下流、仲裁条件、大麦移転、3件の2期間分水、AI目的、履行履歴、version 7→8、セーブ往復、水量・物資・労働保存、3 seed決定性を確認。平均 `0.10 ms/turn`。
+- `UrukCampaignVerticalSliceSmokeTest.Run`: `URUK CAMPAIGN VERTICAL SLICE SMOKE OK`。
+- `SmokeTest.Run`: `SMOKE OK`。`Logs/g4_regression.log` と抽出可能な `[Smoke]` / `SMOKE` 全11行が完全一致。
+- `DemoModeSmokeTest.Run`: `DEMO SMOKE OK`。30ターン制限と製品版セーブ互換を確認。
+- 製品版 `BUILD OK: 98,066,677 bytes`、Demo `DEMO BUILD OK: 98,066,677 bytes`。各12秒実起動し、Unity 6000.3.20f1・重大例外0件。
+- 製品ZIP: 37,587,137 bytes、SHA256 `266364afab666214624b1d84042b87926558bdce5a1b41cc19fe45009fcabf53`。
+- Demo ZIP: 37,589,834 bytes、SHA256 `c08c29436153d934e1bc40a8b4ac93a777db28affe28ea953dfd20dd7701181e`。両manifest一致、各README／LICENSE／Assembly-CSharp.dll／EXEを1件確認し、クラッシュハンドラ0件。
+
+**次の担当**
+
+- Claude: ユーザー承認後に商品画像PR #4408の生成リリースノートだけを修正し、CI再実行・マージ・P2開始日を返す。itch.ioはユーザーがCloudflare本人確認とログインを完了した後、非公開ページへ最新2ZIPと確認済み画像を登録する。
+- Codex: 管理権競合を土地紛争へ接続し、複数水利案件の個別選択を破約・再交渉にも拡張する。P1/P2/H4/H7/itch.ioの開始ゲートを越えるまではH10を開始せず、外部投稿・価格変更・有料広告を行わない。
+
 ### ✅ 2026-08-05 Codex: ウルク第4E・共同管理／破約／再交渉とH10更新実験
 
 **ゲーム開発**
