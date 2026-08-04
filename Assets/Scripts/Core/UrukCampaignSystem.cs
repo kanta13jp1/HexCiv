@@ -28,7 +28,7 @@ namespace HexCiv.Core
     [Serializable]
     public sealed class UrukCampaignProgress
     {
-        public int version = 4;
+        public int version = 5;
         public int actualPopulation;
         public HistoricalPopulationRoles roles;
         public HistoricalPopulationStatuses statuses;
@@ -47,8 +47,10 @@ namespace HexCiv.Core
         public UrukTradeOfferState[] tradeOffers;
         public UrukTransportState[] transports;
         public UrukObligationState[] obligations;
+        public UrukDiplomaticRecordState[] diplomaticRecords;
         public UrukMigrationGroupState[] migrationGroups;
         public UrukWaterDisputeState[] waterDisputes;
+        public int diplomaticReputation;
         public int nextRegionalId = 1;
         public int regionalRevision;
         public int regionalOverlayMode;
@@ -134,7 +136,7 @@ namespace HexCiv.Core
             var starting = definition.startingScenario;
             var progress = new UrukCampaignProgress
             {
-                version = 4,
+                version = 5,
                 actualPopulation = starting.actualPopulation,
                 roles = CopyRoles(starting.roles),
                 statuses = CopyStatuses(starting.statuses),
@@ -152,6 +154,7 @@ namespace HexCiv.Core
                 tradeAutomation = starting.tradeAutomation,
                 currentFloodTrend = (int)UrukFloodTrend.Stable,
                 recordKnowledgeElements = 3,
+                diplomaticReputation = 50,
                 lastReportJa = "小集落ウルク。食料備蓄はわずかで、運河は堆積により十分に機能していない。",
             };
             UrukSubsistenceSystem.EnsureDefaults(progress);
@@ -193,6 +196,13 @@ namespace HexCiv.Core
                 progress.obligations = Array.Empty<UrukObligationState>();
                 progress.version = 4;
             }
+            if (progress.version == 4)
+            {
+                progress.diplomaticRecords =
+                    Array.Empty<UrukDiplomaticRecordState>();
+                progress.diplomaticReputation = 50;
+                progress.version = 5;
+            }
             UrukSubsistenceSystem.EnsureDefaults(progress);
             UrukRegionalSystem.EnsureInitialized(definition, progress);
         }
@@ -202,7 +212,7 @@ namespace HexCiv.Core
         {
             if (definition == null) throw new ArgumentNullException(nameof(definition));
             if (progress == null) throw new ArgumentNullException(nameof(progress));
-            if (progress.version != 4)
+            if (progress.version != 5)
                 throw new InvalidOperationException("ウルク進捗versionが不正");
             if (progress.actualPopulation < 0)
                 throw new InvalidOperationException("実人口が負数");

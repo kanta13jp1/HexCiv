@@ -38,8 +38,11 @@ public static class UrukRegionalSimulationSmokeTest
     {
         var session = HistoricalCampaignFactory.Build(definition);
         var progress = session.Progress;
-        Require(progress.version == 4, "進捗versionが4ではない");
+        Require(progress.version == 5, "進捗versionが5ではない");
         Require(progress.obligations != null, "契約債務台帳が初期化されていない");
+        Require(progress.diplomaticRecords != null &&
+            progress.diplomaticReputation == 50,
+            "外交履歴または初期評判が初期化されていない");
         Require(progress.regionalFactions.Length == 8, "8勢力台帳がない");
         Require(progress.farmPlots.Length == definition.farmPlots.Length,
             "農地定義が状態へ反映されていない");
@@ -153,8 +156,12 @@ public static class UrukRegionalSimulationSmokeTest
             "第8期の水利紛争が生成されていない");
         Require(UrukRegionalSystem.FirstWaitingMigration(progress) != null,
             "第9期の移住集団が生成されていない");
+        int reputationBeforeNegotiation = progress.diplomaticReputation;
         Require(UrukCampaignSystem.TryApplyAction(session,
             UrukRegionalSystem.NegotiateWaterAction, out _), "水利交渉に失敗");
+        Require(progress.diplomaticReputation == reputationBeforeNegotiation + 3 &&
+            HasDiplomaticOutcome(progress, "negotiated"),
+            "水利交渉が外交評判と履歴へ反映されない");
         Require(UrukCampaignSystem.TryApplyAction(session,
             UrukRegionalSystem.AcceptMigrationAction, out _), "移住受入に失敗");
         var migration = progress.migrationGroups[0];
@@ -197,6 +204,8 @@ public static class UrukRegionalSimulationSmokeTest
         Advance(session, 1);
         Require(progress.obligations.Length == 4,
             "4種の契約債務が生成されていない");
+        Require(CountDiplomaticOutcome(progress, "agreed") == 4,
+            "4種の契約合意が外交履歴へ記録されていない");
         Require(HasSegmentUser(progress, "eridu_wetland_intake",
             "uruk_community"), "契約後も水路通行権が付与されていない");
 
@@ -219,6 +228,11 @@ public static class UrukRegionalSimulationSmokeTest
         Require(Obligation(progress, "tribute").status == "completed" &&
             Obligation(progress, "tribute").remainingInstallments == 0,
             "3回の朝貢が完了していない");
+        Require(progress.diplomaticReputation == 63,
+            "契約履行が外交評判へ正しく加算されていない");
+        Require(HasDiplomaticOutcome(progress, "completed") &&
+            HasDiplomaticOutcome(progress, "expired"),
+            "契約履行・期限満了が外交履歴へ記録されていない");
 
         string save = HistoricalCampaignSave.Serialize(session);
         var loaded = HistoricalCampaignSave.Deserialize(save,
@@ -235,13 +249,45 @@ public static class UrukRegionalSimulationSmokeTest
         Advance(defaultSession, 2);
         Require(Obligation(defaultSession.Progress, "tribute").status == "defaulted",
             "物資不足でも朝貢が不履行にならない");
+        Require(defaultSession.Progress.diplomaticReputation == 38 &&
+            HasDiplomaticOutcome(defaultSession.Progress, "defaulted"),
+            "契約不履行が評判低下と履歴へ反映されない");
+
+        defaultSession.Progress.diplomaticReputation = 24;
+        Require(!UrukCampaignSystem.TryApplyAction(defaultSession,
+            UrukRegionalSystem.RequestLoanAction, out _),
+            "低評判でも新規貸付を受けられる");
+        defaultSession.Progress.diplomaticReputation = 29;
+        Require(!UrukCampaignSystem.TryApplyAction(defaultSession,
+            UrukRegionalSystem.AcquireAccessAction, out _),
+            "低評判でも水路通行権を得られる");
 
         var migrated = HistoricalCampaignFactory.Build(definition).Progress;
-        migrated.version = 3;
-        migrated.obligations = null;
+        migrated.version = 4;
+        migrated.diplomaticRecords = null;
+        migrated.diplomaticReputation = 0;
         UrukCampaignSystem.MigrateProgress(definition, migrated);
-        Require(migrated.version == 4 && migrated.obligations != null,
-            "version 3から契約台帳を補完できない");
+        Require(migrated.version == 5 && migrated.diplomaticRecords != null &&
+            migrated.diplomaticReputation == 50,
+            "version 4から外交履歴と評判を補完できない");
+
+        var chainedMigration = HistoricalCampaignFactory.Build(definition).Progress;
+        chainedMigration.version = 3;
+        chainedMigration.obligations = null;
+        chainedMigration.diplomaticRecords = null;
+        UrukCampaignSystem.MigrateProgress(definition, chainedMigration);
+        Require(chainedMigration.version == 5 &&
+            chainedMigration.obligations != null &&
+            chainedMigration.diplomaticRecords != null,
+            "version 3から現行versionへ連続移行できない");
+
+        var rejectSession = HistoricalCampaignFactory.Build(definition);
+        for (int turn = 1; turn <= 8; turn++) Advance(rejectSession, turn);
+        Require(UrukCampaignSystem.TryApplyAction(rejectSession,
+            UrukRegionalSystem.RejectWaterAction, out _), "水利要求の拒否に失敗");
+        Require(rejectSession.Progress.diplomaticReputation == 46 &&
+            HasDiplomaticOutcome(rejectSession.Progress, "rejected"),
+            "水利要求拒否が外交評判と履歴へ反映されない");
 
         var aiSession = HistoricalCampaignFactory.Build(definition);
         SetGood(aiSession.Progress, "lagash_region", "barley", 0);
@@ -349,6 +395,18 @@ public static class UrukRegionalSimulationSmokeTest
         foreach (string user in segment.userFactionIds)
             if (user == factionId) return true;
         return false;
+    }
+
+    static bool HasDiplomaticOutcome(UrukCampaignProgress progress,
+        string outcome) => CountDiplomaticOutcome(progress, outcome) > 0;
+
+    static int CountDiplomaticOutcome(UrukCampaignProgress progress,
+        string outcome)
+    {
+        int count = 0;
+        foreach (var record in progress.diplomaticRecords)
+            if (record.outcome == outcome) count++;
+        return count;
     }
 
     static void SetGood(UrukCampaignProgress progress, string factionId,

@@ -21,6 +21,7 @@ namespace HexCiv.UI
         Button cancelButton;
         Button acceptOfferButton;
         Button negotiateButton;
+        Button rejectWaterButton;
         Button acceptMigrationButton;
         Button rejectMigrationButton;
         readonly Button[] overlayButtons = new Button[4];
@@ -44,6 +45,8 @@ namespace HexCiv.UI
             int active = CountProjects(progress, "active");
             var offer = UrukRegionalSystem.FirstOpenOffer(progress);
             var obligation = UrukRegionalSystem.FirstHumanObligation(progress);
+            var latestDiplomacy =
+                UrukRegionalSystem.LatestHumanDiplomaticRecord(progress);
             var dispute = UrukRegionalSystem.FirstOpenDispute(progress);
             var migration = UrukRegionalSystem.FirstWaitingMigration(progress);
             int enRoute = CountTransports(progress, "en_route");
@@ -61,6 +64,13 @@ namespace HexCiv.UI
                   $"{FactionName(progress, obligation.debtorFactionId)}→" +
                   $"{FactionName(progress, obligation.creditorFactionId)} " +
                   $"期限{obligation.dueTurn}期／{ObligationStatusJa(obligation.status)}";
+            string diplomacyText = latestDiplomacy == null
+                ? "外交履歴なし"
+                : $"第{latestDiplomacy.turn}期 " +
+                  $"{FactionName(progress, latestDiplomacy.counterpartyFactionId)} " +
+                  $"{DiplomaticOutcomeJa(latestDiplomacy.outcome)}" +
+                  $"（評判{Signed(latestDiplomacy.reputationDelta)}）: " +
+                  latestDiplomacy.summaryJa;
             statusText.text =
                 $"水源 {progress.lastRegionalSourceWater}　農地 {progress.lastRegionalFarmWater}　" +
                 $"漏水 {progress.lastRegionalLeakage}　未使用 {progress.lastRegionalUnusedWater}\n" +
@@ -69,7 +79,8 @@ namespace HexCiv.UI
                 $"葦{progress.reservedReeds}　予測{progress.estimatedCanalTurns}期\n" +
                 $"{offerText}　輸送中{enRoute}\n{obligationText}　" +
                 $"水利紛争{(dispute == null ? "なし" : "交渉可")}　" +
-                $"移住{(migration == null ? "なし" : migration.people + "人")}";
+                $"移住{(migration == null ? "なし" : migration.people + "人")}\n" +
+                $"外交評判 {progress.diplomaticReputation}/100　{diplomacyText}";
 
             bool enabled = !session.State.IsGameOver;
             planButton.interactable = enabled && farm != null &&
@@ -80,6 +91,7 @@ namespace HexCiv.UI
             cancelButton.interactable = enabled && planned > 0;
             acceptOfferButton.interactable = enabled && offer != null;
             negotiateButton.interactable = enabled && dispute != null;
+            rejectWaterButton.interactable = enabled && dispute != null;
             acceptMigrationButton.interactable = enabled && migration != null;
             rejectMigrationButton.interactable = enabled && migration != null;
             for (int i = 0; i < overlayButtons.Length; i++)
@@ -113,7 +125,7 @@ namespace HexCiv.UI
             body = UIStyle.CreatePanel(canvasGo.transform, "RegionalBody",
                 new Color(0.025f, 0.04f, 0.07f, 0.95f));
             UIStyle.SetRect(body, new Vector2(0f, 0f), new Vector2(0f, 0f),
-                new Vector2(0f, 0f), new Vector2(18f, 18f), new Vector2(720f, 346f));
+                new Vector2(0f, 0f), new Vector2(18f, 18f), new Vector2(720f, 370f));
 
             var title = UIStyle.CreateText(body.transform, "Title",
                 "南メソポタミア地域管理　—　水利・農業・移動", 17,
@@ -135,7 +147,7 @@ namespace HexCiv.UI
             statusText.resizeTextMinSize = 10;
             UIStyle.SetRect(statusText.gameObject, new Vector2(0f, 1f),
                 new Vector2(1f, 1f), new Vector2(0.5f, 1f),
-                new Vector2(0f, -43f), new Vector2(-24f, 92f));
+                new Vector2(0f, -43f), new Vector2(-24f, 116f));
 
             string[] overlayNames = { "通常", "水利", "農地", "物流" };
             string[] overlayIds =
@@ -176,6 +188,9 @@ namespace HexCiv.UI
             negotiateButton = CreateButton(body.transform, "Negotiate", "水利交渉",
                 558f, 140f, 92f,
                 () => Apply(UrukRegionalSystem.NegotiateWaterAction));
+            rejectWaterButton = CreateButton(body.transform, "RejectWater", "拒否",
+                656f, 140f, 52f,
+                () => Apply(UrukRegionalSystem.RejectWaterAction));
 
             CreateButton(body.transform, "Loan", "穀物貸付", 12f, 96f, 104f,
                 () => Apply(UrukRegionalSystem.RequestLoanAction));
@@ -353,5 +368,18 @@ namespace HexCiv.UI
             "expired" => "期限満了",
             _ => status,
         };
+
+        static string DiplomaticOutcomeJa(string outcome) => outcome switch
+        {
+            "agreed" => "合意",
+            "completed" => "履行",
+            "defaulted" => "不履行",
+            "expired" => "期限満了",
+            "negotiated" => "交渉成立",
+            "rejected" => "要求拒否",
+            _ => outcome,
+        };
+
+        static string Signed(int value) => value > 0 ? "+" + value : value.ToString();
     }
 }

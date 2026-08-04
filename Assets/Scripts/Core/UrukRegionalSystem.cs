@@ -156,6 +156,23 @@ namespace HexCiv.Core
     }
 
     [Serializable]
+    public sealed class UrukDiplomaticRecordState
+    {
+        public string id;
+        /// <summary>contract / water_dispute。</summary>
+        public string category;
+        public string subjectId;
+        public string counterpartyFactionId;
+        public int turn;
+        /// <summary>agreed / completed / defaulted / expired / negotiated / rejected。</summary>
+        public string outcome;
+        public int reputationDelta;
+        public int reputationAfter;
+        public string summaryJa;
+        public string confidence;
+    }
+
+    [Serializable]
     public sealed class UrukMigrationGroupState
     {
         public string id;
@@ -205,6 +222,7 @@ namespace HexCiv.Core
         public const string AcquireAccessAction = "regional_acquire_access";
         public const string OfferTributeAction = "regional_offer_tribute";
         public const string NegotiateWaterAction = "regional_negotiate_water";
+        public const string RejectWaterAction = "regional_reject_water";
         public const string AcceptMigrationAction = "regional_accept_migration";
         public const string RejectMigrationAction = "regional_reject_migration";
 
@@ -222,6 +240,8 @@ namespace HexCiv.Core
             progress.tradeOffers ??= Array.Empty<UrukTradeOfferState>();
             progress.transports ??= Array.Empty<UrukTransportState>();
             progress.obligations ??= Array.Empty<UrukObligationState>();
+            progress.diplomaticRecords ??=
+                Array.Empty<UrukDiplomaticRecordState>();
             progress.migrationGroups ??= Array.Empty<UrukMigrationGroupState>();
             progress.waterDisputes ??= Array.Empty<UrukWaterDisputeState>();
             if (progress.nextRegionalId <= 0) progress.nextRegionalId = 1;
@@ -291,6 +311,20 @@ namespace HexCiv.Core
                      obligation.kind != "tribute"))
                     throw new InvalidOperationException("地域契約債務が不正");
             }
+            var recordIds = new HashSet<string>();
+            foreach (var record in progress.diplomaticRecords)
+            {
+                if (record == null || string.IsNullOrWhiteSpace(record.id) ||
+                    !recordIds.Add(record.id) || record.turn < 0 ||
+                    string.IsNullOrWhiteSpace(record.category) ||
+                    string.IsNullOrWhiteSpace(record.outcome) ||
+                    string.IsNullOrWhiteSpace(record.summaryJa) ||
+                    record.reputationAfter < 0 || record.reputationAfter > 100)
+                    throw new InvalidOperationException("外交履歴が不正");
+            }
+            if (progress.diplomaticReputation < 0 ||
+                progress.diplomaticReputation > 100)
+                throw new InvalidOperationException("外交評判が範囲外");
             if (progress.lastRegionalSourceWater !=
                 progress.lastRegionalFarmWater + progress.lastRegionalLeakage +
                 progress.lastRegionalUnusedWater)
@@ -369,7 +403,9 @@ namespace HexCiv.Core
                 case OfferTributeAction:
                     return CreateTributeAgreement(progress, turn, out resultJa);
                 case NegotiateWaterAction:
-                    return ResolveFirstDispute(progress, true, out resultJa);
+                    return ResolveFirstDispute(progress, turn, true, out resultJa);
+                case RejectWaterAction:
+                    return ResolveFirstDispute(progress, turn, false, out resultJa);
                 case AcceptMigrationAction:
                     return RespondToMigration(progress, turn, true, out resultJa);
                 case RejectMigrationAction:
@@ -466,6 +502,18 @@ namespace HexCiv.Core
                     (obligation.status == "active" ||
                      obligation.status == "in_transit"))
                     return obligation;
+            return null;
+        }
+
+        public static UrukDiplomaticRecordState LatestHumanDiplomaticRecord(
+            UrukCampaignProgress progress)
+        {
+            if (progress?.diplomaticRecords == null) return null;
+            for (int i = progress.diplomaticRecords.Length - 1; i >= 0; i--)
+            {
+                var record = progress.diplomaticRecords[i];
+                if (record != null) return record;
+            }
             return null;
         }
 
@@ -1227,6 +1275,11 @@ namespace HexCiv.Core
         static bool CreateLoanRequest(UrukCampaignProgress progress, int turn,
             out string resultJa)
         {
+            if (progress.diplomaticReputation < 25)
+            {
+                resultJa = "契約不履行の評判が強く、エリドゥが新しい貸付を拒んだ。";
+                return false;
+            }
             if (HasLiveContractBetween(progress, "loan", HumanFactionId))
             {
                 resultJa = "履行中の貸付がある。返済後に新しい貸付を求めてください。";
@@ -1302,6 +1355,11 @@ namespace HexCiv.Core
         static bool CreateAccessAgreement(UrukCampaignProgress progress, int turn,
             out string resultJa)
         {
+            if (progress.diplomaticReputation < 30)
+            {
+                resultJa = "外交評判が低く、エリドゥが水路通行権の供与を拒んだ。";
+                return false;
+            }
             if (HasLiveContractBetween(progress, "access", HumanFactionId))
             {
                 resultJa = "有効な通行権契約がある。";
@@ -1437,6 +1495,8 @@ namespace HexCiv.Core
                         obligation.creditorFactionId);
                     obligation.status = "expired";
                     obligation.lastResultJa = "期限満了により通行権を返還した。";
+                    RecordObligationEvent(progress, obligation, turn, "expired", 2,
+                        "合意した期限を守り、通行権を返還した。");
                     UpdateOfferStatus(progress, obligation.contractId);
                     continue;
                 }
@@ -1450,13 +1510,15 @@ namespace HexCiv.Core
                     obligation.lastResultJa =
                         $"水路労務{obligation.amountPerInstallment}を履行した。";
                     AdjustCounterpartyTrust(progress, obligation, 4);
+                    RecordObligationEvent(progress, obligation, turn,
+                        "completed", 2, obligation.lastResultJa);
                     UpdateOfferStatus(progress, obligation.contractId);
                     continue;
                 }
                 if (FactionGood(progress, obligation.debtorFactionId,
                         obligation.goodId) < obligation.amountPerInstallment)
                 {
-                    DefaultObligation(progress, obligation,
+                    DefaultObligation(progress, obligation, turn,
                         obligation.kind == "loan_repayment"
                             ? "期限までに返済用の現物を用意できなかった。"
                             : "期日の朝貢物資を用意できなかった。");
@@ -1497,11 +1559,14 @@ namespace HexCiv.Core
                 obligation.status = "completed";
                 obligation.lastResultJa = "契約物資の到着を確認し、履行完了。" + loss;
                 AdjustCounterpartyTrust(progress, obligation, 6);
+                RecordObligationEvent(progress, obligation, turn, "completed",
+                    ReputationForCompletion(obligation.kind),
+                    obligation.lastResultJa);
             }
         }
 
         static void DefaultObligation(UrukCampaignProgress progress,
-            UrukObligationState obligation, string reasonJa)
+            UrukObligationState obligation, int turn, string reasonJa)
         {
             obligation.missedPayments++;
             obligation.status = "defaulted";
@@ -1520,6 +1585,8 @@ namespace HexCiv.Core
                 if (debtor != null) debtor.stability = Math.Max(0,
                     debtor.stability - 5);
             }
+            RecordObligationEvent(progress, obligation, turn, "defaulted", -12,
+                reasonJa);
             UpdateOfferStatus(progress, obligation.contractId);
         }
 
@@ -1547,6 +1614,8 @@ namespace HexCiv.Core
                         offer.requestedGoodId, offer.requestedAmount, 1,
                         turn + Math.Max(1, offer.durationTurns));
                     offer.status = "departed";
+                    RecordOfferEvent(progress, offer, turn, "agreed", 0,
+                        "現物貸付と返済期限を合意した。");
                     continue;
                 }
                 if (offer.contractKind == "labor")
@@ -1560,6 +1629,8 @@ namespace HexCiv.Core
                         offer.proposerFactionId, offer.receiverFactionId,
                         "labor_service", offer.offeredAmount, 1, turn + 1);
                     offer.status = "active";
+                    RecordOfferEvent(progress, offer, turn, "agreed", 0,
+                        "共同水路の労務量と現物報酬を合意した。");
                     continue;
                 }
                 if (offer.contractKind == "access")
@@ -1575,6 +1646,8 @@ namespace HexCiv.Core
                         offer.receiverFactionId, offer.proposerFactionId, "", 0, 0,
                         turn + Math.Max(1, offer.durationTurns));
                     offer.status = "active";
+                    RecordOfferEvent(progress, offer, turn, "agreed", 0,
+                        "期限付きの水路・舟運通行権を合意した。");
                     continue;
                 }
                 if (offer.contractKind == "tribute")
@@ -1584,6 +1657,8 @@ namespace HexCiv.Core
                         offer.offeredGoodId, offer.offeredAmount,
                         Math.Max(1, offer.installmentCount), turn + 1);
                     offer.status = "active";
+                    RecordOfferEvent(progress, offer, turn, "agreed", 0,
+                        "現物朝貢の量・回数・間隔を合意した。");
                     continue;
                 }
 
@@ -1599,6 +1674,10 @@ namespace HexCiv.Core
                         offer.receiverFactionId, offer.proposerFactionId,
                         offer.requestedGoodId, offer.requestedAmount, turn);
                 offer.status = "departed";
+                RecordOfferEvent(progress, offer, turn, "agreed", 0,
+                    offer.contractKind == "gift"
+                        ? "現物贈与を積み出した。"
+                        : "交換する現物と数量を合意した。");
             }
         }
 
@@ -1655,12 +1734,20 @@ namespace HexCiv.Core
                 transport.status = "arrived";
                 if (!string.IsNullOrWhiteSpace(transport.obligationId))
                     CompleteObligationDelivery(progress, transport, turn);
+                var offer = FindOffer(progress, transport.contractId);
+                bool wasCompleted = offer?.status == "completed";
                 UpdateOfferStatus(progress, transport.contractId);
+                if (offer != null && !wasCompleted && offer.status == "completed" &&
+                    !HasObligationForContract(progress, offer.id))
+                    RecordOfferEvent(progress, offer, turn, "completed", 2,
+                        offer.contractKind == "gift"
+                            ? "贈与物資が相手共同体へ到着した。"
+                            : "双方の交換物資が到着した。");
             }
         }
 
-        static bool ResolveFirstDispute(UrukCampaignProgress progress, bool negotiate,
-            out string resultJa)
+        static bool ResolveFirstDispute(UrukCampaignProgress progress, int turn,
+            bool negotiate, out string resultJa)
         {
             var dispute = FirstOpenDispute(progress);
             if (dispute == null)
@@ -1676,6 +1763,9 @@ namespace HexCiv.Core
             if (claimant != null)
                 claimant.diplomaticTrust = Math.Clamp(claimant.diplomaticTrust +
                     (negotiate ? 8 : -12), 0, 100);
+            RecordDiplomaticEvent(progress, turn, "water_dispute", dispute.id,
+                dispute.claimantFactionId, negotiate ? "negotiated" : "rejected",
+                negotiate ? 3 : -4, dispute.resultJa, "inferred");
             resultJa = dispute.resultJa;
             return true;
         }
@@ -1796,6 +1886,74 @@ namespace HexCiv.Core
             return false;
         }
 
+        static int ReputationForCompletion(string obligationKind) =>
+            obligationKind switch
+            {
+                "loan_repayment" => 4,
+                "tribute" => 5,
+                "labor_service" => 2,
+                "access_right" => 2,
+                _ => 1,
+            };
+
+        static void RecordOfferEvent(UrukCampaignProgress progress,
+            UrukTradeOfferState offer, int turn, string outcome,
+            int reputationDelta, string summaryJa)
+        {
+            string counterparty = offer.proposerFactionId == HumanFactionId
+                ? offer.receiverFactionId
+                : offer.receiverFactionId == HumanFactionId
+                    ? offer.proposerFactionId : null;
+            if (counterparty == null) return;
+            RecordDiplomaticEvent(progress, turn, "contract", offer.id,
+                counterparty, outcome, reputationDelta, summaryJa,
+                offer.confidence);
+        }
+
+        static void RecordObligationEvent(UrukCampaignProgress progress,
+            UrukObligationState obligation, int turn, string outcome,
+            int reputationDelta, string summaryJa)
+        {
+            string counterparty = obligation.debtorFactionId == HumanFactionId
+                ? obligation.creditorFactionId
+                : obligation.creditorFactionId == HumanFactionId
+                    ? obligation.debtorFactionId : null;
+            if (counterparty == null) return;
+            RecordDiplomaticEvent(progress, turn, "contract", obligation.contractId,
+                counterparty, outcome, reputationDelta, summaryJa,
+                obligation.confidence);
+        }
+
+        static void RecordDiplomaticEvent(UrukCampaignProgress progress, int turn,
+            string category, string subjectId, string counterpartyFactionId,
+            string outcome, int reputationDelta, string summaryJa,
+            string confidence)
+        {
+            progress.diplomaticReputation = Math.Clamp(
+                progress.diplomaticReputation + reputationDelta, 0, 100);
+            Append(ref progress.diplomaticRecords, new UrukDiplomaticRecordState
+            {
+                id = NextId(progress, "diplomacy"),
+                category = category,
+                subjectId = subjectId,
+                counterpartyFactionId = counterpartyFactionId,
+                turn = Math.Max(0, turn),
+                outcome = outcome,
+                reputationDelta = reputationDelta,
+                reputationAfter = progress.diplomaticReputation,
+                summaryJa = summaryJa,
+                confidence = string.IsNullOrWhiteSpace(confidence)
+                    ? "inferred" : confidence,
+            });
+            const int maxRecords = 64;
+            if (progress.diplomaticRecords.Length <= maxRecords) return;
+            var recent = new UrukDiplomaticRecordState[maxRecords];
+            Array.Copy(progress.diplomaticRecords,
+                progress.diplomaticRecords.Length - maxRecords,
+                recent, 0, maxRecords);
+            progress.diplomaticRecords = recent;
+        }
+
         static void AdjustCounterpartyTrust(UrukCampaignProgress progress,
             UrukObligationState obligation, int amount)
         {
@@ -1835,6 +1993,23 @@ namespace HexCiv.Core
             else if (active) offer.status = "active";
             else if (hasObligation || ContractArrived(progress, contractId))
                 offer.status = "completed";
+        }
+
+        static UrukTradeOfferState FindOffer(UrukCampaignProgress progress,
+            string contractId)
+        {
+            if (string.IsNullOrWhiteSpace(contractId)) return null;
+            foreach (var offer in progress.tradeOffers)
+                if (offer.id == contractId) return offer;
+            return null;
+        }
+
+        static bool HasObligationForContract(UrukCampaignProgress progress,
+            string contractId)
+        {
+            foreach (var obligation in progress.obligations)
+                if (obligation.contractId == contractId) return true;
+            return false;
         }
 
         static bool HasOffer(UrukCampaignProgress progress, string id)

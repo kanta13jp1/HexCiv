@@ -26,6 +26,35 @@ CodexとClaude Codeは、以後この `HexCiv` プロジェクトだけを更新
 
 ## 最新状況
 
+### ✅ 2026-08-05 Codex: ウルク第4C・外交履歴／評判と販売画像PRの検証
+
+**ゲーム開発**
+
+- 契約の合意、履行、不履行、満了と、水利紛争の交渉／拒否を、当事者・対象・ターン・結果・評判増減・確度付きの外交履歴へ保存する。最新64件を保持し、セーブ往復後も同じ順序と内容を復元する。
+- 外交評判を0～100で追加。貸付返済、労務完了、通行権満了、朝貢履行は評判を上げ、不履行と一方的拒否は下げる。評判25未満では貸付、30未満では通行権を断られる。
+- 水利紛争に「交渉」と「拒否」の両方を追加。地域管理パネルには現在の評判と最新の外交記録を表示し、現在の契約だけでなく過去の判断が次の交渉へ響くことを可視化した。
+- 史実キャンペーン進捗はversion 5。version 4以前は履歴なし・評判50へ補完し、version 3からの連鎖移行でも既存地域状態と契約債務を保持する。
+
+**販売促進**
+
+- Claude Code作成の自サイト商品画像PR [#4408](https://github.com/kanta13jp1/my_web_app/pull/4408) を最新mainへ更新して独立検証。実ゲーム画像3枚はHexCiv原本とSHA256が一致し、商品ページの画面テスト12件と主要CIは合格した。
+- 必須CI `release-notes-data` だけが、最新main取り込み後に `web/release-notes.json` の生成結果が古いため失敗している。画像実装の不具合ではないが、承認なしの生成コミットや管理者バイパスは行っていない。P2とH2は本番反映まで未完了のまま扱う。
+- Obsidian販売台帳へPR、検証結果、残るゲートと計測開始条件を追記した。H2は公開日を開始日とし、画像以外を同時変更せず `product_view → purchase_click` を分母・分子で測る。
+
+**検証（Unity 6000.3.20f1）**
+
+- `UrukRegionalSimulationSmokeTest.Run`: `URUK REGIONAL SIMULATION SMOKE OK`。合意／履行／不履行／満了、水利交渉／拒否、低評判拒否、v4→v5およびv3連鎖移行、決定的セーブを確認。3 seed性能は0.13 ms/turn。
+- `UrukCampaignVerticalSliceSmokeTest.Run`: `URUK CAMPAIGN VERTICAL SLICE SMOKE OK`。
+- `SmokeTest.Run`: `SMOKE OK`。変更前 `Logs/g4_regression.log` と `[Smoke]` / `SMOKE` 全19行がdiff完全一致。
+- 製品版 `BUILD OK: 98,050,293 bytes`、体験版 `DEMO BUILD OK: 98,050,293 bytes`。両方を12秒起動し、Unity 6000.3.20f1・重大例外0。
+- 製品ZIP: 37,580,758 bytes、SHA256 `64d68b6d65ae457271fc14209c95983f66261a1fdb597ea17c447ed34b89eb14`。
+- 体験版ZIP: 37,583,456 bytes、SHA256 `ec09b7aca9149395101aea058e7e6b6011b0e9644c506caa1e98f64a0a74d932`。
+
+**次の担当**
+
+- Claude: ユーザー承認後、PR #4408で `scripts/generate_release_notes.py` を実行し、生成JSONだけをレビュー・commit・pushして必須CIを再確認する。マージ／本番反映日をObsidianへ記録してH2を開始する。
+- Codex: ウルク縦切りの固定マップ上で水路・農地の占有を紛争原因へ接続し、複数の交渉案と長期的な関係変化を実装する。販売側はP1の本番SQL実測値を受け取るまで推定値を置かない。
+
 ### ✅ 2026-08-05 Codex: ウルク第4B・実物資契約と販売10仮説の運用基盤
 
 **ゲーム開発**
