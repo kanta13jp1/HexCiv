@@ -14,12 +14,12 @@
 - 自サイト価格: ¥500
 - 体験版セーブは製品版で続行可能
 
-2026-08-05 Stage 4H検証済み配布物:
+2026-08-05 Stage 4I検証済み配布物:
 
 | 版 | サイズ | SHA256 |
 |---|---:|---|
-| 製品版 | 37,591,559 bytes | `9938be42455f059c8474e23cfb2c79a71dccfa252fb4f8b96935782daecb7b5a` |
-| 30ターンDemo | 37,594,255 bytes | `9c9704f37be5fae9ae7ba70a91aee033bd731affe7af99e45957d2cbd74937d8` |
+| 製品版 | 37,595,057 bytes | `a5db033e1798504f92fe10b007db26ca3215549d0133e3eb15ff22880a53d2e2` |
+| 30ターンDemo | 37,597,756 bytes | `815b085fcc476561d3390351bedbd47af8d7c07c432ea3da03051e930dcc8843` |
 
 両版ともUnity 6000.3.20f1で12秒起動し、重大例外0件。manifestのサイズ・SHA256と
 実ZIPの一致も確認済み。販売サイトへ差し替える際は2ファイルを混同しない。
@@ -39,10 +39,12 @@
 | `Logs/marketing/uruk_stage4f_water_arbitration.png` | ウルク編の新機能 | 3つの水利要求を比較し、推定上下流関係から第三者仲裁を選ぶ |
 | `Logs/marketing/uruk_stage4g_land_rights.png` | ウルク編の土地外交 | 観測された収穫と双方の推定根拠から、共同耕作・補償・仲裁を選ぶ |
 | `Logs/marketing/uruk_stage4h_water_agreement_selection.png` | ウルク編の合意管理 | 3つの履行中合意から対象を選び、表示中の相手だけを破約・再交渉する |
+| `Logs/marketing/uruk_stage4i_kinship_diplomacy.png` | ウルク編の親族外交 | 氏名不詳・双方同意前提・推定と明示し、相手を選んで親族連携を提案する |
 
 Stage 4F画像は `UrukRegionalScreenshot.CaptureArbitrationCandidate`、Stage 4G画像は
 `UrukRegionalScreenshot.CaptureLandRightsCandidate`、Stage 4H画像は
-`UrukRegionalScreenshot.CaptureWaterAgreementCandidate` で実キャンペーン状態から760×446で
+`UrukRegionalScreenshot.CaptureWaterAgreementCandidate`、Stage 4I画像は
+`UrukRegionalScreenshot.CaptureKinshipCandidate` で実キャンペーン状態から760×446で
 再生成できる。撮影は `-batchmode -force-d3d11` を使い、`-nographics` は使わない。
 Null描画デバイスの場合は灰色画像を成功扱いせず失敗する。2026-08-05生成版は次のとおり。
 
@@ -51,6 +53,7 @@ Null描画デバイスの場合は灰色画像を成功扱いせず失敗する�
 | Stage 4F | 77,743 bytes | `2930238ad5a878a3e5ab727a957bab5c04f248968a6d857784e7b5f5c146888c` |
 | Stage 4G | 86,642 bytes | `2e4dc0cd5d0da878efc3d00967c055e4a9320f6ac0a416f3925ecb188038451a` |
 | Stage 4H | 81,774 bytes | `1be02ed34766fee67f60be54e9593df7e93e39f4929aad17a0ad8f181aedeb59` |
+| Stage 4I | 82,882 bytes | `4b231b5e8b170c8934960fc9964d14d873c38a10ba4bde8a406eb2bdc74266b5` |
 
 商品ページへ載せる際は圧縮前のPNGを使い、実ゲーム画面であること、上下流・季節利用・境界が
 `inferred` な復元であることを明記する。
@@ -78,6 +81,7 @@ HexCivは「育っていく世界を見届ける」ことを中心にした、1�
 - 貸付、労務、通行権、朝貢を、貨幣ではなく現物・期限・輸送として扱う地域契約
 - 取水と収穫から発生する土地・耕作権問題を、共同耕作・補償・仲裁・拒否・再交渉で扱う地域外交
 - 複数の水利要求・履行中合意・再交渉案件を切り替え、表示中の相手だけへ判断を適用する誤操作防止
+- 氏名不詳・双方同意前提・推定を明示し、共同食と贈答から交易路の安全へつなげる親族外交
 - 世界史図鑑、指導者、遺跡、偉人、作品、研究、文化をゲーム内で確認
 - 観戦モードと自動管理。4X初心者向けの導入ガイド
 - BGM・SE、セーブ/ロード、一般的な内蔵GPU向けの軽量表示
@@ -122,12 +126,12 @@ X投稿12本の事前登録下書きと2×2実験設計は
 `MARKETING_EXPERIMENT_H10_UPDATES.md` に保存した。P1/P2、itch.io本人確認、H4/H7終了を
 開始条件とし、それまでは開始日・売上・訪問を未計測として扱う。更新週はテスト済みビルド、
 変更履歴、X告知を一組で公開し、基準週は開発を続けても公開更新とHexCiv投稿を行わない。
-Stage 4F/4G/4Hは開始前に完成した更新候補であり、まだH10第1週として公開・計測していない。
+Stage 4F/4G/4H/4Iは開始前に完成した更新候補であり、まだH10第1週として公開・計測していない。
 
 ## Claude Codeの次アクション
 
 1. 自サイトの商品ページへ実ゲーム画像3枚を追加するPR [#4408](https://github.com/kanta13jp1/my_web_app/pull/4408) は、12件の画面テストと主要CIを通過済み。必須 `release-notes-data` は最新main取り込み後の生成JSONが古いことだけで失敗しているため、承認後に `scripts/generate_release_notes.py` を実行し、生成差分だけを追加してマージする。
-2. itch.ioで非公開ページを作成し、630×500カバー、画像3枚、製品ZIP、無料Demo ZIPを登録する。
+2. itch.ioで非公開ページを作成し、630×500カバー、確認済み画像3～5枚、製品ZIP、無料Demo ZIPを登録する。
 3. 日本語のみであることを、購入ボタンより前に表示する。
 4. P1の本番SQL確認とプローブ行削除を行う。
 5. 公開日から30日間、`itch_io` と `direct` の4段ファネルを週次でObsidianへ記録する。

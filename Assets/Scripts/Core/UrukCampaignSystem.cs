@@ -28,7 +28,7 @@ namespace HexCiv.Core
     [Serializable]
     public sealed class UrukCampaignProgress
     {
-        public int version = 9;
+        public int version = 10;
         public int actualPopulation;
         public HistoricalPopulationRoles roles;
         public HistoricalPopulationStatuses statuses;
@@ -51,6 +51,7 @@ namespace HexCiv.Core
         public UrukMigrationGroupState[] migrationGroups;
         public UrukWaterDisputeState[] waterDisputes;
         public UrukLandDisputeState[] landDisputes;
+        public UrukKinshipTieState[] kinshipTies;
         public int diplomaticReputation;
         public int nextRegionalId = 1;
         public int regionalRevision;
@@ -60,6 +61,7 @@ namespace HexCiv.Core
         public string selectedFarmId;
         public string selectedWaterDisputeId;
         public string selectedLandDisputeId;
+        public string selectedKinshipFactionId;
         public int reservedClay;
         public int reservedReeds;
         public int estimatedCanalTurns;
@@ -139,7 +141,7 @@ namespace HexCiv.Core
             var starting = definition.startingScenario;
             var progress = new UrukCampaignProgress
             {
-                version = 9,
+                version = 10,
                 actualPopulation = starting.actualPopulation,
                 roles = CopyRoles(starting.roles),
                 statuses = CopyStatuses(starting.statuses),
@@ -226,6 +228,11 @@ namespace HexCiv.Core
                 UrukRegionalSystem.MigrateLandRightsV9(progress);
                 progress.version = 9;
             }
+            if (progress.version == 9)
+            {
+                UrukRegionalSystem.MigrateKinshipV10(progress);
+                progress.version = 10;
+            }
             UrukSubsistenceSystem.EnsureDefaults(progress);
             UrukRegionalSystem.EnsureInitialized(definition, progress);
         }
@@ -235,7 +242,7 @@ namespace HexCiv.Core
         {
             if (definition == null) throw new ArgumentNullException(nameof(definition));
             if (progress == null) throw new ArgumentNullException(nameof(progress));
-            if (progress.version != 9)
+            if (progress.version != 10)
                 throw new InvalidOperationException("ウルク進捗versionが不正");
             if (progress.actualPopulation < 0)
                 throw new InvalidOperationException("実人口が負数");

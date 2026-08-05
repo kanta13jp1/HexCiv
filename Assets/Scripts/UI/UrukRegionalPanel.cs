@@ -36,6 +36,8 @@ namespace HexCiv.UI
         Button renegotiateLandButton;
         Button acceptMigrationButton;
         Button rejectMigrationButton;
+        Button nextKinshipButton;
+        Button proposeKinshipButton;
         readonly Button[] overlayButtons = new Button[4];
 
         public void Init(HistoricalCampaignSession campaignSession,
@@ -78,6 +80,10 @@ namespace HexCiv.UI
             var recoverableLand =
                 UrukRegionalSystem.LatestRecoverableLandDispute(progress);
             var land = openLand ?? activeLand ?? recoverableLand;
+            var kinshipCandidate =
+                UrukRegionalSystem.SelectedKinshipCandidate(progress);
+            var latestKinship =
+                UrukRegionalSystem.LatestHumanKinshipTie(progress);
             int enRoute = CountTransports(progress, "en_route");
 
             string farmText = farm == null
@@ -100,8 +106,9 @@ namespace HexCiv.UI
                 : $"第{latestDiplomacy.turn}期 " +
                   $"{FactionName(progress, latestDiplomacy.counterpartyFactionId)} " +
                   $"{DiplomaticOutcomeJa(latestDiplomacy.outcome)}" +
-                  $"（評判{Signed(latestDiplomacy.reputationDelta)}）: " +
-                  latestDiplomacy.summaryJa;
+                  $"（評判{Signed(latestDiplomacy.reputationDelta)}）" +
+                  (latestDiplomacy.category == "kinship_tie"
+                      ? "" : ": " + latestDiplomacy.summaryJa);
             string disputeText = dispute == null
                 ? "水利紛争なし"
                 : $"水利{WaterStatusJa(dispute.status)}" +
@@ -132,6 +139,16 @@ namespace HexCiv.UI
                         FactionName(progress, land.arbitratorFactionId)) +
                   (string.IsNullOrWhiteSpace(land.retaliationJa)
                       ? "" : "　" + land.retaliationJa);
+            string kinshipText = latestKinship == null
+                ? "親族連携なし／候補:" +
+                  (kinshipCandidate == null ? "なし" :
+                    $"{kinshipCandidate.nameJa} 信頼{kinshipCandidate.diplomaticTrust}")
+                : $"親族:{FactionName(progress, latestKinship.partnerFactionId)} " +
+                  $"{KinshipStatusJa(latestKinship.status)} " +
+                  $"氏名不詳／双方同意前提／{ConfidenceJa(latestKinship.confidence)}／" +
+                  $"交易危険-{UrukRegionalSystem.KinshipTransportRiskReduction(progress, "uruk_community", latestKinship.partnerFactionId)}%" +
+                  (kinshipCandidate == null ? "" :
+                    $"／次候補:{kinshipCandidate.nameJa}");
             statusText.text =
                 $"水源 {progress.lastRegionalSourceWater}　農地 {progress.lastRegionalFarmWater}　" +
                 $"漏水 {progress.lastRegionalLeakage}　未使用 {progress.lastRegionalUnusedWater}\n" +
@@ -142,7 +159,7 @@ namespace HexCiv.UI
                 $"移住{(migration == null ? "なし" : migration.people + "人")}\n" +
                 $"{disputeText}\n" +
                 $"{landText}\n" +
-                $"外交評判 {progress.diplomaticReputation}/100　{diplomacyText}";
+                $"外交評判 {progress.diplomaticReputation}/100　{diplomacyText}　{kinshipText}";
 
             bool enabled = !session.State.IsGameOver;
             planButton.interactable = enabled && farm != null &&
@@ -183,6 +200,9 @@ namespace HexCiv.UI
                 UrukCampaignSystem.GoodAmount(progress, "alluvial_clay") >= 1;
             acceptMigrationButton.interactable = enabled && migration != null;
             rejectMigrationButton.interactable = enabled && migration != null;
+            nextKinshipButton.interactable = enabled && kinshipCandidate != null;
+            proposeKinshipButton.interactable = enabled &&
+                UrukRegionalSystem.CanProposeKinshipTie(progress);
             for (int i = 0; i < overlayButtons.Length; i++)
             {
                 var colors = overlayButtons[i].colors;
@@ -217,7 +237,7 @@ namespace HexCiv.UI
                 new Vector2(0f, 0f), new Vector2(18f, 18f), new Vector2(720f, 406f));
 
             var title = UIStyle.CreateText(body.transform, "Title",
-                "南メソポタミア地域管理　—　水利・農業・移動", 17,
+                "南メソポタミア地域管理　—　水利・農業・交易・外交", 17,
                 TextAnchor.MiddleLeft, UIStyle.Accent);
             title.fontStyle = FontStyle.Bold;
             UIStyle.SetRect(title.gameObject, new Vector2(0f, 1f), new Vector2(1f, 1f),
@@ -234,6 +254,7 @@ namespace HexCiv.UI
             statusText.horizontalOverflow = HorizontalWrapMode.Wrap;
             statusText.resizeTextForBestFit = true;
             statusText.resizeTextMinSize = 10;
+            statusText.resizeTextMaxSize = 12;
             UIStyle.SetRect(statusText.gameObject, new Vector2(0f, 1f),
                 new Vector2(1f, 1f), new Vector2(0.5f, 1f),
                 new Vector2(0f, -43f), new Vector2(-24f, 170f));
@@ -333,6 +354,12 @@ namespace HexCiv.UI
             renegotiateLandButton = CreateButton(body.transform, "RenegotiateLand",
                 "土地再交渉", 486f, 2f, 92f,
                 () => Apply(UrukRegionalSystem.RenegotiateLandAction));
+            nextKinshipButton = CreateButton(body.transform, "NextKinship",
+                "親族候補", 584f, 2f, 62f,
+                () => Apply(UrukRegionalSystem.NextKinshipPartnerAction));
+            proposeKinshipButton = CreateButton(body.transform, "ProposeKinship",
+                "連携提案", 652f, 2f, 56f,
+                () => Apply(UrukRegionalSystem.ProposeKinshipTieAction));
         }
 
         Button CreateButton(Transform parent, string name, string label, float x,
@@ -520,8 +547,17 @@ namespace HexCiv.UI
             "land_agreement_defaulted" => "耕作権合意不履行",
             "land_agreement_breached" => "耕作権合意破約",
             "land_renegotiated" => "土地再交渉",
+            "kinship_tie_formed" => "親族連携成立",
+            "kinship_tie_established" => "親族連携定着",
             "rejected" => "要求拒否",
             _ => outcome,
+        };
+
+        static string KinshipStatusJa(string status) => status switch
+        {
+            "active" => "履行中",
+            "established" => "定着",
+            _ => status,
         };
 
         static int OpenDisputeOrdinal(UrukCampaignProgress progress,

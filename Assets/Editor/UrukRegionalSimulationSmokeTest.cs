@@ -6,7 +6,7 @@ using UnityEditor;
 using UnityEngine;
 
 /// <summary>
-/// ウルク編の水・農地・AI台帳・輸送・移住・外交を決定論的に検証する。
+/// ウルク編の水・農地・AI台帳・輸送・移住・外交・親族連携を決定論的に検証する。
 /// </summary>
 public static class UrukRegionalSimulationSmokeTest
 {
@@ -23,6 +23,7 @@ public static class UrukRegionalSimulationSmokeTest
             ValidateWaterDisputeChoices(definition);
             ValidateMultipleWaterArbitration(definition);
             ValidateLandRightsDispute(definition);
+            ValidateKinshipDiplomacy(definition);
             ValidatePlayerSequence(definition);
             ValidateThreeSeedDeterminism();
             UnityEngine.Debug.Log("URUK REGIONAL SIMULATION SMOKE OK");
@@ -41,12 +42,15 @@ public static class UrukRegionalSimulationSmokeTest
     {
         var session = HistoricalCampaignFactory.Build(definition);
         var progress = session.Progress;
-        Require(progress.version == 9, "進捗versionが9ではない");
+        Require(progress.version == 10, "進捗versionが10ではない");
         Require(progress.obligations != null, "契約債務台帳が初期化されていない");
         Require(progress.diplomaticRecords != null &&
             progress.diplomaticReputation == 50,
             "外交履歴または初期評判が初期化されていない");
         Require(progress.regionalFactions.Length == 8, "8勢力台帳がない");
+        Require(progress.kinshipTies != null &&
+            !string.IsNullOrWhiteSpace(progress.selectedKinshipFactionId),
+            "親族連携台帳または初期候補が初期化されていない");
         Require(progress.farmPlots.Length == definition.farmPlots.Length,
             "農地定義が状態へ反映されていない");
         foreach (var farm in progress.farmPlots)
@@ -290,7 +294,7 @@ public static class UrukRegionalSimulationSmokeTest
             },
         };
         UrukCampaignSystem.MigrateProgress(definition, migrated);
-        Require(migrated.version == 9 &&
+        Require(migrated.version == 10 &&
             migrated.waterDisputes[0].claimantFarmId ==
                 "lagash_hinterland_farm" &&
             migrated.waterDisputes[0].resolutionKind == "joint_maintenance" &&
@@ -313,7 +317,7 @@ public static class UrukRegionalSimulationSmokeTest
             },
         };
         UrukCampaignSystem.MigrateProgress(definition, v6Migration);
-        Require(v6Migration.version == 9 &&
+        Require(v6Migration.version == 10 &&
             v6Migration.waterDisputes[0].retaliationJa == "" &&
             v6Migration.waterDisputes[0].renegotiationCount == 0,
             "version 6から報復・再交渉状態を補完できない");
@@ -337,7 +341,7 @@ public static class UrukRegionalSimulationSmokeTest
             },
         };
         UrukCampaignSystem.MigrateProgress(definition, v7Migration);
-        Require(v7Migration.version == 9 &&
+        Require(v7Migration.version == 10 &&
             v7Migration.waterDisputes[0].basinId ==
                 "lower_alluvial_wetland_network" &&
             v7Migration.waterDisputes[0].upstreamFactionId ==
@@ -358,7 +362,7 @@ public static class UrukRegionalSimulationSmokeTest
             farm.userFactionIds = null;
         }
         UrukCampaignSystem.MigrateProgress(definition, v8Migration);
-        Require(v8Migration.version == 9 &&
+        Require(v8Migration.version == 10 &&
             v8Migration.landDisputes != null &&
             v8Migration.selectedLandDisputeId == "",
             "version 8から土地紛争台帳を補完できない");
@@ -368,12 +372,22 @@ public static class UrukRegionalSimulationSmokeTest
                 farm.userFactionIds[0] == farm.ownerFactionId,
                 farm.id + "の旧セーブ農地権利を補完できない");
 
+        var v9Migration = HistoricalCampaignFactory.Build(definition).Progress;
+        v9Migration.version = 9;
+        v9Migration.kinshipTies = null;
+        v9Migration.selectedKinshipFactionId = null;
+        UrukCampaignSystem.MigrateProgress(definition, v9Migration);
+        Require(v9Migration.version == 10 &&
+            v9Migration.kinshipTies != null &&
+            v9Migration.selectedKinshipFactionId == "eridu_community",
+            "version 9から親族連携台帳・候補を補完できない");
+
         var chainedMigration = HistoricalCampaignFactory.Build(definition).Progress;
         chainedMigration.version = 3;
         chainedMigration.obligations = null;
         chainedMigration.diplomaticRecords = null;
         UrukCampaignSystem.MigrateProgress(definition, chainedMigration);
-        Require(chainedMigration.version == 9 &&
+        Require(chainedMigration.version == 10 &&
             chainedMigration.obligations != null &&
             chainedMigration.diplomaticRecords != null,
             "version 3から現行versionへ連続移行できない");
@@ -891,6 +905,134 @@ public static class UrukRegionalSimulationSmokeTest
         Require(UrukRegionalSystem.FirstOpenLandDispute(progress) != null,
             "灌漑・収穫条件を満たしても土地紛争が発生しない");
         return session;
+    }
+
+    static void ValidateKinshipDiplomacy(
+        HistoricalCampaignDefinition definition)
+    {
+        var session = HistoricalCampaignFactory.Build(definition);
+        var progress = session.Progress;
+        var first = UrukRegionalSystem.SelectedKinshipCandidate(progress);
+        Require(first != null && first.factionId == "eridu_community",
+            "初期親族連携候補が定義順のエリドゥではない");
+        Require(UrukCampaignSystem.TryApplyAction(session,
+            UrukRegionalSystem.NextKinshipPartnerAction, out _) &&
+            progress.selectedKinshipFactionId != first.factionId,
+            "親族連携候補を個別に切り替えられない");
+        progress.selectedKinshipFactionId = first.factionId;
+
+        SetGood(progress, "uruk_community", "barley", 10);
+        SetGood(progress, "uruk_community", "sheep_wool", 4);
+        SetGood(progress, first.factionId, "barley", 10);
+        var untouched = UrukRegionalSystem.FindFaction(progress,
+            "ur_community");
+        int untouchedTrust = untouched.diplomaticTrust;
+        int humanBarley = FactionGood(progress, "uruk_community", "barley");
+        int humanWool = FactionGood(progress, "uruk_community", "sheep_wool");
+        int partnerBarley = FactionGood(progress, first.factionId, "barley");
+        int partnerTrust = first.diplomaticTrust;
+        int baselineRisk = UrukRegionalSystem.TransportRiskForTest(definition,
+            HistoricalCampaignFactory.Build(definition).Progress, "risk_probe",
+            "uruk_community", first.factionId, 1);
+
+        string result;
+        Require(UrukRegionalSystem.CanProposeKinshipTie(progress),
+            "条件を満たしても親族連携を提案可能と判定されない");
+        Require(UrukCampaignSystem.TryApplyAction(session,
+                UrukRegionalSystem.ProposeKinshipTieAction, out result),
+            "親族連携の提案に失敗");
+        Require(progress.kinshipTies.Length == 1,
+            "親族連携台帳へ合意が追加されない");
+        var tie = progress.kinshipTies[0];
+        Require(tie.partnerFactionId == first.factionId &&
+            tie.relationKind == "community_kinship_tie" &&
+            tie.humanParticipantJa.Contains("氏名不詳") &&
+            tie.partnerParticipantJa.Contains("氏名不詳") &&
+            tie.consentBasisJa.Contains("同意") &&
+            tie.evidenceNoteJa.Contains("直接史料はない") &&
+            tie.confidence == "inferred" && tie.status == "active" &&
+            result.Contains("推定復元") &&
+            Array.IndexOf(tie.sourceRefs,
+                "cambridge_uruk_glocalization_2025") >= 0,
+            "氏名不詳・同意・確度・史料限界・出典が保存されない");
+        Require(FactionGood(progress, "uruk_community", "barley") ==
+                humanBarley - 1 &&
+            FactionGood(progress, "uruk_community", "sheep_wool") ==
+                humanWool - 1 &&
+            FactionGood(progress, first.factionId, "barley") ==
+                partnerBarley - 1 &&
+            first.diplomaticTrust == partnerTrust + 8 &&
+            untouched.diplomaticTrust == untouchedTrust &&
+            progress.diplomaticReputation == 53 &&
+            HasDiplomaticOutcome(progress, "kinship_tie_formed"),
+            "親族連携の現物消費・対象信頼・評判・履歴が不正");
+        Require(UrukRegionalSystem.KinshipTransportRiskReduction(progress,
+                "uruk_community", first.factionId) == 5 &&
+            UrukRegionalSystem.TransportRiskForTest(definition, progress,
+                "risk_probe", "uruk_community", first.factionId, 1) ==
+                Math.Max(2, baselineRisk - 5),
+            "履行中の親族連携が対象間の輸送危険を5%軽減しない");
+
+        Advance(session, 1);
+        Require(tie.status == "active" &&
+            first.currentGoalJa == "親族連携の履行",
+            "親族連携履行中の勢力別AI目標が維持されない");
+        for (int turn = 2; turn <= 4; turn++) Advance(session, turn);
+        Require(tie.status == "established" && tie.trustAfter == 61 &&
+            first.diplomaticTrust == 61 &&
+            progress.diplomaticReputation == 55 &&
+            first.currentGoalJa == "親族関係を基盤とする交易" &&
+            HasDiplomaticOutcome(progress, "kinship_tie_established") &&
+            UrukRegionalSystem.KinshipTransportRiskReduction(progress,
+                "uruk_community", first.factionId) == 3 &&
+            UrukRegionalSystem.TransportRiskForTest(definition, progress,
+                "risk_probe", "uruk_community", first.factionId, 1) ==
+                Math.Max(2, baselineRisk - 3),
+            "4期間後の連携定着・信頼・評判・AI・交易効果が不正");
+
+        string save = HistoricalCampaignSave.Serialize(session);
+        var loaded = HistoricalCampaignSave.Deserialize(save,
+            id => id == definition.id ? definition : null);
+        Require(JsonUtility.ToJson(progress) == JsonUtility.ToJson(loaded.Progress),
+            "親族連携状態のセーブ往復が一致しない");
+
+        var second = UrukRegionalSystem.SelectedKinshipCandidate(progress);
+        Require(second != null && second.factionId != first.factionId,
+            "成立済み相手が次の親族連携候補から除外されない");
+        SetGood(progress, "uruk_community", "barley", 10);
+        SetGood(progress, "uruk_community", "sheep_wool", 4);
+        SetGood(progress, second.factionId, "barley", 10);
+        Require(UrukCampaignSystem.TryApplyAction(session,
+            UrukRegionalSystem.ProposeKinshipTieAction, out _) &&
+            UrukRegionalSystem.KinshipTieCount(progress) == 2 &&
+            UrukRegionalSystem.SelectedKinshipCandidate(progress) == null &&
+            !UrukCampaignSystem.TryApplyAction(session,
+                UrukRegionalSystem.ProposeKinshipTieAction, out _),
+            "親族連携の2共同体上限が機能しない");
+
+        var lowReputation = HistoricalCampaignFactory.Build(definition);
+        SetGood(lowReputation.Progress, "uruk_community", "barley", 10);
+        SetGood(lowReputation.Progress, "uruk_community", "sheep_wool", 4);
+        lowReputation.Progress.diplomaticReputation = 39;
+        Require(!UrukCampaignSystem.TryApplyAction(lowReputation,
+            UrukRegionalSystem.ProposeKinshipTieAction, out _),
+            "低評判でも親族連携を提案できる");
+
+        var lowTrust = HistoricalCampaignFactory.Build(definition);
+        SetGood(lowTrust.Progress, "uruk_community", "barley", 10);
+        SetGood(lowTrust.Progress, "uruk_community", "sheep_wool", 4);
+        UrukRegionalSystem.SelectedKinshipCandidate(lowTrust.Progress)
+            .diplomaticTrust = 44;
+        Require(!UrukCampaignSystem.TryApplyAction(lowTrust,
+            UrukRegionalSystem.ProposeKinshipTieAction, out _),
+            "低信頼でも親族連携を提案できる");
+
+        var noGoods = HistoricalCampaignFactory.Build(definition);
+        SetGood(noGoods.Progress, "uruk_community", "barley", 0);
+        SetGood(noGoods.Progress, "uruk_community", "sheep_wool", 0);
+        Require(!UrukCampaignSystem.TryApplyAction(noGoods,
+            UrukRegionalSystem.ProposeKinshipTieAction, out _),
+            "共同食・贈答物資なしで親族連携を提案できる");
     }
 
     static HistoricalCampaignSession PreparedWaterDispute(

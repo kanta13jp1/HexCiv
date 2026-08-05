@@ -276,6 +276,34 @@ namespace HexCiv.Core
     }
 
     /// <summary>
+    /// 個人名・婚姻制度を直接復元せず、共同体間の親族連携を現物と信頼で表す推定モデル。
+    /// 当人と双方の家族集団の同意を前提とし、人口移転・婚資・継承規則は仮定しない。
+    /// </summary>
+    [Serializable]
+    public sealed class UrukKinshipTieState
+    {
+        public string id;
+        public string proposerFactionId;
+        public string partnerFactionId;
+        public string relationKind;
+        public string humanParticipantJa;
+        public string partnerParticipantJa;
+        public string consentBasisJa;
+        public string evidenceNoteJa;
+        public string[] sourceRefs;
+        public int createdTurn;
+        public int activeUntilTurn;
+        public int humanBarleySpent;
+        public int humanWoolSpent;
+        public int partnerBarleySpent;
+        public int trustAfter;
+        public string confidence;
+        /// <summary>active / established。</summary>
+        public string status;
+        public string resultJa;
+    }
+
+    /// <summary>
     /// ウルク地域段階の水利グラフ、農地、8勢力台帳、輸送、移住、外交。
     /// 通常4Xの状態・RNGには触れず、配列順と安定IDだけで決定的に解決する。
     /// </summary>
@@ -316,8 +344,13 @@ namespace HexCiv.Core
             "regional_land_renegotiate";
         public const string AcceptMigrationAction = "regional_accept_migration";
         public const string RejectMigrationAction = "regional_reject_migration";
+        public const string NextKinshipPartnerAction =
+            "regional_next_kinship_partner";
+        public const string ProposeKinshipTieAction =
+            "regional_propose_kinship_tie";
 
         const string HumanFactionId = "uruk_community";
+        const int MaxKinshipTies = 2;
 
         public static void EnsureInitialized(HistoricalCampaignDefinition definition,
             UrukCampaignProgress progress)
@@ -338,6 +371,8 @@ namespace HexCiv.Core
             progress.selectedWaterDisputeId ??= "";
             progress.landDisputes ??= Array.Empty<UrukLandDisputeState>();
             progress.selectedLandDisputeId ??= "";
+            progress.kinshipTies ??= Array.Empty<UrukKinshipTieState>();
+            progress.selectedKinshipFactionId ??= "";
             foreach (var farm in progress.farmPlots)
             {
                 if (farm == null) continue;
@@ -348,6 +383,7 @@ namespace HexCiv.Core
             }
             if (progress.nextRegionalId <= 0) progress.nextRegionalId = 1;
             NormalizeSelectedWaterCase(progress);
+            NormalizeSelectedKinshipPartner(progress);
             SyncHumanFaction(progress);
         }
 
@@ -432,6 +468,13 @@ namespace HexCiv.Core
                     if (farm.userFactionIds == null || farm.userFactionIds.Length == 0)
                         farm.userFactionIds = new[] { farm.ownerFactionId };
                 }
+        }
+
+        public static void MigrateKinshipV10(UrukCampaignProgress progress)
+        {
+            if (progress == null) throw new ArgumentNullException(nameof(progress));
+            progress.kinshipTies ??= Array.Empty<UrukKinshipTieState>();
+            progress.selectedKinshipFactionId ??= "";
         }
 
         public static void Validate(HistoricalCampaignDefinition definition,
@@ -586,6 +629,36 @@ namespace HexCiv.Core
             if (!string.IsNullOrWhiteSpace(progress.selectedLandDisputeId) &&
                 FindOpenLandDispute(progress, progress.selectedLandDisputeId) == null)
                 throw new InvalidOperationException("選択中の土地案件が不正");
+            var kinshipIds = new HashSet<string>();
+            foreach (var tie in progress.kinshipTies)
+            {
+                if (tie == null || string.IsNullOrWhiteSpace(tie.id) ||
+                    !kinshipIds.Add(tie.id) ||
+                    tie.proposerFactionId != HumanFactionId ||
+                    !factionIds.Contains(tie.partnerFactionId) ||
+                    tie.partnerFactionId == HumanFactionId ||
+                    tie.relationKind != "community_kinship_tie" ||
+                    string.IsNullOrWhiteSpace(tie.humanParticipantJa) ||
+                    string.IsNullOrWhiteSpace(tie.partnerParticipantJa) ||
+                    string.IsNullOrWhiteSpace(tie.consentBasisJa) ||
+                    string.IsNullOrWhiteSpace(tie.evidenceNoteJa) ||
+                    tie.sourceRefs == null || tie.sourceRefs.Length == 0 ||
+                    tie.createdTurn < 0 || tie.activeUntilTurn < tie.createdTurn ||
+                    tie.humanBarleySpent < 0 || tie.humanWoolSpent < 0 ||
+                    tie.partnerBarleySpent < 0 ||
+                    tie.trustAfter < 0 || tie.trustAfter > 100 ||
+                    tie.confidence != "inferred" ||
+                    (tie.status != "active" && tie.status != "established") ||
+                    string.IsNullOrWhiteSpace(tie.resultJa))
+                    throw new InvalidOperationException("親族連携状態が不正");
+                foreach (string sourceRef in tie.sourceRefs)
+                    if (!HasSource(definition, sourceRef))
+                        throw new InvalidOperationException("親族連携の出典参照が不正");
+            }
+            if (!string.IsNullOrWhiteSpace(progress.selectedKinshipFactionId) &&
+                !IsEligibleKinshipPartner(progress,
+                    progress.selectedKinshipFactionId))
+                throw new InvalidOperationException("選択中の親族連携候補が不正");
             if (progress.lastRegionalSourceWater !=
                 progress.lastRegionalFarmWater + progress.lastRegionalLeakage +
                 progress.lastRegionalUnusedWater)
@@ -703,6 +776,10 @@ namespace HexCiv.Core
                     return RespondToMigration(progress, turn, true, out resultJa);
                 case RejectMigrationAction:
                     return RespondToMigration(progress, turn, false, out resultJa);
+                case NextKinshipPartnerAction:
+                    return SelectNextKinshipPartner(progress, out resultJa);
+                case ProposeKinshipTieAction:
+                    return ProposeKinshipTie(progress, turn, out resultJa);
                 default:
                     resultJa = "不明な地域運営行動。";
                     return false;
@@ -742,10 +819,12 @@ namespace HexCiv.Core
             AdvanceObligations(session.Definition, progress, completedTurn);
             AdvanceTransports(progress, completedTurn);
             AdvanceMigrations(progress, completedTurn);
+            AdvanceKinshipTies(progress, completedTurn);
             PlanAi(session.Definition, progress, completedTurn);
             DegradeCanals(progress, completedTurn, flood);
             SyncHumanFaction(progress);
             NormalizeSelectedWaterCase(progress);
+            NormalizeSelectedKinshipPartner(progress);
             progress.regionalRevision++;
             Validate(session.Definition, progress);
         }
@@ -1004,6 +1083,262 @@ namespace HexCiv.Core
                     return 8;
             }
             return 0;
+        }
+
+        public static UrukRegionalFactionState SelectedKinshipCandidate(
+            UrukCampaignProgress progress)
+        {
+            NormalizeSelectedKinshipPartner(progress);
+            return FindFaction(progress, progress?.selectedKinshipFactionId);
+        }
+
+        public static UrukKinshipTieState LatestHumanKinshipTie(
+            UrukCampaignProgress progress)
+        {
+            if (progress?.kinshipTies == null) return null;
+            for (int i = progress.kinshipTies.Length - 1; i >= 0; i--)
+                if (progress.kinshipTies[i] != null) return progress.kinshipTies[i];
+            return null;
+        }
+
+        public static int KinshipTieCount(UrukCampaignProgress progress)
+        {
+            int count = 0;
+            if (progress?.kinshipTies == null) return count;
+            foreach (var tie in progress.kinshipTies)
+                if (tie != null && (tie.status == "active" ||
+                    tie.status == "established")) count++;
+            return count;
+        }
+
+        public static bool CanProposeKinshipTie(UrukCampaignProgress progress)
+        {
+            var partner = SelectedKinshipCandidate(progress);
+            return partner != null && KinshipTieCount(progress) < MaxKinshipTies &&
+                progress.diplomaticReputation >= 40 &&
+                partner.diplomaticTrust >= 45 &&
+                AvailableFactionGood(progress, HumanFactionId, "barley") >= 1 &&
+                AvailableFactionGood(progress, HumanFactionId, "sheep_wool") >= 1 &&
+                AvailableFactionGood(progress, partner.factionId, "barley") >= 1;
+        }
+
+        public static int KinshipTransportRiskReduction(
+            UrukCampaignProgress progress, string originFactionId,
+            string destinationFactionId)
+        {
+            if (progress?.kinshipTies == null) return 0;
+            foreach (var tie in progress.kinshipTies)
+            {
+                if (tie == null) continue;
+                bool pair = (tie.proposerFactionId == originFactionId &&
+                    tie.partnerFactionId == destinationFactionId) ||
+                    (tie.partnerFactionId == originFactionId &&
+                     tie.proposerFactionId == destinationFactionId);
+                if (pair) return tie.status == "active" ? 5 :
+                    tie.status == "established" ? 3 : 0;
+            }
+            return 0;
+        }
+
+        public static int TransportRiskForTest(
+            HistoricalCampaignDefinition definition,
+            UrukCampaignProgress progress, string transportId,
+            string originFactionId, string destinationFactionId, int turn)
+        {
+            return CalculateTransportRisk(definition, progress, transportId,
+                originFactionId, destinationFactionId, turn);
+        }
+
+        static bool SelectNextKinshipPartner(UrukCampaignProgress progress,
+            out string resultJa)
+        {
+            var candidates = KinshipCandidates(progress);
+            if (candidates.Count == 0)
+            {
+                progress.selectedKinshipFactionId = "";
+                resultJa = KinshipTieCount(progress) >= MaxKinshipTies
+                    ? "親族連携は上限2共同体に達している。"
+                    : "現在選べる親族連携候補がいない。";
+                return false;
+            }
+            int current = -1;
+            for (int i = 0; i < candidates.Count; i++)
+                if (candidates[i].factionId == progress.selectedKinshipFactionId)
+                {
+                    current = i;
+                    break;
+                }
+            var next = candidates[(current + 1) % candidates.Count];
+            progress.selectedKinshipFactionId = next.factionId;
+            progress.regionalRevision++;
+            resultJa = $"親族連携候補: {next.nameJa}（信頼{next.diplomaticTrust}）。";
+            return true;
+        }
+
+        static bool ProposeKinshipTie(UrukCampaignProgress progress, int turn,
+            out string resultJa)
+        {
+            var partner = SelectedKinshipCandidate(progress);
+            if (partner == null)
+            {
+                resultJa = KinshipTieCount(progress) >= MaxKinshipTies
+                    ? "親族連携は上限2共同体に達している。"
+                    : "親族連携候補がいない。";
+                return false;
+            }
+            if (progress.diplomaticReputation < 40)
+            {
+                resultJa = "親族連携の協議には外交評判40以上が必要。";
+                return false;
+            }
+            if (partner.diplomaticTrust < 45)
+            {
+                resultJa = $"{partner.nameJa}との信頼45以上が必要。";
+                return false;
+            }
+            if (AvailableFactionGood(progress, HumanFactionId, "barley") < 1 ||
+                AvailableFactionGood(progress, HumanFactionId, "sheep_wool") < 1)
+            {
+                resultJa = "共同食と贈答に大麦1・羊毛1が必要。";
+                return false;
+            }
+            if (AvailableFactionGood(progress, partner.factionId, "barley") < 1)
+            {
+                resultJa = $"{partner.nameJa}に共同食へ出せる大麦がない。";
+                return false;
+            }
+
+            ConsumeFactionGood(progress, HumanFactionId, "barley", 1);
+            ConsumeFactionGood(progress, HumanFactionId, "sheep_wool", 1);
+            ConsumeFactionGood(progress, partner.factionId, "barley", 1);
+            partner.diplomaticTrust = Math.Clamp(
+                partner.diplomaticTrust + 8, 0, 100);
+            var tie = new UrukKinshipTieState
+            {
+                id = NextId(progress, "kinship"),
+                proposerFactionId = HumanFactionId,
+                partnerFactionId = partner.factionId,
+                relationKind = "community_kinship_tie",
+                humanParticipantJa = "氏名不詳の成人家系構成員",
+                partnerParticipantJa = "氏名不詳の成人家系構成員",
+                consentBasisJa =
+                    "双方の家族集団と当人の同意を前提とする復元モデル",
+                evidenceNoteJa =
+                    "第4千年紀の地域間交流は確認されるが、この二共同体の具体的婚姻・人物・婚資・継承規則を示す直接史料はない。",
+                sourceRefs = new[]
+                {
+                    "cambridge_uruk_glocalization_2025",
+                    "met_uruk_first_city",
+                },
+                createdTurn = Math.Max(0, turn),
+                activeUntilTurn = Math.Max(0, turn) + 3,
+                humanBarleySpent = 1,
+                humanWoolSpent = 1,
+                partnerBarleySpent = 1,
+                trustAfter = partner.diplomaticTrust,
+                confidence = "inferred",
+                status = "active",
+                resultJa =
+                    "氏名不詳の成人家系構成員どうしの親族連携を協議。双方同意を前提とする推定復元で、4期間の往来安全化を始めた。",
+            };
+            Append(ref progress.kinshipTies, tie);
+            partner.currentGoalJa = "親族連携の履行";
+            partner.lastDecisionJa =
+                "共同食へ大麦1を拠出し、家族集団間の往来を見守る。";
+            partner.knownReasonJa = tie.evidenceNoteJa;
+            RecordDiplomaticEvent(progress, turn, "kinship_tie", tie.id,
+                partner.factionId, "kinship_tie_formed", 3,
+                tie.resultJa, tie.confidence);
+            progress.selectedKinshipFactionId = "";
+            NormalizeSelectedKinshipPartner(progress);
+            progress.regionalRevision++;
+            resultJa = tie.resultJa;
+            return true;
+        }
+
+        static void AdvanceKinshipTies(UrukCampaignProgress progress, int turn)
+        {
+            bool changed = false;
+            foreach (var tie in progress.kinshipTies)
+            {
+                if (tie == null || tie.status != "active" ||
+                    turn < tie.activeUntilTurn) continue;
+                tie.status = "established";
+                var partner = FindFaction(progress, tie.partnerFactionId);
+                if (partner != null)
+                {
+                    partner.diplomaticTrust = Math.Clamp(
+                        partner.diplomaticTrust + 3, 0, 100);
+                    tie.trustAfter = partner.diplomaticTrust;
+                }
+                tie.resultJa =
+                    "4期間の往来を終え、氏名不詳の家系構成員を介する共同体間連携が定着した（双方同意を前提とする推定復元）。";
+                RecordDiplomaticEvent(progress, turn, "kinship_tie", tie.id,
+                    tie.partnerFactionId, "kinship_tie_established", 2,
+                    tie.resultJa, tie.confidence);
+                changed = true;
+            }
+            if (changed) progress.regionalRevision++;
+        }
+
+        static List<UrukRegionalFactionState> KinshipCandidates(
+            UrukCampaignProgress progress)
+        {
+            var candidates = new List<UrukRegionalFactionState>();
+            if (progress?.regionalFactions == null ||
+                KinshipTieCount(progress) >= MaxKinshipTies) return candidates;
+            foreach (var faction in progress.regionalFactions)
+                if (faction != null && IsEligibleKinshipPartner(progress,
+                    faction.factionId)) candidates.Add(faction);
+            return candidates;
+        }
+
+        static bool IsEligibleKinshipPartner(UrukCampaignProgress progress,
+            string factionId)
+        {
+            var faction = FindFaction(progress, factionId);
+            if (faction == null || faction.human || factionId == HumanFactionId)
+                return false;
+            if (progress?.kinshipTies == null) return true;
+            foreach (var tie in progress.kinshipTies)
+                if (tie != null && tie.partnerFactionId == factionId &&
+                    (tie.status == "active" || tie.status == "established"))
+                    return false;
+            return true;
+        }
+
+        static void NormalizeSelectedKinshipPartner(
+            UrukCampaignProgress progress)
+        {
+            if (progress == null) return;
+            if (IsEligibleKinshipPartner(progress,
+                progress.selectedKinshipFactionId) &&
+                KinshipTieCount(progress) < MaxKinshipTies) return;
+            progress.selectedKinshipFactionId = "";
+            var candidates = KinshipCandidates(progress);
+            if (candidates.Count > 0)
+                progress.selectedKinshipFactionId = candidates[0].factionId;
+        }
+
+        static UrukKinshipTieState KinshipTieWith(
+            UrukCampaignProgress progress, string factionId)
+        {
+            if (progress?.kinshipTies == null) return null;
+            foreach (var tie in progress.kinshipTies)
+                if (tie != null && tie.partnerFactionId == factionId &&
+                    (tie.status == "active" || tie.status == "established"))
+                    return tie;
+            return null;
+        }
+
+        static bool HasSource(HistoricalCampaignDefinition definition,
+            string sourceRef)
+        {
+            if (definition?.sources == null || string.IsNullOrWhiteSpace(sourceRef))
+                return false;
+            foreach (var source in definition.sources)
+                if (source != null && source.id == sourceRef) return true;
+            return false;
         }
 
         public static void ResolveWaterForTest(UrukCampaignProgress progress,
@@ -1555,6 +1890,17 @@ namespace HexCiv.Core
                     faction.lastDecisionJa =
                         "ウルクとの輸送警戒と水路警備を継続した。";
                     faction.knownReasonJa = "水利合意の拒否・不履行・破約。";
+                }
+                else if (KinshipTieWith(progress, faction.factionId) is var tie &&
+                    tie != null)
+                {
+                    faction.currentGoalJa = tie.status == "active"
+                        ? "親族連携の履行" : "親族関係を基盤とする交易";
+                    faction.lastDecisionJa = tie.status == "active"
+                        ? "家族集団間の往来を見守り、共同食の合意を履行している。"
+                        : "定着した親族連携を通じて交易路の安全を支えている。";
+                    faction.knownReasonJa =
+                        "第4千年紀の地域間交流に基づく推定。具体的人物・婚姻制度は不詳。";
                 }
                 else
                 {
@@ -2456,12 +2802,8 @@ namespace HexCiv.Core
             var from = FindFaction(progress, origin);
             var to = FindFaction(progress, destination);
             string id = NextId(progress, "transport");
-            int risk = 8 + StableHash(definition.seed, id, turn) % 13;
-            if (HasActiveAccessRight(progress, origin, destination))
-                risk = Math.Max(2, risk - 6);
-            risk = Math.Clamp(risk + WaterRetaliationRiskPenalty(progress,
-                origin, destination) + LandRetaliationRiskPenalty(progress,
-                origin, destination), 2, 35);
+            int risk = CalculateTransportRisk(definition, progress, id,
+                origin, destination, turn);
             int lost = StableHash(definition.seed + 17, id, turn) % 100 < risk
                 ? Math.Min(1, amount) : 0;
             Append(ref progress.transports, new UrukTransportState
@@ -2487,6 +2829,22 @@ namespace HexCiv.Core
                     new HistoricalMapPoint { col = to.startCol, row = to.startRow },
                 },
             });
+        }
+
+        static int CalculateTransportRisk(HistoricalCampaignDefinition definition,
+            UrukCampaignProgress progress, string id, string origin,
+            string destination, int turn)
+        {
+            if (definition == null) throw new ArgumentNullException(nameof(definition));
+            if (string.IsNullOrWhiteSpace(id))
+                throw new ArgumentException("輸送IDが空", nameof(id));
+            int risk = 8 + StableHash(definition.seed, id, turn) % 13;
+            if (HasActiveAccessRight(progress, origin, destination))
+                risk = Math.Max(2, risk - 6);
+            return Math.Clamp(risk + WaterRetaliationRiskPenalty(progress,
+                origin, destination) + LandRetaliationRiskPenalty(progress,
+                origin, destination) - KinshipTransportRiskReduction(progress,
+                origin, destination), 2, 35);
         }
 
         static void AdvanceTransports(UrukCampaignProgress progress, int turn)

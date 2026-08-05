@@ -26,6 +26,39 @@ CodexとClaude Codeは、以後この `HexCiv` プロジェクトだけを更新
 
 ## 最新状況
 
+### ✅ 2026-08-05 Codex: ウルク第4I・史料限界を明示する親族外交と販売素材
+
+**ゲーム開発**
+
+- 婚姻を含む可能性のある共同体間親族連携を追加した。候補共同体を個別に切り替え、外交評判40、相手信頼45、ウルクの大麦1・羊毛1、相手の大麦1を満たす場合に、最大2共同体まで提案できる。現物は各台帳から実際に消費する。
+- 紀元前4000年頃の具体的人物・王家婚姻・婚資・系譜・継承制度を捏造しない。双方の参加者は「氏名不詳の成人家系構成員」、合意は「双方の家族集団と当人の同意を前提とする復元モデル」、確度は `inferred` と保存・表示し、人口移転は行わない。第4千年紀の地域間交流を示すCambridge Archaeological Journalの研究は交流可能性の参照に限り、個別婚姻の直接証拠とは扱わない。
+- 4期間の履行中は当事者間の輸送損失リスクを5%、定着後は3%軽減する。選択相手だけの信頼、外交評判、AI目的、外交履歴へ接続した。自動管理は相手を選ばない。
+- 進捗JSONをversion 10へ更新し、version 9以前を空の親族連携台帳と定義順の候補へ補完する。氏名不詳、同意前提、史料限界、出典参照、現物消費、信頼、期間、状態をセーブ往復する。
+- 地域UIに「親族候補」「連携提案」と、相手、履行／定着、氏名不詳、双方同意前提、推定、交易危険軽減を追加した。短い表示へ整え、12ptを上限にして760×446でも折返しが操作列へ重ならないようにした。
+
+**販売促進**
+
+- `UrukRegionalScreenshot.CaptureKinshipCandidate` で実キャンペーン状態を760×446に描画した。`Logs/marketing/uruk_stage4i_kinship_diplomacy.png` は82,882 bytes、SHA256 `4b231b5e8b170c8934960fc9964d14d873c38a10ba4bde8a406eb2bdc74266b5`。相手、履行中、氏名不詳、双方同意前提、推定、交易危険-5%、2操作を目視確認した。
+- Stage 4IをH10の「開始前に完成した更新候補」へ登録した。外部公開、H10第1週、訪問、購入、売上には数えておらず、開始後に同じ改善を二重で新機能告知しない。
+- `MARKETING_HANDOFF.md`、H10事前登録、Obsidian正本へ最新2ZIP、画像、検証事実を同期した。Claudeは販売サイト・itch.io・実測、Codexはゲーム・配布物、Obsidianは仮説判定の正本という分担を維持する。
+
+**検証（Unity 6000.3.20f1）**
+
+- `HistoricalCampaignFoundationSmokeTest.Run`: `HISTORICAL CAMPAIGN FOUNDATION SMOKE OK`。
+- `HistoricalContentSchemaSmokeTest.Run`: `HISTORICAL CONTENT SCHEMA SMOKE OK`。追加した学術出典の型・URL・参照日・審査状態を検証した。
+- `UrukCampaignVerticalSliceSmokeTest.Run`: `URUK CAMPAIGN VERTICAL SLICE SMOKE OK`。
+- `UrukRegionalSimulationSmokeTest.Run`: `URUK REGIONAL SIMULATION SMOKE OK`。対象切替、条件拒否、現物消費、選択外不変、4期定着、交易危険-5%→-3%、AI、評判、v9→v10、セーブ往復、3 seed決定性を確認。最終実行平均 `0.12 ms/turn`。
+- `SmokeTest.Run`: `SMOKE OK`。Stage 4Hの `SMOKE` 出力44行と完全一致。
+- `DemoModeSmokeTest.Run`: `DEMO SMOKE OK`。
+- 製品版 `BUILD OK: 98,089,945 bytes`、Demo `DEMO BUILD OK: 98,089,945 bytes`。各12秒実起動し、Unity 6000.3.20f1・例外0件。
+- 製品ZIP: 37,595,057 bytes、SHA256 `a5db033e1798504f92fe10b007db26ca3215549d0133e3eb15ff22880a53d2e2`。
+- Demo ZIP: 37,597,756 bytes、SHA256 `815b085fcc476561d3390351bedbd47af8d7c07c432ea3da03051e930dcc8843`。両manifest一致、各148項目、README／LICENSE／Assembly-CSharp.dll／EXEを1件、クラッシュハンドラ0件。
+
+**次の担当**
+
+- Claude: ユーザー承認後に商品画像PR #4408の生成リリースノートだけを修正し、CI再実行・マージ・P2開始日を返す。itch.ioはユーザーがCloudflare本人確認とログインを完了した後、非公開ページへ最新2ZIPと確認済み画像を登録する。
+- Codex: 伝令・粘土封泥・数詞記録など、同時代資料で条件を置ける情報伝達を追加交渉とAI観測へ接続する。P1/P2/H4/H7/itch.ioの開始ゲートを越えるまではH10を開始せず、外部投稿・価格変更・有料広告を行わない。
+
 ### ✅ 2026-08-05 Codex: ウルク第4H・個別水利合意操作と販売素材
 
 **ゲーム開発**

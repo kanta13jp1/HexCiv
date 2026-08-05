@@ -30,7 +30,7 @@ with exactly these signatures, because other modules are written against them in
 | AI | `Core/AI/AIController.cs` (helpers allowed in `Core/AI/`) |
 | Rendering | `Rendering/MapRenderer.cs, Rendering/EntityRenderer.cs, Rendering/HeritageRenderer.cs` (HeritageRenderer: 探索済み遺産タイルの独立マーカー。helpers allowed in `Rendering/`) |
 | UI | `UI/UIManager.cs, UI/UIStyle.cs, UI/WorldHistoryPanel.cs, UI/CulturePanel.cs, UI/LegacyPanel.cs, UI/AdministrationPanel.cs, UI/LogisticsPanel.cs, UI/PopulationPanel.cs, UI/PoliticsPanel.cs, UI/MarketPanel.cs` (WorldHistoryPanel: 総合・文明・指導者・生活技術・自然地理を含む世界史台帳10画面とゲーム内状態を閲覧。CulturePanel: 文化政策・影響力。LegacyPanel: 遺産探索・偉人登用・作品収蔵。AdministrationPanel: 国家運営。LogisticsPanel: 文明・部隊別補給比較、手続き生成補給アイコン、スライドフェード、F10。PopulationPanel: 階層・需要・教育・満足・移住、生成三色人物アイコン、F7。PoliticsPanel: 政治力・正統性・利害集団・法律、生成天秤アイコン、F6。MarketPanel: 5財・価格・交易・地域産業・4市場方針、生成木箱双方向矢印アイコン、F4。いずれもsortingOrder 130以上の独立Canvas。helpers allowed in `UI/`) |
-| Historical campaign UI | `UI/HistoricalCampaignPanel.cs, UI/UrukRegionalPanel.cs` — 年代・推定人口幅・備蓄月数・農地・運河・神殿5段階・安定度、最大リスクと3行動の顧問、5%刻み労働配分、人口／食料／地位／社会内訳、簡潔／詳細、史実クイックセーブ、暫定ローポリ復元模型。地域パネルは水利・農地・物流レイヤー、6契約、履行期限、輸送状況、外交評判、最新の外交履歴、水利紛争の観測原因、未決・履行中・再交渉可能を横断する対象番号、上下流関係、仲裁者と分水／穀物補償／共同管理／拒否／破約／再交渉／第三者仲裁、土地・耕作権の観測根拠と共同耕作／現物補償／季節利用仲裁／拒否／破約／再交渉を表示。sortingOrder 122/123の独立Canvas |
+| Historical campaign UI | `UI/HistoricalCampaignPanel.cs, UI/UrukRegionalPanel.cs` — 年代・推定人口幅・備蓄月数・農地・運河・神殿5段階・安定度、最大リスクと3行動の顧問、5%刻み労働配分、人口／食料／地位／社会内訳、簡潔／詳細、史実クイックセーブ、暫定ローポリ復元模型。地域パネルは水利・農地・物流レイヤー、6契約、履行期限、輸送状況、外交評判、最新の外交履歴、水利紛争の観測原因、未決・履行中・再交渉可能を横断する対象番号、上下流関係、仲裁者と分水／穀物補償／共同管理／拒否／破約／再交渉／第三者仲裁、土地・耕作権の観測根拠と共同耕作／現物補償／季節利用仲裁／拒否／破約／再交渉、親族連携候補・同意前提・確度・交易危険軽減を表示。sortingOrder 122/123の独立Canvas |
 | Input/Camera | `Control/CameraController.cs, Control/InputController.cs` |
 | Audio (added 2026-07-20, Codex) | `Audio/GameAudio.cs` — namespace `HexCiv.Audio`; procedural BGM/SFX, presentation-only (reads Core state, never mutates; no state.Rng usage) |
 | Integration | `GameBootstrap.cs`, `Assets/Editor/SmokeTest.cs`, `Assets/Editor/SceneSetup.cs`, `Assets/Editor/BuildScript.cs` |
@@ -43,7 +43,7 @@ Foundation summary: `HexCoord` (axial, pointy-top, `ToWorld/FromWorld/Range/Ring
 Note: `GameActions` に `OnSaveGame` / `OnLoadGame` を追加(2026-07-20、セーブ/ロード。実装は `Core/SaveLoad.cs`、配線は GameBootstrap §9。UI: セーブ/ロードボタン+F5/F9)。
 Note: `GameConfig` に `MapType` を追加(2026-07-20、0=大陸(既定)/1=パンゲア/2=群島。`MapGenerator` が生成パラメータを分岐、SaveLoad version 5 で永続化(旧セーブは0)、UI: ゲーム設定「マップ種別」行。PlayerPrefs "HexCiv.MapType")。
 Note: SaveLoad version 16 で河川流向・氾濫原を永続化し、version 15は河川配列から流向・氾濫原を再構築、version 14以前は保存済み地形から河川自体を決定論的に補完する。version 14 で市場方針、5財の在庫・価格、市場アクセス、需要充足、交易実績、発展済み地域産業を永続化し、version 13以前は均衡市場・各在庫3・市場アクセス50・需要充足75・地域産業なしで補完する。version 13 で政治力・正統性・現行法・4利害集団の支持を永続化し、version 12以前は政治力20・正統性60・長老評議会・各支持50で補完する。version 12 で社会重点・人口階層・需要・教育・満足度・移住を永続化し、version 11以前は安全な既定値で補完する。version 11 でユニット補給状態・連続孤立ターンを追加し、version 10以前は補給良好・0ターンで補完する。version 10 で国庫・税制・維持費・安定度・戦争疲弊・直近収支を追加し、version 9以前は国庫120・均衡税・安定度60で補完する。
-Note: 史実キャンペーン進捗 version 9 で農地の基本帰属・管理者・利用共同体、土地・耕作権紛争、期限付き共同耕作／季節利用、現物配分、仲裁、報復を永続化する。version 8以前の農地は所有勢力を管理者・唯一の利用者として補完する。version 8の水利案件選択・推定水系・第三者仲裁、version 7の共同管理・破約・再交渉・報復、version 6の観測原因・複数期分水、version 5の外交履歴・評判は連鎖移行し、既存地域状態と契約債務を保持する。
+Note: 史実キャンペーン進捗 version 10 で共同体間親族連携、個別候補、氏名不詳の参加者、双方同意前提、出典、確度、現物消費、信頼、履行期間と定着状態を永続化する。version 9以前は空の連携台帳と定義順の候補へ補完する。version 9の農地権利・土地紛争、version 8の水利案件選択・推定水系・第三者仲裁、version 7の共同管理・破約・再交渉・報復、version 6の観測原因・複数期分水、version 5の外交履歴・評判は連鎖移行し、既存地域状態と契約債務を保持する。
 
 ## 3. Simulation module (MUST-MATCH APIs)
 

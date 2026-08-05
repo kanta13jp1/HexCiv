@@ -8,7 +8,7 @@ using UnityEngine;
 using UnityEngine.UI;
 
 /// <summary>
-/// Stage 4F/4G/4H の実キャンペーン状態から、地域外交UIを撮影する。
+/// Stage 4F/4G/4H/4I の実キャンペーン状態から、地域外交UIを撮影する。
 /// 出力は販売素材候補だが、H10開始前は公開・計測へ使用しない。
 /// </summary>
 public static class UrukRegionalScreenshot
@@ -31,6 +31,11 @@ public static class UrukRegionalScreenshot
     {
         Capture("uruk_stage4h_water_agreement_selection.png",
             PrepareMultipleAgreements);
+    }
+
+    public static void CaptureKinshipCandidate()
+    {
+        Capture("uruk_stage4i_kinship_diplomacy.png", PrepareKinshipTie);
     }
 
     static void Capture(string fileName,
@@ -154,6 +159,21 @@ public static class UrukRegionalScreenshot
             UrukRegionalSystem.SelectedActiveWaterAgreement(session.Progress) ==
                 null)
             throw new Exception("撮影用の個別水利対象を再現できない");
+    }
+
+    static void PrepareKinshipTie(HistoricalCampaignSession session)
+    {
+        SetGood(session.Progress, "barley", 5);
+        SetGood(session.Progress, "sheep_wool", 3);
+        session.Progress.selectedKinshipFactionId = "eridu_community";
+        if (!UrukCampaignSystem.TryApplyAction(session,
+            UrukRegionalSystem.ProposeKinshipTieAction, out _))
+            throw new Exception("撮影用の親族連携を開始できない");
+        var tie = UrukRegionalSystem.LatestHumanKinshipTie(session.Progress);
+        if (tie == null || tie.status != "active" ||
+            UrukRegionalSystem.KinshipTransportRiskReduction(session.Progress,
+                "uruk_community", "eridu_community") != 5)
+            throw new Exception("撮影用の親族連携効果を再現できない");
     }
 
     static UrukFarmPlotState FindFarm(UrukCampaignProgress progress, string id)
