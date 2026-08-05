@@ -91,6 +91,8 @@ namespace HexCiv.UI
                 UrukRegionalSystem.SelectedInformationPartner(progress);
             var latestInformation =
                 UrukRegionalSystem.LatestHumanInformationDispatch(progress);
+            var latestTransport =
+                UrukRegionalSystem.LatestHumanTransport(progress);
             int enRoute = CountTransports(progress, "en_route");
 
             string farmText = farm == null
@@ -166,7 +168,15 @@ namespace HexCiv.UI
                     $"{InformationStatusJa(latestInformation.status)} " +
                     $"媒体{ConfidenceJa(latestInformation.mediumConfidence)}・" +
                     $"送受信{ConfidenceJa(latestInformation.scenarioConfidence)}・" +
-                    $"危険-{UrukRegionalSystem.CommunicationTransportRiskReduction(progress, "uruk_community", latestInformation.receiverFactionId, session.State.TurnNumber)}%");
+                    $"危険-{UrukRegionalSystem.CommunicationTransportRiskReduction(progress, "uruk_community", latestInformation.receiverFactionId, session.State.TurnNumber)}%・" +
+                    $"照合輸送{latestInformation.linkedTransportCount}件");
+            string transportText = latestTransport == null
+                ? "最新輸送なし"
+                : $"最新輸送:{GoodNameJa(latestTransport.goodId)}" +
+                  $"{latestTransport.shippedAmount} " +
+                  $"{FactionName(progress, latestTransport.originFactionId)}→" +
+                  $"{FactionName(progress, latestTransport.destinationFactionId)}／" +
+                  UrukRegionalSystem.TransportForecastJa(latestTransport);
             statusText.text =
                 $"水源 {progress.lastRegionalSourceWater}　農地 {progress.lastRegionalFarmWater}　" +
                 $"漏水 {progress.lastRegionalLeakage}　未使用 {progress.lastRegionalUnusedWater}\n" +
@@ -179,7 +189,8 @@ namespace HexCiv.UI
                 $"{landText}\n" +
                 $"外交評判 {progress.diplomaticReputation}/100　{diplomacyText}\n" +
                 kinshipText + "\n" +
-                informationText;
+                informationText + "\n" +
+                transportText;
 
             bool enabled = !session.State.IsGameOver;
             planButton.interactable = enabled && farm != null &&
@@ -259,7 +270,7 @@ namespace HexCiv.UI
             body = UIStyle.CreatePanel(canvasGo.transform, "RegionalBody",
                 new Color(0.025f, 0.04f, 0.07f, 0.95f));
             UIStyle.SetRect(body, new Vector2(0f, 0f), new Vector2(0f, 0f),
-                new Vector2(0f, 0f), new Vector2(18f, 18f), new Vector2(720f, 470f));
+                new Vector2(0f, 0f), new Vector2(18f, 18f), new Vector2(720f, 500f));
 
             var title = UIStyle.CreateText(body.transform, "Title",
                 "南メソポタミア地域管理　—　水利・農業・交易・外交・情報", 17,
@@ -282,7 +293,7 @@ namespace HexCiv.UI
             statusText.resizeTextMaxSize = 12;
             UIStyle.SetRect(statusText.gameObject, new Vector2(0f, 1f),
                 new Vector2(1f, 1f), new Vector2(0.5f, 1f),
-                new Vector2(0f, -43f), new Vector2(-24f, 210f));
+                new Vector2(0f, -43f), new Vector2(-24f, 240f));
 
             string[] overlayNames = { "通常", "水利", "農地", "物流" };
             string[] overlayIds =

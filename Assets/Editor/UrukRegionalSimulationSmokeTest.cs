@@ -43,7 +43,7 @@ public static class UrukRegionalSimulationSmokeTest
     {
         var session = HistoricalCampaignFactory.Build(definition);
         var progress = session.Progress;
-        Require(progress.version == 11, "進捗versionが11ではない");
+        Require(progress.version == 12, "進捗versionが12ではない");
         Require(progress.obligations != null, "契約債務台帳が初期化されていない");
         Require(progress.diplomaticRecords != null &&
             progress.diplomaticReputation == 50,
@@ -300,7 +300,7 @@ public static class UrukRegionalSimulationSmokeTest
             },
         };
         UrukCampaignSystem.MigrateProgress(definition, migrated);
-        Require(migrated.version == 11 &&
+        Require(migrated.version == 12 &&
             migrated.waterDisputes[0].claimantFarmId ==
                 "lagash_hinterland_farm" &&
             migrated.waterDisputes[0].resolutionKind == "joint_maintenance" &&
@@ -323,7 +323,7 @@ public static class UrukRegionalSimulationSmokeTest
             },
         };
         UrukCampaignSystem.MigrateProgress(definition, v6Migration);
-        Require(v6Migration.version == 11 &&
+        Require(v6Migration.version == 12 &&
             v6Migration.waterDisputes[0].retaliationJa == "" &&
             v6Migration.waterDisputes[0].renegotiationCount == 0,
             "version 6から報復・再交渉状態を補完できない");
@@ -347,7 +347,7 @@ public static class UrukRegionalSimulationSmokeTest
             },
         };
         UrukCampaignSystem.MigrateProgress(definition, v7Migration);
-        Require(v7Migration.version == 11 &&
+        Require(v7Migration.version == 12 &&
             v7Migration.waterDisputes[0].basinId ==
                 "lower_alluvial_wetland_network" &&
             v7Migration.waterDisputes[0].upstreamFactionId ==
@@ -368,7 +368,7 @@ public static class UrukRegionalSimulationSmokeTest
             farm.userFactionIds = null;
         }
         UrukCampaignSystem.MigrateProgress(definition, v8Migration);
-        Require(v8Migration.version == 11 &&
+        Require(v8Migration.version == 12 &&
             v8Migration.landDisputes != null &&
             v8Migration.selectedLandDisputeId == "",
             "version 8から土地紛争台帳を補完できない");
@@ -383,7 +383,7 @@ public static class UrukRegionalSimulationSmokeTest
         v9Migration.kinshipTies = null;
         v9Migration.selectedKinshipFactionId = null;
         UrukCampaignSystem.MigrateProgress(definition, v9Migration);
-        Require(v9Migration.version == 11 &&
+        Require(v9Migration.version == 12 &&
             v9Migration.kinshipTies != null &&
             v9Migration.selectedKinshipFactionId == "eridu_community",
             "version 9から親族連携台帳・候補を補完できない");
@@ -394,19 +394,55 @@ public static class UrukRegionalSimulationSmokeTest
         v10Migration.selectedInformationFactionId = null;
         v10Migration.selectedInformationMedium = null;
         UrukCampaignSystem.MigrateProgress(definition, v10Migration);
-        Require(v10Migration.version == 11 &&
+        Require(v10Migration.version == 12 &&
             v10Migration.informationDispatches != null &&
             v10Migration.selectedInformationFactionId == "eridu_community" &&
             v10Migration.selectedInformationMedium ==
                 UrukRegionalSystem.OralMessageMedium,
             "version 10から情報伝達台帳・送信先・媒体を補完できない");
 
+        var v11Migration = HistoricalCampaignFactory.Build(definition).Progress;
+        v11Migration.version = 11;
+        v11Migration.transports = new[]
+        {
+            new UrukTransportState
+            {
+                id = "legacy_transport",
+                contractId = "legacy_contract",
+                originFactionId = "uruk_community",
+                destinationFactionId = "eridu_community",
+                goodId = "barley",
+                shippedAmount = 1,
+                remainingAmount = 1,
+                departureTurn = 5,
+                arrivalTurn = 7,
+                status = "en_route",
+                riskPercent = 12,
+                informationDispatchId = "legacy_information",
+                forecastRiskMinPercent = 0,
+                forecastRiskMaxPercent = 99,
+                forecastConfidence = "certain",
+                informationAssuranceJa = "旧値",
+                termsExact = true,
+            },
+        };
+        UrukCampaignSystem.MigrateProgress(definition, v11Migration);
+        var migratedTransport = v11Migration.transports[0];
+        Require(v11Migration.version == 12 &&
+            migratedTransport.informationDispatchId == "" &&
+            migratedTransport.forecastRiskMinPercent == -1 &&
+            migratedTransport.forecastRiskMaxPercent == -1 &&
+            migratedTransport.forecastConfidence == "" &&
+            migratedTransport.informationAssuranceJa == "" &&
+            !migratedTransport.termsExact,
+            "version 11から輸送予測を安全な情報なし状態へ補完できない");
+
         var chainedMigration = HistoricalCampaignFactory.Build(definition).Progress;
         chainedMigration.version = 3;
         chainedMigration.obligations = null;
         chainedMigration.diplomaticRecords = null;
         UrukCampaignSystem.MigrateProgress(definition, chainedMigration);
-        Require(chainedMigration.version == 11 &&
+        Require(chainedMigration.version == 12 &&
             chainedMigration.obligations != null &&
             chainedMigration.diplomaticRecords != null,
             "version 3から現行versionへ連続移行できない");
@@ -1148,6 +1184,85 @@ public static class UrukRegionalSimulationSmokeTest
                 "sealed_risk_probe", "uruk_community", "eridu_community", 27) ==
                 Math.Max(2, sealedBaseline - 3),
             "封泥到着後の3%輸送危険軽減が不正");
+        SetGood(sealedProgress, "uruk_community", "barley", 5);
+        Require(UrukCampaignSystem.TryApplyAction(sealedSession,
+            UrukRegionalSystem.SendGiftAction, out _),
+            "封泥受信後の照合輸送を計画できない");
+        Advance(sealedSession, 28);
+        var sealedTransport =
+            UrukRegionalSystem.LatestHumanTransport(sealedProgress);
+        Require(sealedTransport != null &&
+            sealedTransport.informationDispatchId == sealedDispatch.id &&
+            sealedTransport.forecastRiskMinPercent ==
+                Math.Max(2, sealedTransport.riskPercent - 4) &&
+            sealedTransport.forecastRiskMaxPercent ==
+                Math.Min(35, sealedTransport.riskPercent + 4) &&
+            sealedTransport.forecastConfidence == "inferred" &&
+            sealedTransport.informationAssuranceJa.Contains("封泥") &&
+            !sealedTransport.termsExact &&
+            sealedDispatch.linkedTransportCount == 1,
+            "封泥による送受者照合・輸送危険幅が契約輸送へ残らない");
+
+        var blindSession = HistoricalCampaignFactory.Build(definition);
+        SetGood(blindSession.Progress, "uruk_community", "barley", 5);
+        Require(UrukCampaignSystem.TryApplyAction(blindSession,
+            UrukRegionalSystem.SendGiftAction, out _),
+            "情報なし輸送の比較用贈与を計画できない");
+        Advance(blindSession, 1);
+        var blindTransport = UrukRegionalSystem.LatestHumanTransport(
+            blindSession.Progress);
+        Require(blindTransport != null &&
+            blindTransport.informationDispatchId == "" &&
+            blindTransport.forecastRiskMinPercent == -1 &&
+            blindTransport.forecastRiskMaxPercent == -1 &&
+            !blindTransport.termsExact &&
+            UrukRegionalSystem.TransportForecastJa(blindTransport).Contains(
+                "危険率は不明"),
+            "情報なしでも輸送危険を知ることができる");
+
+        var precedenceSession = HistoricalCampaignFactory.Build(definition);
+        var precedenceProgress = precedenceSession.Progress;
+        precedenceProgress.templePlanned = true;
+        precedenceProgress.templeStage = 5;
+        precedenceProgress.templeProgress = 100;
+        precedenceProgress.administrationAdopted = true;
+        precedenceProgress.selectedInformationFactionId = "eridu_community";
+        precedenceProgress.selectedInformationMedium =
+            UrukRegionalSystem.NumericalRecordMedium;
+        SetGood(precedenceProgress, "uruk_community", "alluvial_clay", 5);
+        precedenceSession.State.TurnNumber = 34;
+        Require(UrukCampaignSystem.TryApplyAction(precedenceSession,
+            UrukRegionalSystem.SendInformationAction, out _),
+            "優先度試験の数量記録を送れない");
+        var preciseDispatch =
+            UrukRegionalSystem.LatestHumanInformationDispatch(
+                precedenceProgress);
+        Advance(precedenceSession, 34);
+        Advance(precedenceSession, 35);
+        precedenceProgress.selectedInformationMedium =
+            UrukRegionalSystem.ClaySealingMedium;
+        Require(UrukCampaignSystem.TryApplyAction(precedenceSession,
+            UrukRegionalSystem.SendInformationAction, out _),
+            "優先度試験の後発封泥を送れない");
+        var laterSealing = UrukRegionalSystem.LatestHumanInformationDispatch(
+            precedenceProgress);
+        Advance(precedenceSession, 36);
+        Advance(precedenceSession, 37);
+        SetGood(precedenceProgress, "uruk_community", "barley", 5);
+        Require(UrukCampaignSystem.TryApplyAction(precedenceSession,
+            UrukRegionalSystem.SendGiftAction, out _),
+            "複数媒体が有効な照合輸送を計画できない");
+        Advance(precedenceSession, 38);
+        var precedenceTransport = UrukRegionalSystem.LatestHumanTransport(
+            precedenceProgress);
+        Require(precedenceTransport != null && preciseDispatch != null &&
+            laterSealing != null && preciseDispatch.status == "active" &&
+            laterSealing.status == "active" &&
+            precedenceTransport.informationDispatchId == preciseDispatch.id &&
+            precedenceTransport.termsExact &&
+            preciseDispatch.linkedTransportCount == 1 &&
+            laterSealing.linkedTransportCount == 0,
+            "複数の有効媒体から最も精密な情報を照合できない");
 
         var numericSession = HistoricalCampaignFactory.Build(definition);
         var numericProgress = numericSession.Progress;
@@ -1201,6 +1316,41 @@ public static class UrukRegionalSimulationSmokeTest
                 Math.Max(2, numericBaseline - 5) &&
             HasDiplomaticOutcome(numericProgress, "information_received"),
             "数量記録板到着後の信頼・履歴・5%輸送危険軽減が不正");
+        SetGood(numericProgress, "uruk_community", "barley", 5);
+        Require(UrukCampaignSystem.TryApplyAction(numericSession,
+            UrukRegionalSystem.OfferTributeAction, out _),
+            "数量記録受信後の条件照合輸送を計画できない");
+        Advance(numericSession, 36);
+        Advance(numericSession, 37);
+        var numericTransport = UrukRegionalSystem.LatestHumanTransport(
+            numericProgress);
+        string numericTransportDiagnostics = numericTransport == null
+            ? "transport=null"
+            : $"destination={numericTransport.destinationFactionId}, " +
+              $"dispatch={numericTransport.informationDispatchId}/" +
+              $"{numericDispatch.id}, range=" +
+              $"{numericTransport.forecastRiskMinPercent}-" +
+              $"{numericTransport.forecastRiskMaxPercent}, " +
+              $"risk={numericTransport.riskPercent}, " +
+              $"confidence={numericTransport.forecastConfidence}, " +
+              $"assurance={numericTransport.informationAssuranceJa}, " +
+              $"exact={numericTransport.termsExact}, " +
+              $"links={numericDispatch.linkedTransportCount}";
+        Require(numericTransport != null &&
+            numericTransport.destinationFactionId == "ur_community" &&
+            numericTransport.informationDispatchId == numericDispatch.id &&
+            numericTransport.forecastRiskMinPercent ==
+                Math.Max(2, numericTransport.riskPercent - 2) &&
+            numericTransport.forecastRiskMaxPercent ==
+                Math.Min(35, numericTransport.riskPercent + 2) &&
+            numericTransport.forecastConfidence == "inferred" &&
+            numericTransport.informationAssuranceJa.Contains("数量条件") &&
+            numericTransport.termsExact &&
+            numericDispatch.linkedTransportCount == 1 &&
+            UrukRegionalSystem.TransportForecastJa(numericTransport).Contains(
+                "（推定）"),
+            "数量条件の照合・狭い輸送危険幅が契約輸送へ残らない: " +
+            numericTransportDiagnostics);
 
         string save = HistoricalCampaignSave.Serialize(numericSession);
         var loaded = HistoricalCampaignSave.Deserialize(save,

@@ -566,7 +566,8 @@ namespace HexCiv.UI
                         transport.path != null && transport.path.Length >= 2)
                         BuildRoute(transport.path, new Color(0.95f, 0.72f, 0.18f),
                             $"輸送 {transport.goodId} {transport.remainingAmount}　" +
-                            $"到着{transport.arrivalTurn}期");
+                            $"到着{transport.arrivalTurn}期　" +
+                            UrukRegionalSystem.TransportForecastJa(transport));
                 foreach (var migration in progress.migrationGroups)
                 {
                     if (migration.status != "in_transit") continue;

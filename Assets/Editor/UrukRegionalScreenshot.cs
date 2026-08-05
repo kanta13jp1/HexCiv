@@ -8,13 +8,13 @@ using UnityEngine;
 using UnityEngine.UI;
 
 /// <summary>
-/// Stage 4F/4G/4H/4I/4J の実キャンペーン状態から、地域外交UIを撮影する。
+/// Stage 4F/4G/4H/4I/4J/4K の実キャンペーン状態から、地域外交UIを撮影する。
 /// 出力は販売素材候補だが、H10開始前は公開・計測へ使用しない。
 /// </summary>
 public static class UrukRegionalScreenshot
 {
     const int Width = 760;
-    const int Height = 510;
+    const int Height = 540;
 
     public static void CaptureArbitrationCandidate()
     {
@@ -42,6 +42,12 @@ public static class UrukRegionalScreenshot
     {
         Capture("uruk_stage4j_information_transmission.png",
             PrepareInformationTransmission);
+    }
+
+    public static void CaptureTransportForecastCandidate()
+    {
+        Capture("uruk_stage4k_transport_forecast.png",
+            PrepareTransportForecast);
     }
 
     static void Capture(string fileName,
@@ -206,6 +212,28 @@ public static class UrukRegionalScreenshot
             UrukRegionalSystem.CommunicationTransportRiskReduction(
                 session.Progress, "uruk_community", "eridu_community", 36) != 5)
             throw new Exception("撮影用の情報伝達効果を再現できない");
+    }
+
+    static void PrepareTransportForecast(HistoricalCampaignSession session)
+    {
+        PrepareInformationTransmission(session);
+        SetGood(session.Progress, "barley", 5);
+        if (!UrukCampaignSystem.TryApplyAction(session,
+            UrukRegionalSystem.SendGiftAction, out _))
+            throw new Exception("撮影用の情報照合対象契約を作成できない");
+        session.State.TurnNumber = 37;
+        UrukCampaignSystem.AdvanceAfterTurn(session);
+        var transport = UrukRegionalSystem.LatestHumanTransport(
+            session.Progress);
+        var dispatch = UrukRegionalSystem.LatestHumanInformationDispatch(
+            session.Progress);
+        if (transport == null || dispatch == null ||
+            transport.informationDispatchId != dispatch.id ||
+            transport.forecastRiskMinPercent < 2 ||
+            transport.riskPercent < transport.forecastRiskMinPercent ||
+            transport.riskPercent > transport.forecastRiskMaxPercent ||
+            !transport.termsExact || dispatch.linkedTransportCount != 1)
+            throw new Exception("撮影用の情報照合輸送を再現できない");
     }
 
     static UrukFarmPlotState FindFarm(UrukCampaignProgress progress, string id)

@@ -26,6 +26,39 @@ CodexとClaude Codeは、以後この `HexCiv` プロジェクトだけを更新
 
 ## 最新状況
 
+### ✅ 2026-08-05 Codex: ウルク第4K・情報精度を使う契約輸送予測と販売素材
+
+**ゲーム開発**
+
+- 到着済みで有効な情報伝達を、同じ二共同体間で後から始まる契約輸送へ参照IDで結び付けた。連絡なしでは危険率を伏せ、口頭は±6%、封泥は±4%、数量記録は±2%の推定幅を表示する。封泥は送受者・荷の識別、数量記録は数量条件を正確にするが、経路危険は常に `inferred` とする。
+- 情報伝達ごとの照合輸送件数、輸送側の照合根拠・危険幅・数量条件精度を決定的に保存する。物流オーバーレイと地域管理UIへ最新輸送の当事者・照合状態・推定危険幅を追加し、情報の価値を実際の契約判断へ接続した。
+- 進捗JSONをversion 12へ更新し、version 11以前の既存輸送は情報参照なし・危険不明へ安全に補完する。情報がない旧セーブから架空の予測精度を生成しない。
+- Metropolitan MuseumとAntiquityの資料は封緘・識別・物資／送受者／宛先・行政記録の根拠に限って使う。数値の輸送危険幅は史実値ではなくゲーム上の復元モデルであることを仕様とUIに明記した。
+- 情報行追加で地域UIが操作列へ重なる問題を実画像で検出し、パネル高500px・状態欄240pxへ拡張した。
+
+**販売促進**
+
+- `UrukRegionalScreenshot.CaptureTransportForecastCandidate` で実キャンペーン状態を760×540に描画した。`Logs/marketing/uruk_stage4k_transport_forecast.png` は110,049 bytes、SHA256 `22ef2632e7c7e5c4fb7c2f0afcc7b2995570c08e01fd1ff8e488c31b5af97722`。数量記録、照合輸送1件、数量条件、危険10～14%（推定）、文字欠け・重なりなしを目視確認した。
+- Stage 4KをH10の「開始前に完成した更新候補」へ登録した。外部公開、H10第1週、訪問、購入、売上には数えず、同じ改善を開始後に二重で新機能告知しない。
+- `MARKETING_HANDOFF.md`、H10事前登録、Obsidian正本へ最新2ZIP、画像、検証事実を同期した。PR #4408、itch.io、価格、投稿、P1本番SQLには触れていない。
+
+**検証（Unity 6000.3.20f1）**
+
+- `HistoricalCampaignFoundationSmokeTest.Run`: `HISTORICAL CAMPAIGN FOUNDATION SMOKE OK`。
+- `HistoricalContentSchemaSmokeTest.Run`: `HISTORICAL CONTENT SCHEMA SMOKE OK`。
+- `UrukCampaignVerticalSliceSmokeTest.Run`: `URUK CAMPAIGN VERTICAL SLICE SMOKE OK`。
+- `UrukRegionalSimulationSmokeTest.Run`: `URUK REGIONAL SIMULATION SMOKE OK`。情報なし、封泥±4%、数量記録±2%、複数媒体から最精密情報を選ぶ規則、数量条件、照合件数、v11→v12、セーブ往復、3 seed決定性を確認。最終実行平均 `0.18 ms/turn`。
+- `SmokeTest.Run`: `SMOKE OK`。Stage 4Jの抽出可能なSMOKE出力54行と完全一致。
+- `DemoModeSmokeTest.Run`: `DEMO SMOKE OK`。
+- 製品版 `BUILD OK: 98,103,761 bytes`、Demo `DEMO BUILD OK: 98,103,761 bytes`。各12秒実起動し、Unity 6000.3.20f1・重大例外0件。
+- 製品ZIP: 37,600,650 bytes、SHA256 `a7493aee7bf8c477d3642f3e4393e5521305abac02800f92086d1a78dd9dc726`。
+- Demo ZIP: 37,603,352 bytes、SHA256 `029c9c40bcbb8c48a0a0e0bfd0fd5e152c0cf383988881f33eda4d06a657fad4`。各146ファイル（Unity出力144+README+LICENSE）、manifestのサイズ・SHA256一致、README／LICENSE／Assembly-CSharp.dll／EXEを各1件、クラッシュハンドラ0件、残留ステージ0件。
+
+**次の担当**
+
+- Claude: ユーザー承認後に商品画像PR #4408の生成リリースノートだけを修正し、CI再実行・マージ・P2開始日を返す。itch.ioはユーザーがCloudflare本人確認とログインを完了した後、非公開ページへ最新2ZIPと確認済み画像を登録する。
+- Codex: 史料上許容できる「氏名不詳の使者／印章管理担当」を人口役割と契約交渉条件へ接続する。P1/P2/H4/H7/itch.ioの開始ゲートを越えるまではH10を開始せず、外部投稿・価格変更・有料広告を行わない。
+
 ### ✅ 2026-08-05 Codex: ウルク第4J・史料確度を分ける情報伝達と販売素材
 
 **ゲーム開発**

@@ -133,6 +133,14 @@ namespace HexCiv.Core
         /// <summary>pending / en_route / arrived / cancelled。</summary>
         public string status;
         public int riskPercent;
+        /// <summary>この輸送前に当事者間で受信済みだった情報伝達。</summary>
+        public string informationDispatchId;
+        /// <summary>-1は予測情報なし。危険率は史実値ではなくゲーム上の推定。</summary>
+        public int forecastRiskMinPercent = -1;
+        public int forecastRiskMaxPercent = -1;
+        public string forecastConfidence;
+        public string informationAssuranceJa;
+        public bool termsExact;
         public HistoricalMapPoint[] path;
     }
 
@@ -323,6 +331,7 @@ namespace HexCiv.Core
         public int claySpent;
         public int reliabilityPercent;
         public int riskReductionPercent;
+        public int linkedTransportCount;
         public int trustAfter;
         public bool exactQuantities;
         /// <summary>媒体そのものの史料確度。certain / inferred。</summary>
@@ -409,6 +418,13 @@ namespace HexCiv.Core
             progress.constructionProjects ??= Array.Empty<UrukConstructionProjectState>();
             progress.tradeOffers ??= Array.Empty<UrukTradeOfferState>();
             progress.transports ??= Array.Empty<UrukTransportState>();
+            foreach (var transport in progress.transports)
+            {
+                if (transport == null) continue;
+                transport.informationDispatchId ??= "";
+                transport.forecastConfidence ??= "";
+                transport.informationAssuranceJa ??= "";
+            }
             progress.obligations ??= Array.Empty<UrukObligationState>();
             progress.diplomaticRecords ??=
                 Array.Empty<UrukDiplomaticRecordState>();
@@ -539,6 +555,27 @@ namespace HexCiv.Core
                 progress.selectedInformationMedium = OralMessageMedium;
         }
 
+        public static void MigrateTransportForecastsV12(
+            UrukCampaignProgress progress)
+        {
+            if (progress == null) throw new ArgumentNullException(nameof(progress));
+            progress.transports ??= Array.Empty<UrukTransportState>();
+            foreach (var transport in progress.transports)
+            {
+                if (transport == null) continue;
+                transport.informationDispatchId = "";
+                transport.forecastRiskMinPercent = -1;
+                transport.forecastRiskMaxPercent = -1;
+                transport.forecastConfidence = "";
+                transport.informationAssuranceJa = "";
+                transport.termsExact = false;
+            }
+            progress.informationDispatches ??=
+                Array.Empty<UrukInformationDispatchState>();
+            foreach (var dispatch in progress.informationDispatches)
+                if (dispatch != null) dispatch.linkedTransportCount = 0;
+        }
+
         public static void Validate(HistoricalCampaignDefinition definition,
             UrukCampaignProgress progress)
         {
@@ -593,6 +630,35 @@ namespace HexCiv.Core
                     transport.remainingAmount + transport.lostAmount +
                         transport.deliveredAmount != transport.shippedAmount)
                     throw new InvalidOperationException("輸送物資の保存則違反");
+                bool informed = !string.IsNullOrWhiteSpace(
+                    transport.informationDispatchId);
+                if (!informed && (transport.forecastRiskMinPercent != -1 ||
+                    transport.forecastRiskMaxPercent != -1 ||
+                    !string.IsNullOrWhiteSpace(transport.forecastConfidence) ||
+                    !string.IsNullOrWhiteSpace(transport.informationAssuranceJa) ||
+                    transport.termsExact))
+                    throw new InvalidOperationException("情報なし輸送の予測状態が不正");
+                if (informed)
+                {
+                    var dispatch = FindInformationDispatch(progress,
+                        transport.informationDispatchId);
+                    bool samePair = dispatch != null &&
+                        ((dispatch.senderFactionId == transport.originFactionId &&
+                          dispatch.receiverFactionId == transport.destinationFactionId) ||
+                         (dispatch.receiverFactionId == transport.originFactionId &&
+                          dispatch.senderFactionId == transport.destinationFactionId));
+                    if (!samePair || transport.forecastRiskMinPercent < 2 ||
+                        transport.forecastRiskMaxPercent <
+                            transport.forecastRiskMinPercent ||
+                        transport.forecastRiskMaxPercent > 35 ||
+                        transport.riskPercent < transport.forecastRiskMinPercent ||
+                        transport.riskPercent > transport.forecastRiskMaxPercent ||
+                        transport.forecastConfidence != "inferred" ||
+                        string.IsNullOrWhiteSpace(
+                            transport.informationAssuranceJa) ||
+                        transport.termsExact != dispatch.exactQuantities)
+                        throw new InvalidOperationException("情報照合輸送の予測状態が不正");
+                }
             }
             foreach (var obligation in progress.obligations)
             {
@@ -738,6 +804,7 @@ namespace HexCiv.Core
                     !Percent(dispatch.reliabilityPercent) ||
                     dispatch.riskReductionPercent < 0 ||
                     dispatch.riskReductionPercent > 5 ||
+                    dispatch.linkedTransportCount < 0 ||
                     dispatch.trustAfter < 0 || dispatch.trustAfter > 100 ||
                     (dispatch.mediumConfidence != "certain" &&
                      dispatch.mediumConfidence != "inferred") ||
@@ -751,6 +818,13 @@ namespace HexCiv.Core
                     (dispatch.medium == NumericalRecordMedium) !=
                         dispatch.exactQuantities)
                     throw new InvalidOperationException("情報伝達状態が不正");
+                int linkedTransportCount = 0;
+                foreach (var transport in progress.transports)
+                    if (transport != null &&
+                        transport.informationDispatchId == dispatch.id)
+                        linkedTransportCount++;
+                if (dispatch.linkedTransportCount != linkedTransportCount)
+                    throw new InvalidOperationException("情報伝達の輸送照合件数が不正");
                 foreach (string sourceRef in dispatch.sourceRefs)
                     if (!HasSource(definition, sourceRef))
                         throw new InvalidOperationException("情報伝達の出典参照が不正");
@@ -1460,6 +1534,35 @@ namespace HexCiv.Core
             return null;
         }
 
+        public static UrukTransportState LatestHumanTransport(
+            UrukCampaignProgress progress)
+        {
+            if (progress?.transports == null) return null;
+            for (int i = progress.transports.Length - 1; i >= 0; i--)
+            {
+                var transport = progress.transports[i];
+                if (transport != null &&
+                    (transport.originFactionId == HumanFactionId ||
+                     transport.destinationFactionId == HumanFactionId))
+                    return transport;
+            }
+            return null;
+        }
+
+        public static string TransportForecastJa(UrukTransportState transport)
+        {
+            if (transport == null) return "輸送なし";
+            if (string.IsNullOrWhiteSpace(transport.informationDispatchId) ||
+                transport.forecastRiskMinPercent < 0)
+                return "情報照合なし／危険率は不明";
+            string range = transport.forecastRiskMinPercent ==
+                transport.forecastRiskMaxPercent
+                ? transport.forecastRiskMinPercent + "%"
+                : $"{transport.forecastRiskMinPercent}〜" +
+                  $"{transport.forecastRiskMaxPercent}%";
+            return $"{transport.informationAssuranceJa}／危険{range}（推定）";
+        }
+
         public static bool CanSendInformation(HistoricalCampaignSession session)
         {
             if (session?.Progress == null) return false;
@@ -1792,6 +1895,62 @@ namespace HexCiv.Core
                     dispatch.status == "pending") return true;
             return false;
         }
+
+        static UrukInformationDispatchState FindInformationDispatch(
+            UrukCampaignProgress progress, string dispatchId)
+        {
+            if (progress?.informationDispatches == null ||
+                string.IsNullOrWhiteSpace(dispatchId)) return null;
+            foreach (var dispatch in progress.informationDispatches)
+                if (dispatch != null && dispatch.id == dispatchId)
+                    return dispatch;
+            return null;
+        }
+
+        static UrukInformationDispatchState ActiveInformationForPair(
+            UrukCampaignProgress progress, string originFactionId,
+            string destinationFactionId, int turn)
+        {
+            if (progress?.informationDispatches == null) return null;
+            UrukInformationDispatchState best = null;
+            int bestMargin = int.MaxValue;
+            for (int i = progress.informationDispatches.Length - 1; i >= 0; i--)
+            {
+                var dispatch = progress.informationDispatches[i];
+                if (dispatch == null || dispatch.status != "active" ||
+                    turn > dispatch.activeUntilTurn) continue;
+                bool samePair =
+                    dispatch.senderFactionId == originFactionId &&
+                    dispatch.receiverFactionId == destinationFactionId;
+                bool reversePair =
+                    dispatch.receiverFactionId == originFactionId &&
+                    dispatch.senderFactionId == destinationFactionId;
+                if (!samePair && !reversePair) continue;
+                int margin = InformationForecastMargin(dispatch.medium);
+                if (margin < bestMargin)
+                {
+                    best = dispatch;
+                    bestMargin = margin;
+                }
+            }
+            return best;
+        }
+
+        static int InformationForecastMargin(string medium) => medium switch
+        {
+            OralMessageMedium => 6,
+            ClaySealingMedium => 4,
+            NumericalRecordMedium => 2,
+            _ => 6,
+        };
+
+        static string InformationAssuranceJa(string medium) => medium switch
+        {
+            OralMessageMedium => "口頭で移送予定を共有",
+            ClaySealingMedium => "封泥で送受者・荷を識別",
+            NumericalRecordMedium => "数量条件を記録",
+            _ => "情報を共有",
+        };
 
         static bool IsInformationMedium(string medium) =>
             medium == OralMessageMedium || medium == ClaySealingMedium ||
@@ -3308,6 +3467,17 @@ namespace HexCiv.Core
             string id = NextId(progress, "transport");
             int risk = CalculateTransportRisk(definition, progress, id,
                 origin, destination, turn);
+            var dispatch = ActiveInformationForPair(progress, origin,
+                destination, turn);
+            int forecastMin = -1;
+            int forecastMax = -1;
+            if (dispatch != null)
+            {
+                int margin = InformationForecastMargin(dispatch.medium);
+                forecastMin = Math.Clamp(risk - margin, 2, 35);
+                forecastMax = Math.Clamp(risk + margin, 2, 35);
+                dispatch.linkedTransportCount++;
+            }
             int lost = StableHash(definition.seed + 17, id, turn) % 100 < risk
                 ? Math.Min(1, amount) : 0;
             Append(ref progress.transports, new UrukTransportState
@@ -3327,6 +3497,13 @@ namespace HexCiv.Core
                     ? "reed_boat" : "overland",
                 status = "en_route",
                 riskPercent = risk,
+                informationDispatchId = dispatch?.id ?? "",
+                forecastRiskMinPercent = forecastMin,
+                forecastRiskMaxPercent = forecastMax,
+                forecastConfidence = dispatch == null ? "" : "inferred",
+                informationAssuranceJa = dispatch == null ? "" :
+                    InformationAssuranceJa(dispatch.medium),
+                termsExact = dispatch?.exactQuantities ?? false,
                 path = new[]
                 {
                     new HistoricalMapPoint { col = from.startCol, row = from.startRow },
