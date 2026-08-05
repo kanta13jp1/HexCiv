@@ -186,6 +186,13 @@
 - Metropolitan Museumの円筒印章解説とAntiquityの研究は、封緘・識別・物資／送り手／宛先・行政記録との関係を支える。一方、特定輸送の危険率を古代の当事者が数値予報した直接証拠としては使わない。危険幅は情報のゲーム上の価値を表す復元モデルである。
 - 地域管理UIと物流オーバーレイに、最新輸送、当事者、照合根拠、数量条件、推定危険幅、伝達ごとの照合輸送件数を追加した。進捗JSONはversion 12で、version 11以前の既存輸送を参照なし・危険不明へ補完する。
 
+### 第4L段階（実装済み）
+
+- 情報伝達を人口配分へ接続した。新規発送は伝達担当として交易労働5%を到着まで占有し、封泥付き荷と数量記録板は封緘・記録担当としてさらに工芸労働5%を占有する。空き枠がなければ別の相手へ同時発送できず、労働配分を増やせば並行発送できる。
+- 5%は史料から得た担当者数ではなく、プレイヤーへ機会費用を示すゲーム上の稼働枠である。後期第4千年紀の印章・封泥・初期記録が物資移動と行政に関係したことは媒体根拠にするが、このシナリオの使者、封緘担当、記録担当の氏名・人数・役職名を直接示す史料はない。このため「氏名不詳の伝達担当／封緘担当／記録担当」「人数不詳・推定」と保存・表示する。
+- 発送中の稼働枠、残りの交易／工芸労働、他の相手へ送れない理由を地域管理UIへ表示する。到着・失敗時に稼働枠は決定的に解放され、通常4X用RNGは消費しない。
+- 進捗JSONはversion 13。version 12以前の既存伝達は労働枠0・「旧記録・担当配分未記録」として移行し、現行の5%コストや架空の担当者を過去のセーブへ遡及しない。
+
 ## 地理表現上の注意
 
 固定マップは現代の河道・海岸線をそのまま描いたものではない。UNESCO資料は紀元前5000～3000年頃に海水面が現在より約200km内陸へ達し、ウルク・ウル・エリドゥが淡水湿地の縁辺に位置したことを説明している。一方、個々の河道・政治境界を紀元前4000年の一点へ確定することはできない。このため地図全体を `inferred`、主要遺跡の存在を `probable` または `confirmed` として分離した。
@@ -199,6 +206,8 @@
 - [The British Museum — The Uruk Trough](https://www.britishmuseum.org/collection/object/W_1928-0714-1)
 - [The British Museum — Early Uruk numerical tablet](https://www.britishmuseum.org/collection/object/W_1851-0101-217)
 - [Cambridge Archaeological Journal — Reframing the Uruk Expansion: Glocalization and Local Dynamics](https://www.cambridge.org/core/journals/cambridge-archaeological-journal/article/reframing-the-uruk-expansion-glocalization-and-local-dynamics-in-the-late-chalcolithic-adhaimsirwan-drainage-basin-iraqi-kurdistan/6D0017216B86F0F5084F8BD4C2504A9A)
+- [Antiquity — Seals and signs: tracing the origins of writing in ancient Southwest Asia](https://www.cambridge.org/core/journals/antiquity/article/seals-and-signs-tracing-the-origins-of-writing-in-ancient-southwest-asia/B3C2D400F3F80A7A0162D9035C9C2804)
+- [Cuneiform Digital Library Initiative — Seal Portal](https://cdli.earth/artifacts/seals)
 
 これらは調査入口であり、各勢力・物資・地形の確度は今後も発掘報告・博物館記録・学術研究で更新する。
 
@@ -206,7 +215,7 @@
 
 1. 運河接続、維持、洪水、農地、神殿区画の完全なタイル操作。
 2. 共同体と政体を分け、同じ食料・労働・建設ルールを使う8勢力AI。
-3. 土地・耕作権紛争と期限付き利用、補償、仲裁、破約、再交渉、氏名不詳・双方同意前提の親族連携、媒体史料と個別シナリオを分けた情報伝達、後続契約輸送の情報照合（実装済み）。次は使者・印章管理の担い手と交渉可否を接続する。
+3. 土地・耕作権紛争と期限付き利用、補償、仲裁、破約、再交渉、氏名不詳・双方同意前提の親族連携、媒体史料と個別シナリオを分けた情報伝達、後続契約輸送の情報照合、氏名／人数不詳の伝達・封緘・記録担当と労働枠（実装済み）。次は契約交渉の成否を相手側の情報能力と担当者不在へ接続する。
 4. 複数水利要求、推定上流・下流関係、未決・履行中・再交渉可能を横断する個別対象選択、第三者仲裁（実装済み）。
 5. 実人口と接続した民兵、死傷、捕虜、帰還。
 6. 知識要素、文化政策、4種類の即時勝利を実操作へ接続。

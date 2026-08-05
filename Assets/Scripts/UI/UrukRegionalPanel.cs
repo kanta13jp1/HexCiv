@@ -170,6 +170,12 @@ namespace HexCiv.UI
                     $"送受信{ConfidenceJa(latestInformation.scenarioConfidence)}・" +
                     $"危険-{UrukRegionalSystem.CommunicationTransportRiskReduction(progress, "uruk_community", latestInformation.receiverFactionId, session.State.TurnNumber)}%・" +
                     $"照合輸送{latestInformation.linkedTransportCount}件");
+            string personnelText = latestInformation == null
+                ? $"伝達担当の空き: 交易{UrukRegionalSystem.AvailableInformationMessengerLabor(progress)}%・" +
+                  $"工芸{UrukRegionalSystem.AvailableInformationRecordLabor(progress)}%"
+                : $"担当:{UrukRegionalSystem.InformationPersonnelSummaryJa(latestInformation)}／" +
+                  $"空き 交易{UrukRegionalSystem.AvailableInformationMessengerLabor(progress)}%・" +
+                  $"工芸{UrukRegionalSystem.AvailableInformationRecordLabor(progress)}%";
             string transportText = latestTransport == null
                 ? "最新輸送なし"
                 : $"最新輸送:{GoodNameJa(latestTransport.goodId)}" +
@@ -190,6 +196,7 @@ namespace HexCiv.UI
                 $"外交評判 {progress.diplomaticReputation}/100　{diplomacyText}\n" +
                 kinshipText + "\n" +
                 informationText + "\n" +
+                personnelText + "\n" +
                 transportText;
 
             bool enabled = !session.State.IsGameOver;

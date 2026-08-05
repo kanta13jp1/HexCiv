@@ -26,6 +26,37 @@ CodexとClaude Codeは、以後この `HexCiv` プロジェクトだけを更新
 
 ## 最新状況
 
+
+### ✅ 2026-08-05 Codex: ウルク第4L・氏名／人数不詳の情報担当と労働枠
+
+**ゲーム開発**
+
+- 情報伝達を人口配分へ接続した。全媒体は伝達担当として交易労働5%、封泥・数量記録はさらに封緘／記録担当として工芸労働5%を到着まで占有する。空きがなければ別の相手へ並行発送できず、労働配分を増やせば追加発送できる。
+- 5%は史実人数ではなくゲーム上の稼働枠。担当は「氏名不詳の伝達担当／封緘担当／記録担当」「人数不詳・推定」と保存・表示し、第4千年紀の固有名・人数・職名を創作しない。印章・封泥・初期記録と物資行政の関係だけをMetropolitan Museum、Antiquity、CDLIの調査入口で確認した。
+- 発送中の占有枠と残りの交易／工芸労働、送れない理由を地域管理UIへ追加した。到着または失敗で枠は決定的に解放され、通常4XのRNGを消費しない。
+- 進捗JSONをversion 13へ更新。version 12以前の伝達は労働枠0・「旧記録・担当配分未記録」とし、現在のコストや担当像を過去のセーブへ遡及しない。
+
+**販売促進**
+
+- `UrukRegionalScreenshot.CaptureInformationPersonnelCandidate` で実キャンペーン状態を760×540に描画した。`Logs/marketing/uruk_stage4l_information_personnel.png` は102,653 bytes、SHA256 `3133fbae3d8dc265d948803c6eb812c5c9c462a0b8a1202e9d43be079b41c20e`。数量記録発送中、別相手への交易労働不足、氏名／人数不詳・推定、交易／工芸空き0%、文字欠け・重なりなしを目視確認した。
+- Stage 4LをH10の「開始前に完成した更新候補」へ登録した。外部公開、H10第1週、訪問、購入、売上には数えず、同じ改善を開始後に二重で新機能告知しない。
+- `MARKETING_HANDOFF.md`、H10事前登録、Obsidian正本へ最新2ZIP、画像、検証事実を同期した。PR #4408、itch.io、価格、投稿、P1本番SQLには触れていない。
+
+**検証（Unity 6000.3.20f1）**
+
+- `HistoricalCampaignFoundationSmokeTest.Run`: `HISTORICAL CAMPAIGN FOUNDATION SMOKE OK`。
+- `HistoricalContentSchemaSmokeTest.Run`: `HISTORICAL CONTENT SCHEMA SMOKE OK`。
+- `UrukCampaignVerticalSliceSmokeTest.Run`: `URUK CAMPAIGN VERTICAL SLICE SMOKE OK`。
+- `UrukRegionalSimulationSmokeTest.Run`: `URUK REGIONAL SIMULATION SMOKE OK`。媒体別担当、交易／工芸空き、別相手への重複配置拒否、追加配分による並行許可、v12→v13、セーブ往復、3 seed決定性を確認。最終実行平均 `0.15 ms/turn`。
+- `SmokeTest.Run`: `SMOKE OK`。通常4Xの150ターン回帰に合格。
+- `DemoModeSmokeTest.Run`: `DEMO SMOKE OK`。
+- 製品版 `BUILD OK: 98,106,321 bytes`、Demo `DEMO BUILD OK: 98,106,321 bytes`。各12秒実起動し、Unity 6000.3.20f1・例外0件。
+- 製品ZIP: 37,601,404 bytes、SHA256 `2057080640022f87ae1f952a28879ca4828318215d88b1ee640d5d730534c380`。
+- Demo ZIP: 37,604,108 bytes、SHA256 `07293eee7b932011a4f28cca6d0d787f5e569e39017a7fb2afba011110949f98`。各146ファイル（Unity出力144+README+LICENSE）、manifestのサイズ・SHA256一致、README／LICENSE／Assembly-CSharp.dll／EXEを各1件、クラッシュハンドラ・PDB 0件。
+
+**次の担当**
+
+- Claude: ユーザー承認後に商品画像PR #4408の生成リリースノートだけを修正し、CI再実行・マージ・P2開始日を返す。itch.ioはユーザーがCloudflare本人確認とログインを完了した後、非公開ページへ最新2ZIPと確認済み画像を登録する。
 ### ✅ 2026-08-05 Codex: ウルク第4K・情報精度を使う契約輸送予測と販売素材
 
 **ゲーム開発**

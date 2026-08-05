@@ -8,7 +8,7 @@ using UnityEngine;
 using UnityEngine.UI;
 
 /// <summary>
-/// Stage 4F/4G/4H/4I/4J/4K の実キャンペーン状態から、地域外交UIを撮影する。
+/// Stage 4F〜4L の実キャンペーン状態から、地域外交UIを撮影する。
 /// 出力は販売素材候補だが、H10開始前は公開・計測へ使用しない。
 /// </summary>
 public static class UrukRegionalScreenshot
@@ -48,6 +48,12 @@ public static class UrukRegionalScreenshot
     {
         Capture("uruk_stage4k_transport_forecast.png",
             PrepareTransportForecast);
+    }
+
+    public static void CaptureInformationPersonnelCandidate()
+    {
+        Capture("uruk_stage4l_information_personnel.png",
+            PrepareInformationPersonnel);
     }
 
     static void Capture(string fileName,
@@ -234,6 +240,36 @@ public static class UrukRegionalScreenshot
             transport.riskPercent > transport.forecastRiskMaxPercent ||
             !transport.termsExact || dispatch.linkedTransportCount != 1)
             throw new Exception("撮影用の情報照合輸送を再現できない");
+    }
+
+    static void PrepareInformationPersonnel(HistoricalCampaignSession session)
+    {
+        session.State.TurnNumber = 34;
+        session.Progress.templePlanned = true;
+        session.Progress.templeStage = 5;
+        session.Progress.templeProgress = 100;
+        session.Progress.administrationAdopted = true;
+        session.Progress.selectedInformationFactionId = "eridu_community";
+        session.Progress.selectedInformationMedium =
+            UrukRegionalSystem.NumericalRecordMedium;
+        SetGood(session.Progress, "alluvial_clay", 5);
+        session.Progress.labor.food += 5;
+        session.Progress.labor.crafts = 5;
+        if (!UrukCampaignSystem.TryApplyAction(session,
+            UrukRegionalSystem.SendInformationAction, out _))
+            throw new Exception("撮影用の担当付き数量記録板を発送できない");
+        session.Progress.selectedInformationFactionId = "ur_community";
+        var dispatch =
+            UrukRegionalSystem.LatestHumanInformationDispatch(session.Progress);
+        if (dispatch == null || dispatch.status != "pending" ||
+            dispatch.messengerLaborPercent != 5 ||
+            dispatch.recordLaborPercent != 5 ||
+            UrukRegionalSystem.AvailableInformationMessengerLabor(
+                session.Progress) != 0 ||
+            UrukRegionalSystem.AvailableInformationRecordLabor(
+                session.Progress) != 0 ||
+            UrukRegionalSystem.CanSendInformation(session))
+            throw new Exception("撮影用の担当・労働枠を再現できない");
     }
 
     static UrukFarmPlotState FindFarm(UrukCampaignProgress progress, string id)

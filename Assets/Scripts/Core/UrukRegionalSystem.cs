@@ -334,6 +334,16 @@ namespace HexCiv.Core
         public int linkedTransportCount;
         public int trustAfter;
         public bool exactQuantities;
+        /// <summary>
+        /// 発送中に占有する交易・工芸労働枠。人数の史実推定値ではない。
+        /// version 12以前の記録は0（配分未記録）として移行する。
+        /// </summary>
+        public int messengerLaborPercent;
+        public int recordLaborPercent;
+        public string messengerIdentityJa;
+        public string recordIdentityJa;
+        /// <summary>担当者像の復元確度。現段階では常にinferred。</summary>
+        public string personnelConfidence;
         /// <summary>媒体そのものの史料確度。certain / inferred。</summary>
         public string mediumConfidence;
         /// <summary>この送受信を置いた復元モデルの確度。常にinferred。</summary>
@@ -403,6 +413,8 @@ namespace HexCiv.Core
         public const string NumericalRecordMedium = "numerical_record";
         public const int ClaySealingEarliestYear = -3500;
         public const int NumericalRecordEarliestYear = -3350;
+        public const int InformationMessengerLaborPercent = 5;
+        public const int InformationRecordLaborPercent = 5;
 
         const string HumanFactionId = "uruk_community";
         const int MaxKinshipTies = 2;
@@ -437,6 +449,13 @@ namespace HexCiv.Core
             progress.selectedKinshipFactionId ??= "";
             progress.informationDispatches ??=
                 Array.Empty<UrukInformationDispatchState>();
+            foreach (var dispatch in progress.informationDispatches)
+            {
+                if (dispatch == null) continue;
+                dispatch.messengerIdentityJa ??= "";
+                dispatch.recordIdentityJa ??= "";
+                dispatch.personnelConfidence ??= "";
+            }
             progress.selectedInformationFactionId ??= "";
             if (!IsInformationMedium(progress.selectedInformationMedium))
                 progress.selectedInformationMedium = OralMessageMedium;
@@ -574,6 +593,26 @@ namespace HexCiv.Core
                 Array.Empty<UrukInformationDispatchState>();
             foreach (var dispatch in progress.informationDispatches)
                 if (dispatch != null) dispatch.linkedTransportCount = 0;
+        }
+
+        public static void MigrateInformationPersonnelV13(
+            UrukCampaignProgress progress)
+        {
+            if (progress == null) throw new ArgumentNullException(nameof(progress));
+            progress.informationDispatches ??=
+                Array.Empty<UrukInformationDispatchState>();
+            foreach (var dispatch in progress.informationDispatches)
+            {
+                if (dispatch == null) continue;
+                // 旧記録へ現在の労働コストを遡及しない。保存時点で不詳だった
+                // 担当・配分として残し、以後の新規発送だけを稼働枠へ算入する。
+                dispatch.messengerLaborPercent = 0;
+                dispatch.recordLaborPercent = 0;
+                dispatch.messengerIdentityJa =
+                    "氏名不詳（旧記録・担当配分未記録）";
+                dispatch.recordIdentityJa = "";
+                dispatch.personnelConfidence = "inferred";
+            }
         }
 
         public static void Validate(HistoricalCampaignDefinition definition,
@@ -818,6 +857,23 @@ namespace HexCiv.Core
                     (dispatch.medium == NumericalRecordMedium) !=
                         dispatch.exactQuantities)
                     throw new InvalidOperationException("情報伝達状態が不正");
+                bool legacyPersonnel = dispatch.messengerLaborPercent == 0 &&
+                    dispatch.recordLaborPercent == 0;
+                int expectedRecordLabor =
+                    InformationRequiredRecordLabor(dispatch.medium);
+                if (dispatch.messengerLaborPercent < 0 ||
+                    dispatch.recordLaborPercent < 0 ||
+                    dispatch.messengerLaborPercent % 5 != 0 ||
+                    dispatch.recordLaborPercent % 5 != 0 ||
+                    string.IsNullOrWhiteSpace(dispatch.messengerIdentityJa) ||
+                    dispatch.personnelConfidence != "inferred" ||
+                    (!legacyPersonnel &&
+                     (dispatch.messengerLaborPercent !=
+                          InformationMessengerLaborPercent ||
+                      dispatch.recordLaborPercent != expectedRecordLabor ||
+                      (expectedRecordLabor > 0) !=
+                          !string.IsNullOrWhiteSpace(dispatch.recordIdentityJa))))
+                    throw new InvalidOperationException("情報伝達の担当・労働枠が不正");
                 int linkedTransportCount = 0;
                 foreach (var transport in progress.transports)
                     if (transport != null &&
@@ -1563,6 +1619,52 @@ namespace HexCiv.Core
             return $"{transport.informationAssuranceJa}／危険{range}（推定）";
         }
 
+        public static int PendingInformationMessengerLabor(
+            UrukCampaignProgress progress)
+        {
+            int total = 0;
+            if (progress?.informationDispatches == null) return total;
+            foreach (var dispatch in progress.informationDispatches)
+                if (dispatch != null && dispatch.status == "pending")
+                    total += Math.Max(0, dispatch.messengerLaborPercent);
+            return total;
+        }
+
+        public static int PendingInformationRecordLabor(
+            UrukCampaignProgress progress)
+        {
+            int total = 0;
+            if (progress?.informationDispatches == null) return total;
+            foreach (var dispatch in progress.informationDispatches)
+                if (dispatch != null && dispatch.status == "pending")
+                    total += Math.Max(0, dispatch.recordLaborPercent);
+            return total;
+        }
+
+        public static int AvailableInformationMessengerLabor(
+            UrukCampaignProgress progress) => Math.Max(0,
+                (progress?.labor?.trade ?? 0) -
+                PendingInformationMessengerLabor(progress));
+
+        public static int AvailableInformationRecordLabor(
+            UrukCampaignProgress progress) => Math.Max(0,
+                (progress?.labor?.crafts ?? 0) -
+                PendingInformationRecordLabor(progress));
+
+        public static string InformationPersonnelSummaryJa(
+            UrukInformationDispatchState dispatch)
+        {
+            if (dispatch == null) return "担当記録なし";
+            if (dispatch.messengerLaborPercent == 0 &&
+                dispatch.recordLaborPercent == 0)
+                return dispatch.messengerIdentityJa + "（推定）";
+            string record = dispatch.recordLaborPercent <= 0 ? "" :
+                $"／{dispatch.recordIdentityJa}・工芸{dispatch.recordLaborPercent}%";
+            return $"{dispatch.messengerIdentityJa}・交易" +
+                $"{dispatch.messengerLaborPercent}%{record}" +
+                "（人数不詳・推定）";
+        }
+
         public static bool CanSendInformation(HistoricalCampaignSession session)
         {
             if (session?.Progress == null) return false;
@@ -1576,6 +1678,10 @@ namespace HexCiv.Core
                 session.Definition, medium)) return false;
             if (medium == NumericalRecordMedium &&
                 !progress.administrationAdopted) return false;
+            if (AvailableInformationMessengerLabor(progress) <
+                InformationMessengerLaborPercent) return false;
+            if (AvailableInformationRecordLabor(progress) <
+                InformationRequiredRecordLabor(medium)) return false;
             return medium == OralMessageMedium ||
                 AvailableFactionGood(progress, HumanFactionId,
                     "alluvial_clay") >= 1;
@@ -1603,6 +1709,12 @@ namespace HexCiv.Core
                 AvailableFactionGood(progress, HumanFactionId,
                     "alluvial_clay") < 1)
                 return "沖積粘土1が必要";
+            if (AvailableInformationMessengerLabor(progress) <
+                InformationMessengerLaborPercent)
+                return $"交易労働{InformationMessengerLaborPercent}%の空きが必要";
+            int recordLabor = InformationRequiredRecordLabor(medium);
+            if (AvailableInformationRecordLabor(progress) < recordLabor)
+                return $"工芸労働{recordLabor}%の空きが必要";
             return $"到着{InformationMediumTravelTurns(medium)}期／" +
                 $"信頼度{InformationMediumReliability(medium)}%";
         }
@@ -1639,6 +1751,9 @@ namespace HexCiv.Core
 
         public static string InformationMediumConfidence(string medium) =>
             medium == OralMessageMedium ? "inferred" : "certain";
+
+        public static int InformationRequiredRecordLabor(string medium) =>
+            medium == OralMessageMedium ? 0 : InformationRecordLaborPercent;
 
         public static int CommunicationTransportRiskReduction(
             UrukCampaignProgress progress, string originFactionId,
@@ -1739,6 +1854,19 @@ namespace HexCiv.Core
                 resultJa = "封泥・記録媒体に使う沖積粘土1が必要。";
                 return false;
             }
+            if (AvailableInformationMessengerLabor(progress) <
+                InformationMessengerLaborPercent)
+            {
+                resultJa = $"伝達担当に使う交易労働" +
+                    $"{InformationMessengerLaborPercent}%の空きが必要。";
+                return false;
+            }
+            int recordLabor = InformationRequiredRecordLabor(medium);
+            if (AvailableInformationRecordLabor(progress) < recordLabor)
+            {
+                resultJa = $"封緘・記録担当に使う工芸労働{recordLabor}%の空きが必要。";
+                return false;
+            }
             if (clayCost > 0)
                 ConsumeFactionGood(progress, HumanFactionId,
                     "alluvial_clay", clayCost);
@@ -1762,6 +1890,14 @@ namespace HexCiv.Core
                     medium == ClaySealingMedium ? 3 : 5,
                 trustAfter = partner.diplomaticTrust,
                 exactQuantities = medium == NumericalRecordMedium,
+                messengerLaborPercent = InformationMessengerLaborPercent,
+                recordLaborPercent = recordLabor,
+                messengerIdentityJa = "氏名不詳の伝達担当",
+                recordIdentityJa = medium == ClaySealingMedium
+                    ? "氏名不詳の封緘担当"
+                    : medium == NumericalRecordMedium
+                        ? "氏名不詳の記録担当" : "",
+                personnelConfidence = "inferred",
                 mediumConfidence = InformationMediumConfidence(medium),
                 scenarioConfidence = "inferred",
                 mediumEvidenceJa = InformationMediumEvidenceJa(medium),
