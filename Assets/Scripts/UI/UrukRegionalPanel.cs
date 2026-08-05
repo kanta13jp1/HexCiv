@@ -59,14 +59,19 @@ namespace HexCiv.UI
             var obligation = UrukRegionalSystem.FirstHumanObligation(progress);
             var latestDiplomacy =
                 UrukRegionalSystem.LatestHumanDiplomaticRecord(progress);
-            var openDispute = UrukRegionalSystem.SelectedOpenDispute(progress);
+            var dispute = UrukRegionalSystem.SelectedWaterCase(progress);
+            var openDispute = dispute != null && dispute.status == "open"
+                ? dispute : null;
             int openDisputeCount =
                 UrukRegionalSystem.OpenWaterDisputeCount(progress);
+            int actionableWaterCount =
+                UrukRegionalSystem.ActionableWaterCaseCount(progress);
+            int selectedWaterOrdinal =
+                UrukRegionalSystem.SelectedWaterCaseOrdinal(progress);
             var activeAgreement =
-                UrukRegionalSystem.FirstActiveWaterAgreement(progress);
+                UrukRegionalSystem.SelectedActiveWaterAgreement(progress);
             var recoverableDispute =
-                UrukRegionalSystem.LatestRecoverableWaterDispute(progress);
-            var dispute = openDispute ?? activeAgreement ?? recoverableDispute;
+                UrukRegionalSystem.SelectedRecoverableWaterDispute(progress);
             var migration = UrukRegionalSystem.FirstWaitingMigration(progress);
             var openLand = UrukRegionalSystem.SelectedOpenLandDispute(progress);
             var activeLand = UrukRegionalSystem.FirstActiveLandAgreement(progress);
@@ -100,9 +105,10 @@ namespace HexCiv.UI
             string disputeText = dispute == null
                 ? "水利紛争なし"
                 : $"水利{WaterStatusJa(dispute.status)}" +
+                   $"（対象{selectedWaterOrdinal}/{actionableWaterCount}" +
                    (openDispute != null
-                       ? $"（案件{OpenDisputeOrdinal(progress, dispute)}/" +
-                         $"{openDisputeCount}）" : "") + ": " +
+                       ? $"・未決{OpenDisputeOrdinal(progress, dispute)}/" +
+                         $"{openDisputeCount}" : "") + "）: " +
                    $"{FactionName(progress, dispute.claimantFactionId)}　" +
                    $"不足{dispute.claimantWaterDeficit}／相手水路" +
                    $"{dispute.claimantCanalCondition}%／ウルク流量" +
@@ -156,8 +162,10 @@ namespace HexCiv.UI
                 recoverableDispute != null &&
                 UrukCampaignSystem.GoodAmount(progress, "barley") >= 1 &&
                 UrukCampaignSystem.GoodAmount(progress, "reeds") >= 1;
-            nextWaterDisputeButton.interactable = enabled && openDisputeCount > 1;
-            arbitrateWaterButton.interactable = enabled && openDisputeCount > 1 &&
+            nextWaterDisputeButton.interactable = enabled &&
+                actionableWaterCount > 1;
+            arbitrateWaterButton.interactable = enabled && openDispute != null &&
+                openDisputeCount > 1 &&
                 progress.diplomaticReputation >= 25 &&
                 UrukCampaignSystem.GoodAmount(progress, "barley") >= 1;
             jointLandButton.interactable = enabled && openLand != null &&
@@ -276,7 +284,7 @@ namespace HexCiv.UI
             CreateButton(body.transform, "Tribute", "朝貢を約す", 330f, 96f, 104f,
                 () => Apply(UrukRegionalSystem.OfferTributeAction));
             nextWaterDisputeButton = CreateButton(body.transform,
-                "NextWaterDispute", "水利案件切替", 444f, 96f, 106f,
+                "NextWaterDispute", "水利対象切替", 444f, 96f, 106f,
                 () => Apply(UrukRegionalSystem.NextWaterDisputeAction));
             arbitrateWaterButton = CreateButton(body.transform,
                 "ArbitrateWater", "第三者仲裁", 556f, 96f, 102f,

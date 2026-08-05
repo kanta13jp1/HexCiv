@@ -26,6 +26,36 @@ CodexとClaude Codeは、以後この `HexCiv` プロジェクトだけを更新
 
 ## 最新状況
 
+### ✅ 2026-08-05 Codex: ウルク第4H・個別水利合意操作と販売素材
+
+**ゲーム開発**
+
+- 既存の `selectedWaterDisputeId` を、未決要求だけでなく履行中合意と再交渉可能案件を含む現在の水利対象へ拡張した。保存項目と進捗versionは増やさず、旧セーブとの互換性を維持する。
+- 地域UIは操作可能な全水利対象の番号を表示し、「水利対象切替」で未決・履行中・再交渉可能を決定的な順序で巡回する。未決の表示中は分水等、履行中の表示中は破約、拒否・破約・不履行の表示中は再交渉だけを有効化する。
+- 複数の仲裁合意が並行しても、表示中の相手だけを破約する。再交渉の大麦1・葦1も選択相手の実備蓄へだけ移し、選択外の合意と案件は変更しない。未決案件の表示中に隠れた別合意を破約する旧挙動を禁止した。
+- 合意完了で選択が操作不能になった場合は次の対象へ正規化し、全件完了時は選択を空にする。Core純度、決定性、通常4X RNGを維持する。
+
+**販売促進**
+
+- `UrukRegionalScreenshot.CaptureWaterAgreementCandidate` を追加し、仲裁後の3件から2件目を選んだ実UIを760×446で再生成可能にした。`Logs/marketing/uruk_stage4h_water_agreement_selection.png` は81,774 bytes、SHA256 `1be02ed34766fee67f60be54e9593df7e93e39f4929aad17a0ad8f181aedeb59`。対象2/3、相手、履行状態、切替・破約・再交渉ボタンを目視確認した。
+- Stage 4HをH10の「開始前に完成した更新候補」へ登録した。H10第1週、公開投稿、訪問、購入、売上には数えておらず、開始後に同じ改善を二重で新機能告知しない。
+- `MARKETING_HANDOFF.md` とObsidian正本へ最新2ZIP、画像ハッシュ、検証事実を同期した。Claudeは外部掲載と計測、Codexはゲームと配布物、Obsidianは仮説判定の正本という分担を維持する。
+
+**検証（Unity 6000.3.20f1）**
+
+- `UrukRegionalSimulationSmokeTest.Run`: `URUK REGIONAL SIMULATION SMOKE OK`。3件仲裁後の履行対象切替、選択相手だけの破約・現物再交渉、選択外不変、隠れた合意の誤操作禁止、完了時正規化、セーブ往復、3 seed決定性を確認。平均 `0.11 ms/turn`。
+- `UrukCampaignVerticalSliceSmokeTest.Run`: `URUK CAMPAIGN VERTICAL SLICE SMOKE OK`。
+- `SmokeTest.Run`: `SMOKE OK`。Stage 4Gの `[Smoke]` / `SMOKE` 全11行と完全一致。
+- `DemoModeSmokeTest.Run`: `DEMO SMOKE OK`。30ターン制限と製品版セーブ互換を確認。
+- 製品版 `BUILD OK: 98,081,525 bytes`、Demo `DEMO BUILD OK: 98,081,525 bytes`。各12秒実起動し、Unity 6000.3.20f1・例外0件。
+- 製品ZIP: 37,591,559 bytes、SHA256 `9938be42455f059c8474e23cfb2c79a71dccfa252fb4f8b96935782daecb7b5a`。
+- Demo ZIP: 37,594,255 bytes、SHA256 `9c9704f37be5fae9ae7ba70a91aee033bd731affe7af99e45957d2cbd74937d8`。両manifest一致、各148項目、README／LICENSE／Assembly-CSharp.dll／EXEを1件、クラッシュハンドラ0件。
+
+**次の担当**
+
+- Claude: ユーザー承認後に商品画像PR #4408の生成リリースノートだけを修正し、CI再実行・マージ・P2開始日を返す。itch.ioはユーザーがCloudflare本人確認とログインを完了した後、非公開ページへ最新2ZIPと確認済み画像を登録する。
+- Codex: 婚姻外交と情報伝達の史実条件・確度・AI判断を設計し、外交評判を追加交渉条件へ接続する。P1/P2/H4/H7/itch.ioの開始ゲートを越えるまではH10を開始せず、外部投稿・価格変更・有料広告を行わない。
+
 ### ✅ 2026-08-05 Codex: ウルク第4G・土地／耕作権紛争と販売素材
 
 **ゲーム開発**

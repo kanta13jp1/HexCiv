@@ -347,6 +347,7 @@ namespace HexCiv.Core
                     farm.userFactionIds = new[] { farm.ownerFactionId };
             }
             if (progress.nextRegionalId <= 0) progress.nextRegionalId = 1;
+            NormalizeSelectedWaterCase(progress);
             SyncHumanFaction(progress);
         }
 
@@ -550,7 +551,8 @@ namespace HexCiv.Core
                     throw new InvalidOperationException("水利紛争状態が不正");
             }
             if (!string.IsNullOrWhiteSpace(progress.selectedWaterDisputeId) &&
-                FindOpenDispute(progress, progress.selectedWaterDisputeId) == null)
+                !IsActionableWaterCase(FindDispute(progress,
+                    progress.selectedWaterDisputeId)))
                 throw new InvalidOperationException("選択中の水利案件が不正");
             foreach (var dispute in progress.landDisputes)
             {
@@ -743,6 +745,7 @@ namespace HexCiv.Core
             PlanAi(session.Definition, progress, completedTurn);
             DegradeCanals(progress, completedTurn, flood);
             SyncHumanFaction(progress);
+            NormalizeSelectedWaterCase(progress);
             progress.regionalRevision++;
             Validate(session.Definition, progress);
         }
@@ -832,9 +835,9 @@ namespace HexCiv.Core
         public static UrukWaterDisputeState SelectedOpenDispute(
             UrukCampaignProgress progress)
         {
-            var selected = FindOpenDispute(progress,
-                progress?.selectedWaterDisputeId);
-            return selected ?? FirstOpenDispute(progress);
+            var selected = SelectedWaterCase(progress);
+            return selected != null && selected.status == "open"
+                ? selected : null;
         }
 
         public static int OpenWaterDisputeCount(UrukCampaignProgress progress)
@@ -848,15 +851,67 @@ namespace HexCiv.Core
             return count;
         }
 
+        /// <summary>
+        /// 判断待ち、履行中、再交渉可能のいずれかで、現在UIが示す水利対象。
+        /// 表示対象と実行対象を一致させ、複数案件で別の合意を誤操作しない。
+        /// </summary>
+        public static UrukWaterDisputeState SelectedWaterCase(
+            UrukCampaignProgress progress)
+        {
+            var selected = FindDispute(progress,
+                progress?.selectedWaterDisputeId);
+            if (IsActionableWaterCase(selected)) return selected;
+            if (progress?.waterDisputes == null) return null;
+            foreach (var dispute in progress.waterDisputes)
+                if (IsActionableWaterCase(dispute)) return dispute;
+            return null;
+        }
+
+        public static int ActionableWaterCaseCount(
+            UrukCampaignProgress progress)
+        {
+            int count = 0;
+            if (progress?.waterDisputes == null) return count;
+            foreach (var dispute in progress.waterDisputes)
+                if (IsActionableWaterCase(dispute)) count++;
+            return count;
+        }
+
+        public static int SelectedWaterCaseOrdinal(
+            UrukCampaignProgress progress)
+        {
+            var selected = SelectedWaterCase(progress);
+            if (selected == null || progress?.waterDisputes == null) return 0;
+            int ordinal = 0;
+            foreach (var dispute in progress.waterDisputes)
+            {
+                if (!IsActionableWaterCase(dispute)) continue;
+                ordinal++;
+                if (dispute.id == selected.id) return ordinal;
+            }
+            return 0;
+        }
+
+        public static UrukWaterDisputeState SelectedActiveWaterAgreement(
+            UrukCampaignProgress progress)
+        {
+            var selected = SelectedWaterCase(progress);
+            return IsActiveWaterAgreement(selected) ? selected : null;
+        }
+
+        public static UrukWaterDisputeState SelectedRecoverableWaterDispute(
+            UrukCampaignProgress progress)
+        {
+            var selected = SelectedWaterCase(progress);
+            return IsRecoverableWaterDispute(selected) ? selected : null;
+        }
+
         public static UrukWaterDisputeState FirstActiveWaterAgreement(
             UrukCampaignProgress progress)
         {
             if (progress?.waterDisputes == null) return null;
             foreach (var dispute in progress.waterDisputes)
-                if (!dispute.agreementSettled &&
-                    (dispute.status == "shared" ||
-                     dispute.status == "jointly_managed"))
-                    return dispute;
+                if (IsActiveWaterAgreement(dispute)) return dispute;
             return null;
         }
 
@@ -867,8 +922,7 @@ namespace HexCiv.Core
             for (int i = progress.waterDisputes.Length - 1; i >= 0; i--)
             {
                 var dispute = progress.waterDisputes[i];
-                if (dispute.status == "rejected" || dispute.status == "breached" ||
-                    dispute.status == "defaulted") return dispute;
+                if (IsRecoverableWaterDispute(dispute)) return dispute;
             }
             return null;
         }
@@ -2578,26 +2632,28 @@ namespace HexCiv.Core
         static bool SelectNextWaterDispute(UrukCampaignProgress progress,
             out string resultJa)
         {
-            var open = new List<UrukWaterDisputeState>();
+            var actionable = new List<UrukWaterDisputeState>();
             foreach (var dispute in progress.waterDisputes)
-                if (dispute != null &&
-                    dispute.respondentFactionId == HumanFactionId &&
-                    dispute.status == "open") open.Add(dispute);
-            if (open.Count < 2)
+                if (IsActionableWaterCase(dispute)) actionable.Add(dispute);
+            if (actionable.Count < 2)
             {
-                resultJa = open.Count == 0
-                    ? "判断待ちの水利案件がない。"
-                    : "判断待ちの水利案件は1件だけ。";
+                resultJa = actionable.Count == 0
+                    ? "操作できる水利対象がない。"
+                    : "操作できる水利対象は1件だけ。";
                 return false;
             }
             int current = -1;
-            for (int i = 0; i < open.Count; i++)
-                if (open[i].id == progress.selectedWaterDisputeId) current = i;
-            var next = open[(current + 1 + open.Count) % open.Count];
+            for (int i = 0; i < actionable.Count; i++)
+                if (actionable[i].id == progress.selectedWaterDisputeId)
+                    current = i;
+            var next = actionable[(current + 1 + actionable.Count) %
+                actionable.Count];
             progress.selectedWaterDisputeId = next.id;
             progress.regionalRevision++;
-            resultJa = $"水利案件を{FindFaction(progress, next.claimantFactionId)?.nameJa}" +
-                "の要求へ切り替えた。";
+            string claimantName = FindFaction(progress,
+                next.claimantFactionId)?.nameJa ?? next.claimantFactionId;
+            resultJa = $"水利対象を{claimantName}の" +
+                $"{WaterCaseKindJa(next)}へ切り替えた。";
             return true;
         }
 
@@ -2663,7 +2719,7 @@ namespace HexCiv.Core
             arbitrator.lastDecisionJa =
                 "競合する要求を期限付きの少量分水へまとめた。";
             arbitrator.knownReasonJa = reason;
-            progress.selectedWaterDisputeId = "";
+            progress.selectedWaterDisputeId = open[0].id;
             progress.regionalRevision++;
             resultJa = $"{open.Count}件の水利要求を第三者仲裁へ付し、" +
                 "大麦1を共同食としてニップールへ渡した。";
@@ -2673,10 +2729,10 @@ namespace HexCiv.Core
         static bool BreachActiveWaterAgreement(UrukCampaignProgress progress,
             int turn, out string resultJa)
         {
-            var dispute = FirstActiveWaterAgreement(progress);
+            var dispute = SelectedActiveWaterAgreement(progress);
             if (dispute == null)
             {
-                resultJa = "破約できる水利合意がない。";
+                resultJa = "選択中の水利対象に破約できる合意がない。";
                 return false;
             }
             if (dispute.status == "jointly_managed")
@@ -2706,10 +2762,10 @@ namespace HexCiv.Core
         static bool RenegotiateWaterDispute(UrukCampaignProgress progress, int turn,
             out string resultJa)
         {
-            var dispute = LatestRecoverableWaterDispute(progress);
+            var dispute = SelectedRecoverableWaterDispute(progress);
             if (dispute == null)
             {
-                resultJa = "再交渉できる水利問題がない。";
+                resultJa = "選択中の水利対象は再交渉できない。";
                 return false;
             }
             if (AvailableFactionGood(progress, HumanFactionId, "barley") < 1 ||
@@ -3429,6 +3485,55 @@ namespace HexCiv.Core
             return null;
         }
 
+        static bool IsActiveWaterAgreement(UrukWaterDisputeState dispute)
+        {
+            return dispute != null && !dispute.agreementSettled &&
+                (dispute.status == "shared" ||
+                 dispute.status == "jointly_managed");
+        }
+
+        static bool IsRecoverableWaterDispute(UrukWaterDisputeState dispute)
+        {
+            return dispute != null &&
+                (dispute.status == "rejected" ||
+                 dispute.status == "breached" ||
+                 dispute.status == "defaulted");
+        }
+
+        static bool IsActionableWaterCase(UrukWaterDisputeState dispute)
+        {
+            return dispute != null &&
+                dispute.respondentFactionId == HumanFactionId &&
+                (dispute.status == "open" ||
+                 IsActiveWaterAgreement(dispute) ||
+                 IsRecoverableWaterDispute(dispute));
+        }
+
+        static string WaterCaseKindJa(UrukWaterDisputeState dispute)
+        {
+            if (dispute == null) return "案件";
+            if (dispute.status == "open") return "要求";
+            if (IsActiveWaterAgreement(dispute)) return "履行中合意";
+            if (IsRecoverableWaterDispute(dispute)) return "再交渉案件";
+            return "案件";
+        }
+
+        static void NormalizeSelectedWaterCase(UrukCampaignProgress progress)
+        {
+            if (progress == null) return;
+            var selected = FindDispute(progress,
+                progress.selectedWaterDisputeId);
+            if (IsActionableWaterCase(selected)) return;
+            progress.selectedWaterDisputeId = "";
+            if (progress.waterDisputes == null) return;
+            foreach (var dispute in progress.waterDisputes)
+                if (IsActionableWaterCase(dispute))
+                {
+                    progress.selectedWaterDisputeId = dispute.id;
+                    return;
+                }
+        }
+
         static UrukWaterDisputeState FindOpenDispute(UrukCampaignProgress progress,
             string id)
         {
@@ -3479,7 +3584,12 @@ namespace HexCiv.Core
         static void SelectFirstOpenWaterDispute(UrukCampaignProgress progress)
         {
             var first = FirstOpenDispute(progress);
-            progress.selectedWaterDisputeId = first?.id ?? "";
+            if (first != null)
+            {
+                progress.selectedWaterDisputeId = first.id;
+                return;
+            }
+            NormalizeSelectedWaterCase(progress);
         }
 
         static HistoricalMapPoint[] FindPath(int fromCol, int fromRow,

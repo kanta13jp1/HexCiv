@@ -554,18 +554,8 @@ public static class UrukRegionalSimulationSmokeTest
     static void ValidateMultipleWaterArbitration(
         HistoricalCampaignDefinition definition)
     {
-        var session = HistoricalCampaignFactory.Build(definition);
+        var session = PreparedMultipleWaterDisputes(definition);
         var progress = session.Progress;
-        var intake = Segment(progress, "uruk_intake_segment");
-        var branch = Segment(progress, "uruk_north_branch");
-        intake.condition = 80;
-        branch.completed = true;
-        branch.condition = 80;
-        Segment(progress, "lagash_tigris_branch").condition = 0;
-        Segment(progress, "eridu_wetland_intake").condition = 0;
-        Segment(progress, "ur_marsh_branch").condition = 0;
-
-        Advance(session, 12);
         Require(UrukRegionalSystem.OpenWaterDisputeCount(progress) == 3,
             "異なる地理条件から複数の水利要求が同時生成されない");
         var first = UrukRegionalSystem.SelectedOpenDispute(progress);
@@ -586,7 +576,10 @@ public static class UrukRegionalSimulationSmokeTest
             UrukRegionalSystem.ArbitrateWaterDisputesAction, out _),
             "競合する水利要求の第三者仲裁に失敗");
         Require(UrukRegionalSystem.OpenWaterDisputeCount(progress) == 0 &&
-            progress.selectedWaterDisputeId == "" &&
+            progress.selectedWaterDisputeId == progress.waterDisputes[0].id &&
+            UrukRegionalSystem.SelectedActiveWaterAgreement(progress) ==
+                progress.waterDisputes[0] &&
+            UrukRegionalSystem.ActionableWaterCaseCount(progress) == 3 &&
             UrukCampaignSystem.GoodAmount(progress, "barley") == 4 &&
             FactionGood(progress, "nippur_community", "barley") ==
                 nippurBarley + 1 && progress.diplomaticReputation == 53,
@@ -599,6 +592,13 @@ public static class UrukRegionalSimulationSmokeTest
                 !string.IsNullOrWhiteSpace(dispute.arbitrationReasonJa) &&
                 dispute.waterSharePerTurn == 1,
                 dispute.id + "に第三者裁定と期限付き分水が保存されない");
+        Require(UrukCampaignSystem.TryApplyAction(session,
+            UrukRegionalSystem.NextWaterDisputeAction, out _),
+            "履行中の水利合意を切り替えられない");
+        Require(UrukRegionalSystem.SelectedActiveWaterAgreement(progress) ==
+                progress.waterDisputes[1] &&
+            UrukRegionalSystem.SelectedWaterCaseOrdinal(progress) == 2,
+            "水利対象切替が選択中の履行合意へ反映されない");
         Require(CountDiplomaticOutcome(progress,
                 "water_arbitration_award") == 3,
             "各請求側への仲裁裁定が外交履歴へ残らない");
@@ -615,7 +615,8 @@ public static class UrukRegionalSimulationSmokeTest
                 dispute.id + "の仲裁分水が物理水量で履行されない");
         Require(CountDiplomaticOutcome(progress,
                 "water_arbitration_completed") == 3 &&
-            progress.diplomaticReputation == 56,
+            progress.diplomaticReputation == 56 &&
+            progress.selectedWaterDisputeId == "",
             "仲裁分水の完了と長期評判が一致しない");
         ValidateConservation(definition, progress);
 
@@ -624,6 +625,94 @@ public static class UrukRegionalSimulationSmokeTest
             id => id == definition.id ? definition : null);
         Require(JsonUtility.ToJson(progress) == JsonUtility.ToJson(loaded.Progress),
             "複数水利案件・仲裁状態のセーブ往復が一致しない");
+
+        ValidateSelectedWaterAgreementActions(definition);
+    }
+
+    static void ValidateSelectedWaterAgreementActions(
+        HistoricalCampaignDefinition definition)
+    {
+        var session = PreparedMultipleWaterDisputes(definition);
+        var progress = session.Progress;
+        SetGood(progress, "uruk_community", "barley", 10);
+        SetGood(progress, "uruk_community", "reeds", 10);
+        Require(UrukCampaignSystem.TryApplyAction(session,
+            UrukRegionalSystem.ArbitrateWaterDisputesAction, out _),
+            "個別操作試験の第三者仲裁に失敗");
+        Require(UrukCampaignSystem.TryApplyAction(session,
+            UrukRegionalSystem.NextWaterDisputeAction, out _),
+            "個別操作試験の履行中合意切替に失敗");
+
+        var first = progress.waterDisputes[0];
+        var selected = progress.waterDisputes[1];
+        var third = progress.waterDisputes[2];
+        string selectedId = selected.id;
+        int claimantBarley = FactionGood(progress,
+            selected.claimantFactionId, "barley");
+        int claimantReeds = FactionGood(progress,
+            selected.claimantFactionId, "reeds");
+        Require(UrukRegionalSystem.SelectedActiveWaterAgreement(progress) ==
+                selected &&
+            UrukCampaignSystem.TryApplyAction(session,
+                UrukRegionalSystem.BreachWaterAgreementAction, out _),
+            "選択中の履行合意を破約できない");
+        Require(selected.status == "breached" && first.status == "shared" &&
+            third.status == "shared" &&
+            UrukRegionalSystem.SelectedRecoverableWaterDispute(progress) ==
+                selected,
+            "破約が選択外の水利合意へ誤適用された");
+
+        Require(UrukCampaignSystem.TryApplyAction(session,
+            UrukRegionalSystem.RenegotiateWaterAction, out _),
+            "選択中の破約案件を再交渉できない");
+        Require(selected.status == "open" &&
+            progress.selectedWaterDisputeId == selectedId &&
+            FactionGood(progress, selected.claimantFactionId, "barley") ==
+                claimantBarley + 1 &&
+            FactionGood(progress, selected.claimantFactionId, "reeds") ==
+                claimantReeds + 1 &&
+            first.status == "shared" && third.status == "shared",
+            "再交渉が選択相手だけへの現物移転・再開にならない");
+        Require(!UrukCampaignSystem.TryApplyAction(session,
+            UrukRegionalSystem.BreachWaterAgreementAction, out _),
+            "未決案件の表示中に選択外の履行合意を破約した");
+
+        Require(UrukCampaignSystem.TryApplyAction(session,
+            UrukRegionalSystem.NextWaterDisputeAction, out _),
+            "未決案件から次の履行合意へ切り替えられない");
+        Require(UrukRegionalSystem.SelectedActiveWaterAgreement(progress) ==
+                third &&
+            UrukCampaignSystem.TryApplyAction(session,
+                UrukRegionalSystem.BreachWaterAgreementAction, out _),
+            "切替先の履行合意を破約できない");
+        Require(third.status == "breached" && first.status == "shared" &&
+            selected.status == "open",
+            "切替先以外の水利対象が破約で変化した");
+
+        string save = HistoricalCampaignSave.Serialize(session);
+        var loaded = HistoricalCampaignSave.Deserialize(save,
+            id => id == definition.id ? definition : null);
+        Require(JsonUtility.ToJson(progress) == JsonUtility.ToJson(loaded.Progress) &&
+            UrukRegionalSystem.SelectedRecoverableWaterDispute(
+                loaded.Progress)?.id == third.id,
+            "個別水利対象と破約・再交渉状態のセーブ往復が一致しない");
+    }
+
+    static HistoricalCampaignSession PreparedMultipleWaterDisputes(
+        HistoricalCampaignDefinition definition)
+    {
+        var session = HistoricalCampaignFactory.Build(definition);
+        var progress = session.Progress;
+        var intake = Segment(progress, "uruk_intake_segment");
+        var branch = Segment(progress, "uruk_north_branch");
+        intake.condition = 80;
+        branch.completed = true;
+        branch.condition = 80;
+        Segment(progress, "lagash_tigris_branch").condition = 0;
+        Segment(progress, "eridu_wetland_intake").condition = 0;
+        Segment(progress, "ur_marsh_branch").condition = 0;
+        Advance(session, 12);
+        return session;
     }
 
     static void ValidateLandRightsDispute(

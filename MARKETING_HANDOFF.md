@@ -14,12 +14,12 @@
 - 自サイト価格: ¥500
 - 体験版セーブは製品版で続行可能
 
-2026-08-05 Stage 4G検証済み配布物:
+2026-08-05 Stage 4H検証済み配布物:
 
 | 版 | サイズ | SHA256 |
 |---|---:|---|
-| 製品版 | 37,590,963 bytes | `0c00056d0e2f73c711e285612359f3a294459cf59da3c0b61f8a81bc7852c44f` |
-| 30ターンDemo | 37,593,656 bytes | `118254966f627f4c11f66dce128e2662ecaabc2fe3d08e06a37f08a2b686c5e0` |
+| 製品版 | 37,591,559 bytes | `9938be42455f059c8474e23cfb2c79a71dccfa252fb4f8b96935782daecb7b5a` |
+| 30ターンDemo | 37,594,255 bytes | `9c9704f37be5fae9ae7ba70a91aee033bd731affe7af99e45957d2cbd74937d8` |
 
 両版ともUnity 6000.3.20f1で12秒起動し、重大例外0件。manifestのサイズ・SHA256と
 実ZIPの一致も確認済み。販売サイトへ差し替える際は2ファイルを混同しない。
@@ -38,16 +38,19 @@
 | `Logs/gameplay_turn150.png` | 終盤 | 文明が大陸を覆い、歴史の結果が地図に残る |
 | `Logs/marketing/uruk_stage4f_water_arbitration.png` | ウルク編の新機能 | 3つの水利要求を比較し、推定上下流関係から第三者仲裁を選ぶ |
 | `Logs/marketing/uruk_stage4g_land_rights.png` | ウルク編の土地外交 | 観測された収穫と双方の推定根拠から、共同耕作・補償・仲裁を選ぶ |
+| `Logs/marketing/uruk_stage4h_water_agreement_selection.png` | ウルク編の合意管理 | 3つの履行中合意から対象を選び、表示中の相手だけを破約・再交渉する |
 
-Stage 4F画像は `UrukRegionalScreenshot.CaptureArbitrationCandidate` で実キャンペーン状態から
-760×446で再生成できる。Stage 4G画像は `UrukRegionalScreenshot.CaptureLandRightsCandidate` で
-同条件から再生成できる。撮影は `-batchmode -force-d3d11` を使い、`-nographics` は使わない。
+Stage 4F画像は `UrukRegionalScreenshot.CaptureArbitrationCandidate`、Stage 4G画像は
+`UrukRegionalScreenshot.CaptureLandRightsCandidate`、Stage 4H画像は
+`UrukRegionalScreenshot.CaptureWaterAgreementCandidate` で実キャンペーン状態から760×446で
+再生成できる。撮影は `-batchmode -force-d3d11` を使い、`-nographics` は使わない。
 Null描画デバイスの場合は灰色画像を成功扱いせず失敗する。2026-08-05生成版は次のとおり。
 
 | 画像 | サイズ | SHA256 |
 |---|---:|---|
 | Stage 4F | 77,743 bytes | `2930238ad5a878a3e5ab727a957bab5c04f248968a6d857784e7b5f5c146888c` |
 | Stage 4G | 86,642 bytes | `2e4dc0cd5d0da878efc3d00967c055e4a9320f6ac0a416f3925ecb188038451a` |
+| Stage 4H | 81,774 bytes | `1be02ed34766fee67f60be54e9593df7e93e39f4929aad17a0ad8f181aedeb59` |
 
 商品ページへ載せる際は圧縮前のPNGを使い、実ゲーム画面であること、上下流・季節利用・境界が
 `inferred` な復元であることを明記する。
@@ -74,6 +77,7 @@ HexCivは「育っていく世界を見届ける」ことを中心にした、1�
 - ランダム世界の通常ゲームと、紀元前4000年頃の南メソポタミアを扱うウルク編
 - 貸付、労務、通行権、朝貢を、貨幣ではなく現物・期限・輸送として扱う地域契約
 - 取水と収穫から発生する土地・耕作権問題を、共同耕作・補償・仲裁・拒否・再交渉で扱う地域外交
+- 複数の水利要求・履行中合意・再交渉案件を切り替え、表示中の相手だけへ判断を適用する誤操作防止
 - 世界史図鑑、指導者、遺跡、偉人、作品、研究、文化をゲーム内で確認
 - 観戦モードと自動管理。4X初心者向けの導入ガイド
 - BGM・SE、セーブ/ロード、一般的な内蔵GPU向けの軽量表示
@@ -118,7 +122,7 @@ X投稿12本の事前登録下書きと2×2実験設計は
 `MARKETING_EXPERIMENT_H10_UPDATES.md` に保存した。P1/P2、itch.io本人確認、H4/H7終了を
 開始条件とし、それまでは開始日・売上・訪問を未計測として扱う。更新週はテスト済みビルド、
 変更履歴、X告知を一組で公開し、基準週は開発を続けても公開更新とHexCiv投稿を行わない。
-Stage 4F/4Gは開始前に完成した更新候補であり、まだH10第1週として公開・計測していない。
+Stage 4F/4G/4Hは開始前に完成した更新候補であり、まだH10第1週として公開・計測していない。
 
 ## Claude Codeの次アクション
 
@@ -140,5 +144,5 @@ PR #4408が本番へ反映されるまではP2を完了扱いにせず、H2の�
 ## Codexの継続アクション
 
 - ゲーム本体、製品/Demoビルド、セーブ互換、回帰試験を維持する。
-- 大きな機能完成ごとに3ターン時点の画像を再撮影し、同じカメラ条件で比較可能にする。
+- 大きな機能完成ごとに実キャンペーン状態の画像を再撮影し、同じ解像度・描画条件で比較可能にする。
 - 販売文面に書く機能は、実ビルドで再現できるものだけにする。

@@ -8,7 +8,7 @@ using UnityEngine;
 using UnityEngine.UI;
 
 /// <summary>
-/// Stage 4F/4G の実キャンペーン状態から、地域外交UIを撮影する。
+/// Stage 4F/4G/4H の実キャンペーン状態から、地域外交UIを撮影する。
 /// 出力は販売素材候補だが、H10開始前は公開・計測へ使用しない。
 /// </summary>
 public static class UrukRegionalScreenshot
@@ -25,6 +25,12 @@ public static class UrukRegionalScreenshot
     public static void CaptureLandRightsCandidate()
     {
         Capture("uruk_stage4g_land_rights.png", PrepareLandDispute);
+    }
+
+    public static void CaptureWaterAgreementCandidate()
+    {
+        Capture("uruk_stage4h_water_agreement_selection.png",
+            PrepareMultipleAgreements);
     }
 
     static void Capture(string fileName,
@@ -133,6 +139,23 @@ public static class UrukRegionalScreenshot
             throw new Exception("撮影用の土地・耕作権紛争を再現できない");
     }
 
+    static void PrepareMultipleAgreements(HistoricalCampaignSession session)
+    {
+        PrepareMultipleDisputes(session);
+        SetGood(session.Progress, "barley", 5);
+        if (!UrukCampaignSystem.TryApplyAction(session,
+            UrukRegionalSystem.ArbitrateWaterDisputesAction, out _))
+            throw new Exception("撮影用の第三者仲裁を開始できない");
+        if (!UrukCampaignSystem.TryApplyAction(session,
+            UrukRegionalSystem.NextWaterDisputeAction, out _))
+            throw new Exception("撮影用の履行中合意を切り替えられない");
+        if (UrukRegionalSystem.ActionableWaterCaseCount(session.Progress) != 3 ||
+            UrukRegionalSystem.SelectedWaterCaseOrdinal(session.Progress) != 2 ||
+            UrukRegionalSystem.SelectedActiveWaterAgreement(session.Progress) ==
+                null)
+            throw new Exception("撮影用の個別水利対象を再現できない");
+    }
+
     static UrukFarmPlotState FindFarm(UrukCampaignProgress progress, string id)
     {
         foreach (var farm in progress.farmPlots)
@@ -151,5 +174,16 @@ public static class UrukRegionalScreenshot
                 return;
             }
         throw new Exception("撮影対象水路が見つからない: " + id);
+    }
+
+    static void SetGood(UrukCampaignProgress progress, string id, int amount)
+    {
+        foreach (var good in progress.stockpiles)
+            if (good.id == id)
+            {
+                good.amount = amount;
+                return;
+            }
+        throw new Exception("撮影用物資が見つからない: " + id);
     }
 }
