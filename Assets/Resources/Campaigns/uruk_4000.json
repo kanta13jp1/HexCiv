@@ -1006,6 +1006,30 @@
       "reviewStatus": "verified"
     },
     {
+      "id": "met_late_uruk_cylinder_seal",
+      "publisher": "The Metropolitan Museum of Art",
+      "title": "Cylinder seal and modern impression: ritual scene before a temple facade",
+      "url": "https://www.metmuseum.org/art/collection/search/326721",
+      "sourceType": "museum",
+      "accessedDate": "2026-08-05",
+      "usage": "reference_only",
+      "license": "",
+      "licenseUrl": "",
+      "reviewStatus": "verified"
+    },
+    {
+      "id": "cambridge_seals_signs_2025",
+      "publisher": "Cambridge University Press / Antiquity",
+      "title": "Seals and signs: tracing the origins of writing in ancient South-west Asia",
+      "url": "https://www.cambridge.org/core/journals/antiquity/article/seals-and-signs-tracing-the-origins-of-writing-in-ancient-southwest-asia/B3C2D400F3F80A7A0162D9035C9C2804",
+      "sourceType": "academic",
+      "accessedDate": "2026-08-05",
+      "usage": "reference_only",
+      "license": "",
+      "licenseUrl": "",
+      "reviewStatus": "verified"
+    },
+    {
       "id": "cambridge_uruk_glocalization_2025",
       "publisher": "Cambridge University Press / Cambridge Archaeological Journal",
       "title": "Reframing the Uruk Expansion: Glocalization and Local Dynamics in the Late Chalcolithic Adhaim-Sirwan Drainage Basin, Iraqi Kurdistan",

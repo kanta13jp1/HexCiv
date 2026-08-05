@@ -6,7 +6,7 @@ using UnityEditor;
 using UnityEngine;
 
 /// <summary>
-/// ウルク編の水・農地・AI台帳・輸送・移住・外交・親族連携を決定論的に検証する。
+/// ウルク編の水・農地・AI台帳・輸送・移住・外交・親族連携・情報伝達を決定論的に検証する。
 /// </summary>
 public static class UrukRegionalSimulationSmokeTest
 {
@@ -24,6 +24,7 @@ public static class UrukRegionalSimulationSmokeTest
             ValidateMultipleWaterArbitration(definition);
             ValidateLandRightsDispute(definition);
             ValidateKinshipDiplomacy(definition);
+            ValidateInformationTransmission(definition);
             ValidatePlayerSequence(definition);
             ValidateThreeSeedDeterminism();
             UnityEngine.Debug.Log("URUK REGIONAL SIMULATION SMOKE OK");
@@ -42,7 +43,7 @@ public static class UrukRegionalSimulationSmokeTest
     {
         var session = HistoricalCampaignFactory.Build(definition);
         var progress = session.Progress;
-        Require(progress.version == 10, "進捗versionが10ではない");
+        Require(progress.version == 11, "進捗versionが11ではない");
         Require(progress.obligations != null, "契約債務台帳が初期化されていない");
         Require(progress.diplomaticRecords != null &&
             progress.diplomaticReputation == 50,
@@ -51,6 +52,11 @@ public static class UrukRegionalSimulationSmokeTest
         Require(progress.kinshipTies != null &&
             !string.IsNullOrWhiteSpace(progress.selectedKinshipFactionId),
             "親族連携台帳または初期候補が初期化されていない");
+        Require(progress.informationDispatches != null &&
+            progress.selectedInformationFactionId == "eridu_community" &&
+            progress.selectedInformationMedium ==
+                UrukRegionalSystem.OralMessageMedium,
+            "情報伝達台帳・初期送信先・初期媒体が初期化されていない");
         Require(progress.farmPlots.Length == definition.farmPlots.Length,
             "農地定義が状態へ反映されていない");
         foreach (var farm in progress.farmPlots)
@@ -294,7 +300,7 @@ public static class UrukRegionalSimulationSmokeTest
             },
         };
         UrukCampaignSystem.MigrateProgress(definition, migrated);
-        Require(migrated.version == 10 &&
+        Require(migrated.version == 11 &&
             migrated.waterDisputes[0].claimantFarmId ==
                 "lagash_hinterland_farm" &&
             migrated.waterDisputes[0].resolutionKind == "joint_maintenance" &&
@@ -317,7 +323,7 @@ public static class UrukRegionalSimulationSmokeTest
             },
         };
         UrukCampaignSystem.MigrateProgress(definition, v6Migration);
-        Require(v6Migration.version == 10 &&
+        Require(v6Migration.version == 11 &&
             v6Migration.waterDisputes[0].retaliationJa == "" &&
             v6Migration.waterDisputes[0].renegotiationCount == 0,
             "version 6から報復・再交渉状態を補完できない");
@@ -341,7 +347,7 @@ public static class UrukRegionalSimulationSmokeTest
             },
         };
         UrukCampaignSystem.MigrateProgress(definition, v7Migration);
-        Require(v7Migration.version == 10 &&
+        Require(v7Migration.version == 11 &&
             v7Migration.waterDisputes[0].basinId ==
                 "lower_alluvial_wetland_network" &&
             v7Migration.waterDisputes[0].upstreamFactionId ==
@@ -362,7 +368,7 @@ public static class UrukRegionalSimulationSmokeTest
             farm.userFactionIds = null;
         }
         UrukCampaignSystem.MigrateProgress(definition, v8Migration);
-        Require(v8Migration.version == 10 &&
+        Require(v8Migration.version == 11 &&
             v8Migration.landDisputes != null &&
             v8Migration.selectedLandDisputeId == "",
             "version 8から土地紛争台帳を補完できない");
@@ -377,17 +383,30 @@ public static class UrukRegionalSimulationSmokeTest
         v9Migration.kinshipTies = null;
         v9Migration.selectedKinshipFactionId = null;
         UrukCampaignSystem.MigrateProgress(definition, v9Migration);
-        Require(v9Migration.version == 10 &&
+        Require(v9Migration.version == 11 &&
             v9Migration.kinshipTies != null &&
             v9Migration.selectedKinshipFactionId == "eridu_community",
             "version 9から親族連携台帳・候補を補完できない");
+
+        var v10Migration = HistoricalCampaignFactory.Build(definition).Progress;
+        v10Migration.version = 10;
+        v10Migration.informationDispatches = null;
+        v10Migration.selectedInformationFactionId = null;
+        v10Migration.selectedInformationMedium = null;
+        UrukCampaignSystem.MigrateProgress(definition, v10Migration);
+        Require(v10Migration.version == 11 &&
+            v10Migration.informationDispatches != null &&
+            v10Migration.selectedInformationFactionId == "eridu_community" &&
+            v10Migration.selectedInformationMedium ==
+                UrukRegionalSystem.OralMessageMedium,
+            "version 10から情報伝達台帳・送信先・媒体を補完できない");
 
         var chainedMigration = HistoricalCampaignFactory.Build(definition).Progress;
         chainedMigration.version = 3;
         chainedMigration.obligations = null;
         chainedMigration.diplomaticRecords = null;
         UrukCampaignSystem.MigrateProgress(definition, chainedMigration);
-        Require(chainedMigration.version == 10 &&
+        Require(chainedMigration.version == 11 &&
             chainedMigration.obligations != null &&
             chainedMigration.diplomaticRecords != null,
             "version 3から現行versionへ連続移行できない");
@@ -1033,6 +1052,162 @@ public static class UrukRegionalSimulationSmokeTest
         Require(!UrukCampaignSystem.TryApplyAction(noGoods,
             UrukRegionalSystem.ProposeKinshipTieAction, out _),
             "共同食・贈答物資なしで親族連携を提案できる");
+    }
+
+    static void ValidateInformationTransmission(
+        HistoricalCampaignDefinition definition)
+    {
+        var oral = HistoricalCampaignFactory.Build(definition);
+        var oralProgress = oral.Progress;
+        var oralPartner =
+            UrukRegionalSystem.SelectedInformationPartner(oralProgress);
+        Require(oralPartner != null &&
+            oralPartner.factionId == "eridu_community",
+            "初期情報伝達先が定義順のエリドゥではない");
+        int oralClay = FactionGood(oralProgress, "uruk_community",
+            "alluvial_clay");
+        Require(UrukCampaignSystem.TryApplyAction(oral,
+                UrukRegionalSystem.SendInformationAction, out _) &&
+            oralProgress.informationDispatches.Length == 1,
+            "開始時に口頭伝言を送れない");
+        var oralDispatch = oralProgress.informationDispatches[0];
+        Require(oralDispatch.medium == UrukRegionalSystem.OralMessageMedium &&
+            oralDispatch.status == "pending" &&
+            oralDispatch.arrivalTurn == 3 && oralDispatch.claySpent == 0 &&
+            oralDispatch.reliabilityPercent == 65 &&
+            oralDispatch.mediumConfidence == "inferred" &&
+            oralDispatch.scenarioConfidence == "inferred" &&
+            !oralDispatch.exactQuantities &&
+            FactionGood(oralProgress, "uruk_community", "alluvial_clay") ==
+                oralClay,
+            "口頭伝言の遅延・不確実性・無資源条件が不正");
+        Advance(oral, 1);
+        Require(oralDispatch.status == "pending" &&
+            UrukRegionalSystem.CommunicationTransportRiskReduction(
+                oralProgress, "uruk_community", oralPartner.factionId, 1) == 0,
+            "未到着の口頭伝言が輸送危険へ反映された");
+        Advance(oral, 2);
+        Require(oralDispatch.status == "pending",
+            "口頭伝言が予定より早く到着した");
+        Advance(oral, 3);
+        Require(oralDispatch.status == "active" ||
+            oralDispatch.status == "failed",
+            "口頭伝言が決定的に到着判定されない");
+        int oralReduction = oralDispatch.status == "active" ? 1 : 0;
+        Require(UrukRegionalSystem.CommunicationTransportRiskReduction(
+                oralProgress, "uruk_community", oralPartner.factionId, 3) ==
+                oralReduction &&
+            HasDiplomaticOutcome(oralProgress, oralDispatch.status == "active"
+                ? "information_received" : "information_failed"),
+            "口頭伝言の到着結果・履歴・輸送効果が不正");
+
+        var sealedSession = HistoricalCampaignFactory.Build(definition);
+        var sealedProgress = sealedSession.Progress;
+        sealedProgress.selectedInformationMedium =
+            UrukRegionalSystem.ClaySealingMedium;
+        sealedSession.State.TurnNumber = 25;
+        Require(sealedSession.CurrentYear == -3520 &&
+            !UrukRegionalSystem.CanSendInformation(sealedSession) &&
+            !UrukCampaignSystem.TryApplyAction(sealedSession,
+                UrukRegionalSystem.SendInformationAction, out _),
+            "紀元前3500年より前に封泥付き荷を使用できる");
+        sealedSession.State.TurnNumber = 26;
+        SetGood(sealedProgress, "uruk_community", "alluvial_clay", 4);
+        int sealedClay = FactionGood(sealedProgress, "uruk_community",
+            "alluvial_clay");
+        int sealedBaseline = UrukRegionalSystem.TransportRiskForTest(definition,
+            sealedProgress, "sealed_risk_probe", "uruk_community",
+            "eridu_community", 27);
+        Require(sealedSession.CurrentYear == -3500 &&
+            UrukRegionalSystem.CanSendInformation(sealedSession) &&
+            UrukCampaignSystem.TryApplyAction(sealedSession,
+                UrukRegionalSystem.SendInformationAction, out _),
+            "紀元前3500年に封泥付き荷を発送できない");
+        var sealedDispatch =
+            UrukRegionalSystem.LatestHumanInformationDispatch(sealedProgress);
+        Require(sealedDispatch.medium ==
+                UrukRegionalSystem.ClaySealingMedium &&
+            sealedDispatch.earliestYear == -3500 &&
+            sealedDispatch.claySpent == 1 &&
+            sealedDispatch.reliabilityPercent == 85 &&
+            sealedDispatch.mediumConfidence == "certain" &&
+            sealedDispatch.scenarioConfidence == "inferred" &&
+            Array.IndexOf(sealedDispatch.sourceRefs,
+                "met_late_uruk_cylinder_seal") >= 0 &&
+            FactionGood(sealedProgress, "uruk_community",
+                "alluvial_clay") == sealedClay - 1,
+            "封泥の年代・粘土消費・確度・出典が保存されない");
+        Advance(sealedSession, 26);
+        Require(sealedDispatch.status == "pending",
+            "封泥付き荷が予定より早く到着した");
+        Advance(sealedSession, 27);
+        Require(sealedDispatch.status == "active" &&
+            UrukRegionalSystem.CommunicationTransportRiskReduction(
+                sealedProgress, "uruk_community", "eridu_community", 27) == 3 &&
+            UrukRegionalSystem.TransportRiskForTest(definition, sealedProgress,
+                "sealed_risk_probe", "uruk_community", "eridu_community", 27) ==
+                Math.Max(2, sealedBaseline - 3),
+            "封泥到着後の3%輸送危険軽減が不正");
+
+        var numericSession = HistoricalCampaignFactory.Build(definition);
+        var numericProgress = numericSession.Progress;
+        numericProgress.selectedInformationFactionId = "ur_community";
+        numericProgress.selectedInformationMedium =
+            UrukRegionalSystem.NumericalRecordMedium;
+        numericSession.State.TurnNumber = 33;
+        Require(numericSession.CurrentYear == -3360 &&
+            !UrukCampaignSystem.TryApplyAction(numericSession,
+                UrukRegionalSystem.SendInformationAction, out _),
+            "紀元前3350年より前に数量記録板を使用できる");
+        numericSession.State.TurnNumber = 34;
+        Require(numericSession.CurrentYear == -3340 &&
+            !UrukCampaignSystem.TryApplyAction(numericSession,
+                UrukRegionalSystem.SendInformationAction, out _),
+            "数量記録行政なしで数量記録板を使用できる");
+        numericProgress.templePlanned = true;
+        numericProgress.templeStage = 5;
+        numericProgress.templeProgress = 100;
+        numericProgress.administrationAdopted = true;
+        SetGood(numericProgress, "uruk_community", "alluvial_clay", 4);
+        int numericBaseline = UrukRegionalSystem.TransportRiskForTest(definition,
+            numericProgress, "numeric_risk_probe", "uruk_community",
+            "ur_community", 35);
+        Require(UrukCampaignSystem.TryApplyAction(numericSession,
+                UrukRegionalSystem.SendInformationAction, out _) &&
+            FactionGood(numericProgress, "uruk_community",
+                "alluvial_clay") == 3,
+            "行政導入後に数量記録板を発送できない");
+        var numericDispatch =
+            UrukRegionalSystem.LatestHumanInformationDispatch(numericProgress);
+        Require(numericDispatch.medium ==
+                UrukRegionalSystem.NumericalRecordMedium &&
+            numericDispatch.earliestYear == -3350 &&
+            numericDispatch.reliabilityPercent == 100 &&
+            numericDispatch.exactQuantities &&
+            numericDispatch.mediumConfidence == "certain" &&
+            numericDispatch.scenarioConfidence == "inferred" &&
+            Array.IndexOf(numericDispatch.sourceRefs,
+                "british_museum_uruk_tablet") >= 0 &&
+            Array.IndexOf(numericDispatch.sourceRefs,
+                "cambridge_seals_signs_2025") >= 0,
+            "数量記録板の最速年代・数量性・確度・出典が不正");
+        Advance(numericSession, 34);
+        Advance(numericSession, 35);
+        Require(numericDispatch.status == "active" &&
+            UrukRegionalSystem.CommunicationTransportRiskReduction(
+                numericProgress, "uruk_community", "ur_community", 35) == 5 &&
+            UrukRegionalSystem.TransportRiskForTest(definition, numericProgress,
+                "numeric_risk_probe", "uruk_community", "ur_community", 35) ==
+                Math.Max(2, numericBaseline - 5) &&
+            HasDiplomaticOutcome(numericProgress, "information_received"),
+            "数量記録板到着後の信頼・履歴・5%輸送危険軽減が不正");
+
+        string save = HistoricalCampaignSave.Serialize(numericSession);
+        var loaded = HistoricalCampaignSave.Deserialize(save,
+            id => id == definition.id ? definition : null);
+        Require(JsonUtility.ToJson(numericProgress) ==
+                JsonUtility.ToJson(loaded.Progress),
+            "情報伝達状態のセーブ往復が一致しない");
     }
 
     static HistoricalCampaignSession PreparedWaterDispute(

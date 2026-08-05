@@ -26,6 +26,39 @@ CodexとClaude Codeは、以後この `HexCiv` プロジェクトだけを更新
 
 ## 最新状況
 
+### ✅ 2026-08-05 Codex: ウルク第4J・史料確度を分ける情報伝達と販売素材
+
+**ゲーム開発**
+
+- 共同体間情報伝達を追加した。相手と媒体を個別に選び、口頭伝言は開始時から2期間・信頼度65%、封泥付き荷は紀元前3500年以後に粘土1を消費して1期間・信頼度85%、数量記録板は記録行政成立後かつ紀元前3350年以後に粘土1を消費して1期間・信頼度100%・正確な数量として扱う。最速年代以前は送付できない。
+- 到着・誤解を保存済み状態から決定的に算出し、通常4XのRNGを消費しない。正しく理解された伝達は対象間の信頼、外交評判、AI目的、外交履歴へ接続し、4期間だけ媒体別に交易損失リスクを1%／3%／5%軽減する。複数伝達は加算せず最大効果だけを使う。
+- 円筒印章・封泥・数量記録の存在はMetropolitan Museum、Antiquity、British Museumを媒体根拠にするが、選択した二共同体間の具体的伝達は直接史料ではない。UIとセーブで「媒体：確実」「今回の伝達：推定」を分離し、送信者名や文面を創作しない。
+- 進捗JSONをversion 11へ更新し、version 10以前を空の伝達台帳、定義順の相手、口頭伝言へ補完する。送付・到着期、状態、信頼度、誤解、数量精度、出典、二種類の確度、現物消費、交易効果をセーブ往復する。
+- 地域UIに「伝達先」「媒体切替」「情報を送る」と、年代条件、媒体／シナリオ確度、到着期、信頼度、誤解、数量精度、交易効果を追加した。
+
+**販売促進**
+
+- `UrukRegionalScreenshot.CaptureInformationCandidate` で実キャンペーン状態を760×510に描画した。`Logs/marketing/uruk_stage4j_information_transmission.png` は98,582 bytes、SHA256 `50a46cfb605cd3c3286dacb4b5474ec6805a8db92aa2a7a4af5c548f24ab8e05`。封泥付き荷の受信、媒体確度、シナリオ確度、信頼度100%、交易危険-5%、3操作を目視確認した。
+- Stage 4JをH10の「開始前に完成した更新候補」へ登録した。外部公開、H10第1週、訪問、購入、売上には数えず、同じ改善を開始後に二重で新機能告知しない。
+- `MARKETING_HANDOFF.md`、H10事前登録、Obsidian正本へ最新2ZIP、画像、検証事実を同期した。Claudeは販売サイト・itch.io・実測、Codexはゲーム・配布物、Obsidianは仮説判定の正本という分担を維持する。
+
+**検証（Unity 6000.3.20f1）**
+
+- `HistoricalCampaignFoundationSmokeTest.Run`: `HISTORICAL CAMPAIGN FOUNDATION SMOKE OK`。
+- `HistoricalContentSchemaSmokeTest.Run`: `HISTORICAL CONTENT SCHEMA SMOKE OK`。追加した博物館・学術出典の型、URL、参照日、審査状態を確認。
+- `UrukCampaignVerticalSliceSmokeTest.Run`: `URUK CAMPAIGN VERTICAL SLICE SMOKE OK`。
+- `UrukRegionalSimulationSmokeTest.Run`: `URUK REGIONAL SIMULATION SMOKE OK`。年代・行政・粘土条件、口頭の遅延と誤解、封泥、数量精度、到着効果、選択相手、v10→v11、セーブ往復、3 seed決定性を確認。最終実行平均 `0.15 ms/turn`。
+- `SmokeTest.Run`: `SMOKE OK`。Stage 4Iの抽出可能なSMOKE出力54行と大文字小文字を含め完全一致。
+- `DemoModeSmokeTest.Run`: `DEMO SMOKE OK`。
+- 製品版 `BUILD OK: 98,101,201 bytes`、Demo `DEMO BUILD OK: 98,101,201 bytes`。各12秒実起動し、Unity 6000.3.20f1・例外0件。
+- 製品ZIP: 37,599,457 bytes、SHA256 `b9e454c94d6b0c4290ff6990067f7e152dd32c8c720665d983f1f5c24e2de68b`。
+- Demo ZIP: 37,602,155 bytes、SHA256 `b8a90a9d866c4bfbd3774306357a6e217def7469151d1e8ecc112851ad885da3`。両manifest一致、各148項目、README／LICENSE／Assembly-CSharp.dll／EXEを1件、クラッシュハンドラ0件、残留ステージ0件。
+
+**次の担当**
+
+- Claude: ユーザー承認後に商品画像PR #4408の生成リリースノートだけを修正し、CI再実行・マージ・P2開始日を返す。itch.ioはユーザーがCloudflare本人確認とログインを完了した後、非公開ページへ最新2ZIPと確認済み画像を登録する。
+- Codex: 情報の正確性を実際の契約条件・輸送予測・交渉可否へ接続し、史料上許容できる使者／印章管理の役割表示を検討する。P1/P2/H4/H7/itch.ioの開始ゲートを越えるまではH10を開始せず、外部投稿・価格変更・有料広告を行わない。
+
 ### ✅ 2026-08-05 Codex: ウルク第4I・史料限界を明示する親族外交と販売素材
 
 **ゲーム開発**

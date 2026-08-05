@@ -304,6 +304,40 @@ namespace HexCiv.Core
     }
 
     /// <summary>
+    /// 物資移送に先立つ情報伝達。特定の歴史的通信事件を再現せず、媒体の
+    /// 考古学的な確認度と、当事者・内容の復元確度を分けて保存する。
+    /// </summary>
+    [Serializable]
+    public sealed class UrukInformationDispatchState
+    {
+        public string id;
+        public string senderFactionId;
+        public string receiverFactionId;
+        /// <summary>oral_message / clay_sealing / numerical_record。</summary>
+        public string medium;
+        public string subjectJa;
+        public int createdTurn;
+        public int arrivalTurn;
+        public int activeUntilTurn;
+        public int earliestYear;
+        public int claySpent;
+        public int reliabilityPercent;
+        public int riskReductionPercent;
+        public int trustAfter;
+        public bool exactQuantities;
+        /// <summary>媒体そのものの史料確度。certain / inferred。</summary>
+        public string mediumConfidence;
+        /// <summary>この送受信を置いた復元モデルの確度。常にinferred。</summary>
+        public string scenarioConfidence;
+        public string mediumEvidenceJa;
+        public string scenarioNoteJa;
+        public string[] sourceRefs;
+        /// <summary>pending / active / failed / archived。</summary>
+        public string status;
+        public string resultJa;
+    }
+
+    /// <summary>
     /// ウルク地域段階の水利グラフ、農地、8勢力台帳、輸送、移住、外交。
     /// 通常4Xの状態・RNGには触れず、配列順と安定IDだけで決定的に解決する。
     /// </summary>
@@ -348,6 +382,18 @@ namespace HexCiv.Core
             "regional_next_kinship_partner";
         public const string ProposeKinshipTieAction =
             "regional_propose_kinship_tie";
+        public const string NextInformationPartnerAction =
+            "regional_next_information_partner";
+        public const string NextInformationMediumAction =
+            "regional_next_information_medium";
+        public const string SendInformationAction =
+            "regional_send_information";
+
+        public const string OralMessageMedium = "oral_message";
+        public const string ClaySealingMedium = "clay_sealing";
+        public const string NumericalRecordMedium = "numerical_record";
+        public const int ClaySealingEarliestYear = -3500;
+        public const int NumericalRecordEarliestYear = -3350;
 
         const string HumanFactionId = "uruk_community";
         const int MaxKinshipTies = 2;
@@ -373,6 +419,11 @@ namespace HexCiv.Core
             progress.selectedLandDisputeId ??= "";
             progress.kinshipTies ??= Array.Empty<UrukKinshipTieState>();
             progress.selectedKinshipFactionId ??= "";
+            progress.informationDispatches ??=
+                Array.Empty<UrukInformationDispatchState>();
+            progress.selectedInformationFactionId ??= "";
+            if (!IsInformationMedium(progress.selectedInformationMedium))
+                progress.selectedInformationMedium = OralMessageMedium;
             foreach (var farm in progress.farmPlots)
             {
                 if (farm == null) continue;
@@ -384,6 +435,7 @@ namespace HexCiv.Core
             if (progress.nextRegionalId <= 0) progress.nextRegionalId = 1;
             NormalizeSelectedWaterCase(progress);
             NormalizeSelectedKinshipPartner(progress);
+            NormalizeSelectedInformationPartner(progress);
             SyncHumanFaction(progress);
         }
 
@@ -475,6 +527,16 @@ namespace HexCiv.Core
             if (progress == null) throw new ArgumentNullException(nameof(progress));
             progress.kinshipTies ??= Array.Empty<UrukKinshipTieState>();
             progress.selectedKinshipFactionId ??= "";
+        }
+
+        public static void MigrateInformationV11(UrukCampaignProgress progress)
+        {
+            if (progress == null) throw new ArgumentNullException(nameof(progress));
+            progress.informationDispatches ??=
+                Array.Empty<UrukInformationDispatchState>();
+            progress.selectedInformationFactionId ??= "";
+            if (!IsInformationMedium(progress.selectedInformationMedium))
+                progress.selectedInformationMedium = OralMessageMedium;
         }
 
         public static void Validate(HistoricalCampaignDefinition definition,
@@ -659,6 +721,47 @@ namespace HexCiv.Core
                 !IsEligibleKinshipPartner(progress,
                     progress.selectedKinshipFactionId))
                 throw new InvalidOperationException("選択中の親族連携候補が不正");
+            var dispatchIds = new HashSet<string>();
+            foreach (var dispatch in progress.informationDispatches)
+            {
+                if (dispatch == null || string.IsNullOrWhiteSpace(dispatch.id) ||
+                    !dispatchIds.Add(dispatch.id) ||
+                    dispatch.senderFactionId != HumanFactionId ||
+                    !factionIds.Contains(dispatch.receiverFactionId) ||
+                    dispatch.receiverFactionId == HumanFactionId ||
+                    !IsInformationMedium(dispatch.medium) ||
+                    string.IsNullOrWhiteSpace(dispatch.subjectJa) ||
+                    dispatch.createdTurn < 0 ||
+                    dispatch.arrivalTurn < dispatch.createdTurn ||
+                    dispatch.activeUntilTurn < dispatch.arrivalTurn ||
+                    dispatch.claySpent < 0 || dispatch.claySpent > 1 ||
+                    !Percent(dispatch.reliabilityPercent) ||
+                    dispatch.riskReductionPercent < 0 ||
+                    dispatch.riskReductionPercent > 5 ||
+                    dispatch.trustAfter < 0 || dispatch.trustAfter > 100 ||
+                    (dispatch.mediumConfidence != "certain" &&
+                     dispatch.mediumConfidence != "inferred") ||
+                    dispatch.scenarioConfidence != "inferred" ||
+                    string.IsNullOrWhiteSpace(dispatch.mediumEvidenceJa) ||
+                    string.IsNullOrWhiteSpace(dispatch.scenarioNoteJa) ||
+                    dispatch.sourceRefs == null || dispatch.sourceRefs.Length == 0 ||
+                    (dispatch.status != "pending" && dispatch.status != "active" &&
+                     dispatch.status != "failed" && dispatch.status != "archived") ||
+                    string.IsNullOrWhiteSpace(dispatch.resultJa) ||
+                    (dispatch.medium == NumericalRecordMedium) !=
+                        dispatch.exactQuantities)
+                    throw new InvalidOperationException("情報伝達状態が不正");
+                foreach (string sourceRef in dispatch.sourceRefs)
+                    if (!HasSource(definition, sourceRef))
+                        throw new InvalidOperationException("情報伝達の出典参照が不正");
+            }
+            if (!string.IsNullOrWhiteSpace(
+                    progress.selectedInformationFactionId) &&
+                !IsInformationPartner(progress,
+                    progress.selectedInformationFactionId))
+                throw new InvalidOperationException("選択中の情報伝達先が不正");
+            if (!IsInformationMedium(progress.selectedInformationMedium))
+                throw new InvalidOperationException("選択中の情報媒体が不正");
             if (progress.lastRegionalSourceWater !=
                 progress.lastRegionalFarmWater + progress.lastRegionalLeakage +
                 progress.lastRegionalUnusedWater)
@@ -780,6 +883,12 @@ namespace HexCiv.Core
                     return SelectNextKinshipPartner(progress, out resultJa);
                 case ProposeKinshipTieAction:
                     return ProposeKinshipTie(progress, turn, out resultJa);
+                case NextInformationPartnerAction:
+                    return SelectNextInformationPartner(progress, out resultJa);
+                case NextInformationMediumAction:
+                    return SelectNextInformationMedium(progress, out resultJa);
+                case SendInformationAction:
+                    return SendInformation(session, turn, out resultJa);
                 default:
                     resultJa = "不明な地域運営行動。";
                     return false;
@@ -820,11 +929,14 @@ namespace HexCiv.Core
             AdvanceTransports(progress, completedTurn);
             AdvanceMigrations(progress, completedTurn);
             AdvanceKinshipTies(progress, completedTurn);
+            AdvanceInformationDispatches(session.Definition, progress,
+                completedTurn);
             PlanAi(session.Definition, progress, completedTurn);
             DegradeCanals(progress, completedTurn, flood);
             SyncHumanFaction(progress);
             NormalizeSelectedWaterCase(progress);
             NormalizeSelectedKinshipPartner(progress);
+            NormalizeSelectedInformationPartner(progress);
             progress.regionalRevision++;
             Validate(session.Definition, progress);
         }
@@ -1330,6 +1442,398 @@ namespace HexCiv.Core
                     return tie;
             return null;
         }
+
+        public static UrukRegionalFactionState SelectedInformationPartner(
+            UrukCampaignProgress progress)
+        {
+            NormalizeSelectedInformationPartner(progress);
+            return FindFaction(progress, progress?.selectedInformationFactionId);
+        }
+
+        public static UrukInformationDispatchState LatestHumanInformationDispatch(
+            UrukCampaignProgress progress)
+        {
+            if (progress?.informationDispatches == null) return null;
+            for (int i = progress.informationDispatches.Length - 1; i >= 0; i--)
+                if (progress.informationDispatches[i] != null)
+                    return progress.informationDispatches[i];
+            return null;
+        }
+
+        public static bool CanSendInformation(HistoricalCampaignSession session)
+        {
+            if (session?.Progress == null) return false;
+            var progress = session.Progress;
+            var partner = SelectedInformationPartner(progress);
+            string medium = progress.selectedInformationMedium;
+            if (partner == null || !IsInformationMedium(medium) ||
+                HasPendingInformationFor(progress, partner.factionId)) return false;
+            int currentYear = session.CurrentYear;
+            if (currentYear < InformationMediumEarliestYear(
+                session.Definition, medium)) return false;
+            if (medium == NumericalRecordMedium &&
+                !progress.administrationAdopted) return false;
+            return medium == OralMessageMedium ||
+                AvailableFactionGood(progress, HumanFactionId,
+                    "alluvial_clay") >= 1;
+        }
+
+        public static string InformationRequirementJa(
+            HistoricalCampaignSession session)
+        {
+            if (session?.Progress == null) return "セッションなし";
+            var progress = session.Progress;
+            var partner = SelectedInformationPartner(progress);
+            string medium = progress.selectedInformationMedium;
+            if (partner == null) return "伝達先なし";
+            if (HasPendingInformationFor(progress, partner.factionId))
+                return "同じ相手への伝達が到着待ち";
+            int earliest = InformationMediumEarliestYear(session.Definition,
+                medium);
+            if (session.CurrentYear < earliest)
+                return HistoricalCampaignCalendar.FormatYearJa(earliest) +
+                    "以後に利用可能";
+            if (medium == NumericalRecordMedium &&
+                !progress.administrationAdopted)
+                return "数量記録行政の採用が必要";
+            if (medium != OralMessageMedium &&
+                AvailableFactionGood(progress, HumanFactionId,
+                    "alluvial_clay") < 1)
+                return "沖積粘土1が必要";
+            return $"到着{InformationMediumTravelTurns(medium)}期／" +
+                $"信頼度{InformationMediumReliability(medium)}%";
+        }
+
+        public static string InformationMediumNameJa(string medium) => medium switch
+        {
+            OralMessageMedium => "口頭伝言（復元）",
+            ClaySealingMedium => "封泥付き荷",
+            NumericalRecordMedium => "数量記録板",
+            _ => medium,
+        };
+
+        public static int InformationMediumEarliestYear(
+            HistoricalCampaignDefinition definition, string medium)
+        {
+            return medium switch
+            {
+                ClaySealingMedium => ClaySealingEarliestYear,
+                NumericalRecordMedium => NumericalRecordEarliestYear,
+                _ => definition?.startYear ?? -4000,
+            };
+        }
+
+        public static int InformationMediumTravelTurns(string medium) =>
+            medium == OralMessageMedium ? 2 : 1;
+
+        public static int InformationMediumReliability(string medium) => medium switch
+        {
+            OralMessageMedium => 65,
+            ClaySealingMedium => 85,
+            NumericalRecordMedium => 100,
+            _ => 0,
+        };
+
+        public static string InformationMediumConfidence(string medium) =>
+            medium == OralMessageMedium ? "inferred" : "certain";
+
+        public static int CommunicationTransportRiskReduction(
+            UrukCampaignProgress progress, string originFactionId,
+            string destinationFactionId, int turn)
+        {
+            int best = 0;
+            if (progress?.informationDispatches == null) return best;
+            foreach (var dispatch in progress.informationDispatches)
+            {
+                if (dispatch == null || dispatch.status != "active" ||
+                    turn > dispatch.activeUntilTurn) continue;
+                bool pair = (dispatch.senderFactionId == originFactionId &&
+                    dispatch.receiverFactionId == destinationFactionId) ||
+                    (dispatch.receiverFactionId == originFactionId &&
+                     dispatch.senderFactionId == destinationFactionId);
+                if (pair) best = Math.Max(best,
+                    dispatch.riskReductionPercent);
+            }
+            return best;
+        }
+
+        static bool SelectNextInformationPartner(UrukCampaignProgress progress,
+            out string resultJa)
+        {
+            var candidates = InformationPartners(progress);
+            if (candidates.Count == 0)
+            {
+                progress.selectedInformationFactionId = "";
+                resultJa = "現在選べる情報伝達先がいない。";
+                return false;
+            }
+            int current = -1;
+            for (int i = 0; i < candidates.Count; i++)
+                if (candidates[i].factionId ==
+                    progress.selectedInformationFactionId)
+                {
+                    current = i;
+                    break;
+                }
+            var next = candidates[(current + 1) % candidates.Count];
+            progress.selectedInformationFactionId = next.factionId;
+            progress.regionalRevision++;
+            resultJa = $"情報伝達先: {next.nameJa}。";
+            return true;
+        }
+
+        static bool SelectNextInformationMedium(UrukCampaignProgress progress,
+            out string resultJa)
+        {
+            string next = progress.selectedInformationMedium switch
+            {
+                OralMessageMedium => ClaySealingMedium,
+                ClaySealingMedium => NumericalRecordMedium,
+                _ => OralMessageMedium,
+            };
+            progress.selectedInformationMedium = next;
+            progress.regionalRevision++;
+            resultJa = "情報媒体: " + InformationMediumNameJa(next) + "。";
+            return true;
+        }
+
+        static bool SendInformation(HistoricalCampaignSession session, int turn,
+            out string resultJa)
+        {
+            var progress = session.Progress;
+            var partner = SelectedInformationPartner(progress);
+            string medium = progress.selectedInformationMedium;
+            if (partner == null)
+            {
+                resultJa = "情報伝達先がいない。";
+                return false;
+            }
+            if (HasPendingInformationFor(progress, partner.factionId))
+            {
+                resultJa = "同じ相手への伝達がまだ到着していない。";
+                return false;
+            }
+            int currentYear = session.CurrentYear;
+            int earliestYear = InformationMediumEarliestYear(
+                session.Definition, medium);
+            if (currentYear < earliestYear)
+            {
+                resultJa = InformationMediumNameJa(medium) + "は" +
+                    HistoricalCampaignCalendar.FormatYearJa(earliestYear) +
+                    "より前には使用できない。";
+                return false;
+            }
+            if (medium == NumericalRecordMedium &&
+                !progress.administrationAdopted)
+            {
+                resultJa = "数量記録板には数量記録行政の採用が必要。";
+                return false;
+            }
+            int clayCost = medium == OralMessageMedium ? 0 : 1;
+            if (clayCost > 0 && AvailableFactionGood(progress, HumanFactionId,
+                "alluvial_clay") < clayCost)
+            {
+                resultJa = "封泥・記録媒体に使う沖積粘土1が必要。";
+                return false;
+            }
+            if (clayCost > 0)
+                ConsumeFactionGood(progress, HumanFactionId,
+                    "alluvial_clay", clayCost);
+
+            int travelTurns = InformationMediumTravelTurns(medium);
+            int arrivalTurn = Math.Max(0, turn) + travelTurns;
+            var dispatch = new UrukInformationDispatchState
+            {
+                id = NextId(progress, "information"),
+                senderFactionId = HumanFactionId,
+                receiverFactionId = partner.factionId,
+                medium = medium,
+                subjectJa = InformationSubjectJa(medium),
+                createdTurn = Math.Max(0, turn),
+                arrivalTurn = arrivalTurn,
+                activeUntilTurn = arrivalTurn + 3,
+                earliestYear = earliestYear,
+                claySpent = clayCost,
+                reliabilityPercent = InformationMediumReliability(medium),
+                riskReductionPercent = medium == OralMessageMedium ? 1 :
+                    medium == ClaySealingMedium ? 3 : 5,
+                trustAfter = partner.diplomaticTrust,
+                exactQuantities = medium == NumericalRecordMedium,
+                mediumConfidence = InformationMediumConfidence(medium),
+                scenarioConfidence = "inferred",
+                mediumEvidenceJa = InformationMediumEvidenceJa(medium),
+                scenarioNoteJa =
+                    "この二共同体間の個別伝達・担当者・文言は直接史料がないため推定復元。",
+                sourceRefs = InformationSourceRefs(medium),
+                status = "pending",
+                resultJa = $"{partner.nameJa}へ{InformationMediumNameJa(medium)}を発送。" +
+                    $"{travelTurns}期間後に到着予定。",
+            };
+            Append(ref progress.informationDispatches, dispatch);
+            partner.currentGoalJa = "ウルクからの情報到着待ち";
+            partner.lastDecisionJa = dispatch.resultJa;
+            partner.knownReasonJa = dispatch.scenarioNoteJa;
+            progress.regionalRevision++;
+            resultJa = dispatch.resultJa;
+            return true;
+        }
+
+        static void AdvanceInformationDispatches(
+            HistoricalCampaignDefinition definition,
+            UrukCampaignProgress progress, int turn)
+        {
+            bool changed = false;
+            foreach (var dispatch in progress.informationDispatches)
+            {
+                if (dispatch == null) continue;
+                if (dispatch.status == "pending" && turn >= dispatch.arrivalTurn)
+                {
+                    var partner = FindFaction(progress,
+                        dispatch.receiverFactionId);
+                    bool understood = StableHash(definition.seed + 31,
+                        dispatch.id, dispatch.createdTurn) % 100 <
+                        dispatch.reliabilityPercent;
+                    if (understood)
+                    {
+                        dispatch.status = "active";
+                        dispatch.activeUntilTurn = turn + 3;
+                        int trustDelta = dispatch.medium == OralMessageMedium ? 1 :
+                            dispatch.medium == ClaySealingMedium ? 2 : 3;
+                        if (partner != null)
+                        {
+                            partner.diplomaticTrust = Math.Clamp(
+                                partner.diplomaticTrust + trustDelta, 0, 100);
+                            dispatch.trustAfter = partner.diplomaticTrust;
+                            partner.currentGoalJa = "伝達済みの物資移送に備える";
+                            partner.lastDecisionJa =
+                                InformationMediumNameJa(dispatch.medium) +
+                                "を照合した。";
+                            partner.knownReasonJa = dispatch.subjectJa;
+                        }
+                        dispatch.resultJa =
+                            $"{InformationMediumNameJa(dispatch.medium)}が到着し、" +
+                            $"{dispatch.activeUntilTurn - turn + 1}期間、当事者間の" +
+                            $"輸送危険を{dispatch.riskReductionPercent}%軽減する。";
+                        RecordDiplomaticEvent(progress, turn,
+                            "information_transfer", dispatch.id,
+                            dispatch.receiverFactionId, "information_received",
+                            dispatch.medium == OralMessageMedium ? 0 : 1,
+                            dispatch.resultJa, dispatch.scenarioConfidence);
+                    }
+                    else
+                    {
+                        dispatch.status = "failed";
+                        dispatch.riskReductionPercent = 0;
+                        if (partner != null)
+                        {
+                            partner.diplomaticTrust = Math.Clamp(
+                                partner.diplomaticTrust - 1, 0, 100);
+                            dispatch.trustAfter = partner.diplomaticTrust;
+                            partner.currentGoalJa = "伝言内容を再確認する";
+                            partner.lastDecisionJa = "口頭伝言の内容を一致させられなかった。";
+                        }
+                        dispatch.resultJa =
+                            "口頭伝言の内容が一致せず、物資移送の危険軽減は得られなかった。";
+                        RecordDiplomaticEvent(progress, turn,
+                            "information_transfer", dispatch.id,
+                            dispatch.receiverFactionId, "information_failed", -1,
+                            dispatch.resultJa, dispatch.scenarioConfidence);
+                    }
+                    changed = true;
+                }
+                else if (dispatch.status == "active" &&
+                    turn > dispatch.activeUntilTurn)
+                {
+                    dispatch.status = "archived";
+                    dispatch.resultJa = "伝達済み情報の有効期間が終わった。";
+                    changed = true;
+                }
+            }
+            if (changed) progress.regionalRevision++;
+        }
+
+        static List<UrukRegionalFactionState> InformationPartners(
+            UrukCampaignProgress progress)
+        {
+            var result = new List<UrukRegionalFactionState>();
+            if (progress?.regionalFactions == null) return result;
+            foreach (var faction in progress.regionalFactions)
+                if (faction != null && !faction.human &&
+                    faction.factionId != HumanFactionId) result.Add(faction);
+            return result;
+        }
+
+        static bool IsInformationPartner(UrukCampaignProgress progress,
+            string factionId)
+        {
+            var faction = FindFaction(progress, factionId);
+            return faction != null && !faction.human &&
+                faction.factionId != HumanFactionId;
+        }
+
+        static void NormalizeSelectedInformationPartner(
+            UrukCampaignProgress progress)
+        {
+            if (progress == null) return;
+            if (IsInformationPartner(progress,
+                progress.selectedInformationFactionId)) return;
+            progress.selectedInformationFactionId = "";
+            var candidates = InformationPartners(progress);
+            if (candidates.Count > 0)
+                progress.selectedInformationFactionId = candidates[0].factionId;
+        }
+
+        static bool HasPendingInformationFor(UrukCampaignProgress progress,
+            string factionId)
+        {
+            if (progress?.informationDispatches == null) return false;
+            foreach (var dispatch in progress.informationDispatches)
+                if (dispatch != null && dispatch.receiverFactionId == factionId &&
+                    dispatch.status == "pending") return true;
+            return false;
+        }
+
+        static bool IsInformationMedium(string medium) =>
+            medium == OralMessageMedium || medium == ClaySealingMedium ||
+            medium == NumericalRecordMedium;
+
+        static string InformationSubjectJa(string medium) => medium switch
+        {
+            OralMessageMedium => "次回の物資移送予定を口頭で伝える",
+            ClaySealingMedium => "荷の送り手・宛先を封泥で識別する",
+            NumericalRecordMedium => "大麦などの数量を記録して移送予定を照合する",
+            _ => "物資移送予定",
+        };
+
+        static string InformationMediumEvidenceJa(string medium) => medium switch
+        {
+            OralMessageMedium =>
+                "口頭伝達は考古資料に直接残らず、地域間接触から置いた復元モデル。",
+            ClaySealingMedium =>
+                "紀元前3500～3100年頃の円筒印章と封泥用途が博物館資料で確認される。",
+            NumericalRecordMedium =>
+                "紀元前3350年頃以後の原楔形文字会計と紀元前3300～3100年のウルク数量板が確認される。",
+            _ => "根拠なし",
+        };
+
+        static string[] InformationSourceRefs(string medium) => medium switch
+        {
+            ClaySealingMedium => new[]
+            {
+                "met_late_uruk_cylinder_seal",
+                "cambridge_seals_signs_2025",
+            },
+            NumericalRecordMedium => new[]
+            {
+                "british_museum_uruk_tablet",
+                "cambridge_seals_signs_2025",
+            },
+            _ => new[]
+            {
+                "cambridge_uruk_glocalization_2025",
+                "met_uruk_first_city",
+            },
+        };
 
         static bool HasSource(HistoricalCampaignDefinition definition,
             string sourceRef)
@@ -2844,7 +3348,8 @@ namespace HexCiv.Core
             return Math.Clamp(risk + WaterRetaliationRiskPenalty(progress,
                 origin, destination) + LandRetaliationRiskPenalty(progress,
                 origin, destination) - KinshipTransportRiskReduction(progress,
-                origin, destination), 2, 35);
+                origin, destination) - CommunicationTransportRiskReduction(
+                progress, origin, destination, turn), 2, 35);
         }
 
         static void AdvanceTransports(UrukCampaignProgress progress, int turn)

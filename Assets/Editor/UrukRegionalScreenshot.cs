@@ -8,13 +8,13 @@ using UnityEngine;
 using UnityEngine.UI;
 
 /// <summary>
-/// Stage 4F/4G/4H/4I の実キャンペーン状態から、地域外交UIを撮影する。
+/// Stage 4F/4G/4H/4I/4J の実キャンペーン状態から、地域外交UIを撮影する。
 /// 出力は販売素材候補だが、H10開始前は公開・計測へ使用しない。
 /// </summary>
 public static class UrukRegionalScreenshot
 {
     const int Width = 760;
-    const int Height = 446;
+    const int Height = 510;
 
     public static void CaptureArbitrationCandidate()
     {
@@ -35,7 +35,13 @@ public static class UrukRegionalScreenshot
 
     public static void CaptureKinshipCandidate()
     {
-        Capture("uruk_stage4i_kinship_diplomacy.png", PrepareKinshipTie);
+            Capture("uruk_stage4i_kinship_diplomacy.png", PrepareKinshipTie);
+    }
+
+    public static void CaptureInformationCandidate()
+    {
+        Capture("uruk_stage4j_information_transmission.png",
+            PrepareInformationTransmission);
     }
 
     static void Capture(string fileName,
@@ -174,6 +180,32 @@ public static class UrukRegionalScreenshot
             UrukRegionalSystem.KinshipTransportRiskReduction(session.Progress,
                 "uruk_community", "eridu_community") != 5)
             throw new Exception("撮影用の親族連携効果を再現できない");
+    }
+
+    static void PrepareInformationTransmission(
+        HistoricalCampaignSession session)
+    {
+        session.State.TurnNumber = 34;
+        session.Progress.templePlanned = true;
+        session.Progress.templeStage = 5;
+        session.Progress.templeProgress = 100;
+        session.Progress.administrationAdopted = true;
+        session.Progress.selectedInformationFactionId = "eridu_community";
+        session.Progress.selectedInformationMedium =
+            UrukRegionalSystem.NumericalRecordMedium;
+        SetGood(session.Progress, "alluvial_clay", 5);
+        if (!UrukCampaignSystem.TryApplyAction(session,
+            UrukRegionalSystem.SendInformationAction, out _))
+            throw new Exception("撮影用の数量記録板を発送できない");
+        session.State.TurnNumber = 36;
+        UrukCampaignSystem.AdvanceAfterTurn(session);
+        var dispatch =
+            UrukRegionalSystem.LatestHumanInformationDispatch(session.Progress);
+        if (dispatch == null || dispatch.status != "active" ||
+            dispatch.medium != UrukRegionalSystem.NumericalRecordMedium ||
+            UrukRegionalSystem.CommunicationTransportRiskReduction(
+                session.Progress, "uruk_community", "eridu_community", 36) != 5)
+            throw new Exception("撮影用の情報伝達効果を再現できない");
     }
 
     static UrukFarmPlotState FindFarm(UrukCampaignProgress progress, string id)

@@ -38,6 +38,9 @@ namespace HexCiv.UI
         Button rejectMigrationButton;
         Button nextKinshipButton;
         Button proposeKinshipButton;
+        Button nextInformationButton;
+        Button nextInformationMediumButton;
+        Button sendInformationButton;
         readonly Button[] overlayButtons = new Button[4];
 
         public void Init(HistoricalCampaignSession campaignSession,
@@ -84,6 +87,10 @@ namespace HexCiv.UI
                 UrukRegionalSystem.SelectedKinshipCandidate(progress);
             var latestKinship =
                 UrukRegionalSystem.LatestHumanKinshipTie(progress);
+            var informationPartner =
+                UrukRegionalSystem.SelectedInformationPartner(progress);
+            var latestInformation =
+                UrukRegionalSystem.LatestHumanInformationDispatch(progress);
             int enRoute = CountTransports(progress, "en_route");
 
             string farmText = farm == null
@@ -107,8 +114,9 @@ namespace HexCiv.UI
                   $"{FactionName(progress, latestDiplomacy.counterpartyFactionId)} " +
                   $"{DiplomaticOutcomeJa(latestDiplomacy.outcome)}" +
                   $"（評判{Signed(latestDiplomacy.reputationDelta)}）" +
-                  (latestDiplomacy.category == "kinship_tie"
-                      ? "" : ": " + latestDiplomacy.summaryJa);
+                  (latestDiplomacy.category == "kinship_tie" ||
+                   latestDiplomacy.category == "information_transfer"
+                       ? "" : ": " + latestDiplomacy.summaryJa);
             string disputeText = dispute == null
                 ? "水利紛争なし"
                 : $"水利{WaterStatusJa(dispute.status)}" +
@@ -149,6 +157,16 @@ namespace HexCiv.UI
                   $"交易危険-{UrukRegionalSystem.KinshipTransportRiskReduction(progress, "uruk_community", latestKinship.partnerFactionId)}%" +
                   (kinshipCandidate == null ? "" :
                     $"／次候補:{kinshipCandidate.nameJa}");
+            string informationText =
+                $"伝達先:{(informationPartner == null ? "なし" : informationPartner.nameJa)}／" +
+                $"媒体:{UrukRegionalSystem.InformationMediumNameJa(progress.selectedInformationMedium)}／" +
+                UrukRegionalSystem.InformationRequirementJa(session) +
+                (latestInformation == null ? "／伝達履歴なし" :
+                    $"／最新:{FactionName(progress, latestInformation.receiverFactionId)} " +
+                    $"{InformationStatusJa(latestInformation.status)} " +
+                    $"媒体{ConfidenceJa(latestInformation.mediumConfidence)}・" +
+                    $"送受信{ConfidenceJa(latestInformation.scenarioConfidence)}・" +
+                    $"危険-{UrukRegionalSystem.CommunicationTransportRiskReduction(progress, "uruk_community", latestInformation.receiverFactionId, session.State.TurnNumber)}%");
             statusText.text =
                 $"水源 {progress.lastRegionalSourceWater}　農地 {progress.lastRegionalFarmWater}　" +
                 $"漏水 {progress.lastRegionalLeakage}　未使用 {progress.lastRegionalUnusedWater}\n" +
@@ -159,7 +177,9 @@ namespace HexCiv.UI
                 $"移住{(migration == null ? "なし" : migration.people + "人")}\n" +
                 $"{disputeText}\n" +
                 $"{landText}\n" +
-                $"外交評判 {progress.diplomaticReputation}/100　{diplomacyText}　{kinshipText}";
+                $"外交評判 {progress.diplomaticReputation}/100　{diplomacyText}\n" +
+                kinshipText + "\n" +
+                informationText;
 
             bool enabled = !session.State.IsGameOver;
             planButton.interactable = enabled && farm != null &&
@@ -203,6 +223,11 @@ namespace HexCiv.UI
             nextKinshipButton.interactable = enabled && kinshipCandidate != null;
             proposeKinshipButton.interactable = enabled &&
                 UrukRegionalSystem.CanProposeKinshipTie(progress);
+            nextInformationButton.interactable = enabled &&
+                informationPartner != null;
+            nextInformationMediumButton.interactable = enabled;
+            sendInformationButton.interactable = enabled &&
+                UrukRegionalSystem.CanSendInformation(session);
             for (int i = 0; i < overlayButtons.Length; i++)
             {
                 var colors = overlayButtons[i].colors;
@@ -234,10 +259,10 @@ namespace HexCiv.UI
             body = UIStyle.CreatePanel(canvasGo.transform, "RegionalBody",
                 new Color(0.025f, 0.04f, 0.07f, 0.95f));
             UIStyle.SetRect(body, new Vector2(0f, 0f), new Vector2(0f, 0f),
-                new Vector2(0f, 0f), new Vector2(18f, 18f), new Vector2(720f, 406f));
+                new Vector2(0f, 0f), new Vector2(18f, 18f), new Vector2(720f, 470f));
 
             var title = UIStyle.CreateText(body.transform, "Title",
-                "南メソポタミア地域管理　—　水利・農業・交易・外交", 17,
+                "南メソポタミア地域管理　—　水利・農業・交易・外交・情報", 17,
                 TextAnchor.MiddleLeft, UIStyle.Accent);
             title.fontStyle = FontStyle.Bold;
             UIStyle.SetRect(title.gameObject, new Vector2(0f, 1f), new Vector2(1f, 1f),
@@ -257,7 +282,7 @@ namespace HexCiv.UI
             statusText.resizeTextMaxSize = 12;
             UIStyle.SetRect(statusText.gameObject, new Vector2(0f, 1f),
                 new Vector2(1f, 1f), new Vector2(0.5f, 1f),
-                new Vector2(0f, -43f), new Vector2(-24f, 170f));
+                new Vector2(0f, -43f), new Vector2(-24f, 210f));
 
             string[] overlayNames = { "通常", "水利", "農地", "物流" };
             string[] overlayIds =
@@ -270,96 +295,105 @@ namespace HexCiv.UI
                 int index = i;
                 overlayButtons[i] = CreateButton(body.transform,
                     "Overlay_" + overlayNames[i], overlayNames[i],
-                    12f + i * 82f, 184f, 74f,
+                    12f + i * 82f, 228f, 74f,
                     () => Apply(overlayIds[index]));
             }
-            CreateButton(body.transform, "NextFarm", "農地を切替", 348f, 184f, 94f,
+            CreateButton(body.transform, "NextFarm", "農地を切替", 348f, 228f, 94f,
                 NextFarm);
             planButton = CreateButton(body.transform, "PlanCanal", "水路を提案",
-                448f, 184f, 112f,
+                448f, 228f, 112f,
                 () => Apply(UrukRegionalSystem.PlanCanalAction));
             cancelButton = CreateButton(body.transform, "CancelCanal", "計画取消",
-                566f, 184f, 92f,
+                566f, 228f, 92f,
                 () => Apply(UrukRegionalSystem.CancelCanalPlanAction));
 
-            CreateButton(body.transform, "CropBarley", "大麦", 12f, 140f, 70f,
+            CreateButton(body.transform, "CropBarley", "大麦", 12f, 184f, 70f,
                 () => Apply(UrukRegionalSystem.CropBarleyAction));
-            CreateButton(body.transform, "CropEmmer", "エンマー", 88f, 140f, 82f,
+            CreateButton(body.transform, "CropEmmer", "エンマー", 88f, 184f, 82f,
                 () => Apply(UrukRegionalSystem.CropEmmerAction));
-            CreateButton(body.transform, "CropFallow", "休耕", 176f, 140f, 70f,
+            CreateButton(body.transform, "CropFallow", "休耕", 176f, 184f, 70f,
                 () => Apply(UrukRegionalSystem.CropFallowAction));
             acceptOfferButton = CreateButton(body.transform, "AcceptOffer", "提案を受諾",
-                252f, 140f, 104f,
+                252f, 184f, 104f,
                 () => Apply(UrukRegionalSystem.AcceptOfferAction));
-            CreateButton(body.transform, "Gift", "食料贈与", 362f, 140f, 92f,
+            CreateButton(body.transform, "Gift", "食料贈与", 362f, 184f, 92f,
                 () => Apply(UrukRegionalSystem.SendGiftAction));
-            CreateButton(body.transform, "Barter", "物々交換", 460f, 140f, 92f,
+            CreateButton(body.transform, "Barter", "物々交換", 460f, 184f, 92f,
                 () => Apply(UrukRegionalSystem.OfferBarterAction));
 
-            CreateButton(body.transform, "Loan", "穀物貸付", 12f, 96f, 104f,
+            CreateButton(body.transform, "Loan", "穀物貸付", 12f, 140f, 104f,
                 () => Apply(UrukRegionalSystem.RequestLoanAction));
-            CreateButton(body.transform, "Labor", "労務契約", 122f, 96f, 104f,
+            CreateButton(body.transform, "Labor", "労務契約", 122f, 140f, 104f,
                 () => Apply(UrukRegionalSystem.OfferLaborAction));
-            CreateButton(body.transform, "Access", "通行権", 232f, 96f, 92f,
+            CreateButton(body.transform, "Access", "通行権", 232f, 140f, 92f,
                 () => Apply(UrukRegionalSystem.AcquireAccessAction));
-            CreateButton(body.transform, "Tribute", "朝貢を約す", 330f, 96f, 104f,
+            CreateButton(body.transform, "Tribute", "朝貢を約す", 330f, 140f, 104f,
                 () => Apply(UrukRegionalSystem.OfferTributeAction));
             nextWaterDisputeButton = CreateButton(body.transform,
-                "NextWaterDispute", "水利対象切替", 444f, 96f, 106f,
+                "NextWaterDispute", "水利対象切替", 444f, 140f, 106f,
                 () => Apply(UrukRegionalSystem.NextWaterDisputeAction));
             arbitrateWaterButton = CreateButton(body.transform,
-                "ArbitrateWater", "第三者仲裁", 556f, 96f, 102f,
+                "ArbitrateWater", "第三者仲裁", 556f, 140f, 102f,
                 () => Apply(UrukRegionalSystem.ArbitrateWaterDisputesAction));
 
             acceptMigrationButton = CreateButton(body.transform, "AcceptMigration",
-                "移住を受入", 12f, 44f, 104f,
+                "移住を受入", 12f, 88f, 104f,
                 () => Apply(UrukRegionalSystem.AcceptMigrationAction));
             rejectMigrationButton = CreateButton(body.transform, "RejectMigration",
-                "移住を拒否", 122f, 44f, 104f,
+                "移住を拒否", 122f, 88f, 104f,
                 () => Apply(UrukRegionalSystem.RejectMigrationAction));
             shareWaterButton = CreateButton(body.transform, "ShareWater",
-                "分水", 232f, 44f, 74f,
+                "分水", 232f, 88f, 74f,
                 () => Apply(UrukRegionalSystem.ShareWaterAction));
             compensateWaterButton = CreateButton(body.transform, "CompensateWater",
-                "穀物補償", 312f, 44f, 92f,
+                "穀物補償", 312f, 88f, 92f,
                 () => Apply(UrukRegionalSystem.CompensateWaterAction));
             negotiateButton = CreateButton(body.transform, "JointMaintenance",
-                "共同管理", 410f, 44f, 92f,
+                "共同管理", 410f, 88f, 92f,
                 () => Apply(UrukRegionalSystem.NegotiateWaterAction));
             rejectWaterButton = CreateButton(body.transform, "RejectWater", "拒否",
-                508f, 44f, 64f,
+                508f, 88f, 64f,
                 () => Apply(UrukRegionalSystem.RejectWaterAction));
             breachWaterButton = CreateButton(body.transform, "BreachWater",
-                "破約", 578f, 44f, 58f,
+                "破約", 578f, 88f, 58f,
                 () => Apply(UrukRegionalSystem.BreachWaterAgreementAction));
             renegotiateWaterButton = CreateButton(body.transform, "RenegotiateWater",
-                "再交渉", 642f, 44f, 66f,
+                "再交渉", 642f, 88f, 66f,
                 () => Apply(UrukRegionalSystem.RenegotiateWaterAction));
 
             jointLandButton = CreateButton(body.transform, "JointLand",
-                "土地共同耕作", 12f, 2f, 108f,
+                "土地共同耕作", 12f, 46f, 108f,
                 () => Apply(UrukRegionalSystem.JointCultivationLandAction));
             compensateLandButton = CreateButton(body.transform, "CompensateLand",
-                "土地補償", 126f, 2f, 88f,
+                "土地補償", 126f, 46f, 88f,
                 () => Apply(UrukRegionalSystem.CompensateLandAction));
             mediateLandButton = CreateButton(body.transform, "MediateLand",
-                "土地仲裁", 220f, 2f, 88f,
+                "土地仲裁", 220f, 46f, 88f,
                 () => Apply(UrukRegionalSystem.MediateLandAction));
             rejectLandButton = CreateButton(body.transform, "RejectLand",
-                "土地拒否", 314f, 2f, 80f,
+                "土地拒否", 314f, 46f, 80f,
                 () => Apply(UrukRegionalSystem.RejectLandAction));
             breachLandButton = CreateButton(body.transform, "BreachLand",
-                "土地破約", 400f, 2f, 80f,
+                "土地破約", 400f, 46f, 80f,
                 () => Apply(UrukRegionalSystem.BreachLandAgreementAction));
             renegotiateLandButton = CreateButton(body.transform, "RenegotiateLand",
-                "土地再交渉", 486f, 2f, 92f,
+                "土地再交渉", 486f, 46f, 92f,
                 () => Apply(UrukRegionalSystem.RenegotiateLandAction));
             nextKinshipButton = CreateButton(body.transform, "NextKinship",
-                "親族候補", 584f, 2f, 62f,
+                "親族候補", 584f, 46f, 62f,
                 () => Apply(UrukRegionalSystem.NextKinshipPartnerAction));
             proposeKinshipButton = CreateButton(body.transform, "ProposeKinship",
-                "連携提案", 652f, 2f, 56f,
+                "連携提案", 652f, 46f, 56f,
                 () => Apply(UrukRegionalSystem.ProposeKinshipTieAction));
+            nextInformationButton = CreateButton(body.transform,
+                "NextInformation", "伝達先", 12f, 2f, 112f,
+                () => Apply(UrukRegionalSystem.NextInformationPartnerAction));
+            nextInformationMediumButton = CreateButton(body.transform,
+                "NextInformationMedium", "媒体切替", 130f, 2f, 112f,
+                () => Apply(UrukRegionalSystem.NextInformationMediumAction));
+            sendInformationButton = CreateButton(body.transform,
+                "SendInformation", "情報を送る", 248f, 2f, 112f,
+                () => Apply(UrukRegionalSystem.SendInformationAction));
         }
 
         Button CreateButton(Transform parent, string name, string label, float x,
@@ -549,6 +583,8 @@ namespace HexCiv.UI
             "land_renegotiated" => "土地再交渉",
             "kinship_tie_formed" => "親族連携成立",
             "kinship_tie_established" => "親族連携定着",
+            "information_received" => "情報到着",
+            "information_failed" => "伝達不一致",
             "rejected" => "要求拒否",
             _ => outcome,
         };
@@ -557,6 +593,15 @@ namespace HexCiv.UI
         {
             "active" => "履行中",
             "established" => "定着",
+            _ => status,
+        };
+
+        static string InformationStatusJa(string status) => status switch
+        {
+            "pending" => "到着待ち",
+            "active" => "照合済み",
+            "failed" => "伝達不一致",
+            "archived" => "有効期間終了",
             _ => status,
         };
 
