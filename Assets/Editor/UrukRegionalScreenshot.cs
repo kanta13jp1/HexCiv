@@ -8,7 +8,7 @@ using UnityEngine;
 using UnityEngine.UI;
 
 /// <summary>
-/// Stage 4F の実キャンペーン状態から、複数水利要求が並ぶ地域UIを撮影する。
+/// Stage 4F/4G の実キャンペーン状態から、地域外交UIを撮影する。
 /// 出力は販売素材候補だが、H10開始前は公開・計測へ使用しない。
 /// </summary>
 public static class UrukRegionalScreenshot
@@ -18,6 +18,18 @@ public static class UrukRegionalScreenshot
 
     public static void CaptureArbitrationCandidate()
     {
+        Capture("uruk_stage4f_water_arbitration.png",
+            PrepareMultipleDisputes);
+    }
+
+    public static void CaptureLandRightsCandidate()
+    {
+        Capture("uruk_stage4g_land_rights.png", PrepareLandDispute);
+    }
+
+    static void Capture(string fileName,
+        Action<HistoricalCampaignSession> prepare)
+    {
         GameObject host = null;
         GameObject cameraGo = null;
         RenderTexture target = null;
@@ -25,10 +37,14 @@ public static class UrukRegionalScreenshot
         var previousActive = RenderTexture.active;
         try
         {
+            if (SystemInfo.graphicsDeviceType ==
+                UnityEngine.Rendering.GraphicsDeviceType.Null)
+                throw new Exception(
+                    "販促画像の撮影には描画デバイスが必要。-nographicsを外し-force-d3d11で実行してください。");
             var definition = HistoricalCampaignRepository.LoadBuiltIn(
                 HistoricalCampaignRepository.Uruk4000Id);
             var session = HistoricalCampaignFactory.Build(definition);
-            PrepareMultipleDisputes(session);
+            prepare(session);
 
             host = new GameObject("UrukRegionalScreenshotHost");
             var panel = host.AddComponent<UrukRegionalPanel>();
@@ -66,8 +82,7 @@ public static class UrukRegionalScreenshot
             string directory = Path.Combine(Directory.GetCurrentDirectory(),
                 "Logs", "marketing");
             Directory.CreateDirectory(directory);
-            string path = Path.Combine(directory,
-                "uruk_stage4f_water_arbitration.png");
+            string path = Path.Combine(directory, fileName);
             File.WriteAllBytes(path, texture.EncodeToPNG());
             Debug.Log("URUK REGIONAL SCREENSHOT OK: " + path);
             EditorApplication.Exit(0);
@@ -103,6 +118,26 @@ public static class UrukRegionalScreenshot
         UrukCampaignSystem.AdvanceAfterTurn(session);
         if (UrukRegionalSystem.OpenWaterDisputeCount(session.Progress) != 3)
             throw new Exception("撮影用の水利要求3件を再現できない");
+    }
+
+    static void PrepareLandDispute(HistoricalCampaignSession session)
+    {
+        var plot = FindFarm(session.Progress, "uruk_west_farm");
+        plot.crop = "barley";
+        session.Progress.selectedFarmId = plot.id;
+        SetSegment(session.Progress, "uruk_intake_segment", 80, true);
+        SetSegment(session.Progress, "uruk_west_branch", 80, true);
+        session.State.TurnNumber = 15;
+        UrukCampaignSystem.AdvanceAfterTurn(session);
+        if (UrukRegionalSystem.FirstOpenLandDispute(session.Progress) == null)
+            throw new Exception("撮影用の土地・耕作権紛争を再現できない");
+    }
+
+    static UrukFarmPlotState FindFarm(UrukCampaignProgress progress, string id)
+    {
+        foreach (var farm in progress.farmPlots)
+            if (farm.id == id) return farm;
+        throw new Exception("撮影対象農地が見つからない: " + id);
     }
 
     static void SetSegment(UrukCampaignProgress progress, string id,

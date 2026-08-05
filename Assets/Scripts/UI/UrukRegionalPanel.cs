@@ -28,6 +28,12 @@ namespace HexCiv.UI
         Button renegotiateWaterButton;
         Button nextWaterDisputeButton;
         Button arbitrateWaterButton;
+        Button jointLandButton;
+        Button compensateLandButton;
+        Button mediateLandButton;
+        Button rejectLandButton;
+        Button breachLandButton;
+        Button renegotiateLandButton;
         Button acceptMigrationButton;
         Button rejectMigrationButton;
         readonly Button[] overlayButtons = new Button[4];
@@ -62,12 +68,19 @@ namespace HexCiv.UI
                 UrukRegionalSystem.LatestRecoverableWaterDispute(progress);
             var dispute = openDispute ?? activeAgreement ?? recoverableDispute;
             var migration = UrukRegionalSystem.FirstWaitingMigration(progress);
+            var openLand = UrukRegionalSystem.SelectedOpenLandDispute(progress);
+            var activeLand = UrukRegionalSystem.FirstActiveLandAgreement(progress);
+            var recoverableLand =
+                UrukRegionalSystem.LatestRecoverableLandDispute(progress);
+            var land = openLand ?? activeLand ?? recoverableLand;
             int enRoute = CountTransports(progress, "en_route");
 
             string farmText = farm == null
                 ? "対象農地なし"
                 : $"{CropNameJa(farm.crop)}／水{farm.waterReceived}/{farm.waterDemand}／" +
-                  $"塩害{farm.salinity}%／前期収穫{farm.lastYield}";
+                  $"塩害{farm.salinity}%／前期収穫{farm.lastYield}／" +
+                  $"管理:{FactionName(progress, farm.managerFactionId)}／" +
+                  $"利用{farm.userFactionIds?.Length ?? 0}共同体";
             string offerText = offer == null
                 ? "交易提案なし"
                 : OfferText(progress, offer);
@@ -101,6 +114,18 @@ namespace HexCiv.UI
                          FactionName(progress, dispute.arbitratorFactionId)) +
                    (string.IsNullOrWhiteSpace(dispute.retaliationJa)
                        ? "" : "　" + dispute.retaliationJa);
+            string landText = land == null
+                ? "土地・耕作権紛争なし"
+                : $"土地{LandStatusJa(land.status)}: " +
+                  $"{FactionName(progress, land.claimantFactionId)}→" +
+                  $"{FarmNameJa(land.plotId)}　観測 収穫{land.observedYield}・水{land.observedWater}　" +
+                  $"根拠:{land.claimantBasisJa}／{land.respondentBasisJa} " +
+                  $"（{ConfidenceJa(land.confidence)}）" +
+                  (string.IsNullOrWhiteSpace(land.arbitratorFactionId)
+                      ? "" : "　仲裁:" +
+                        FactionName(progress, land.arbitratorFactionId)) +
+                  (string.IsNullOrWhiteSpace(land.retaliationJa)
+                      ? "" : "　" + land.retaliationJa);
             statusText.text =
                 $"水源 {progress.lastRegionalSourceWater}　農地 {progress.lastRegionalFarmWater}　" +
                 $"漏水 {progress.lastRegionalLeakage}　未使用 {progress.lastRegionalUnusedWater}\n" +
@@ -110,6 +135,7 @@ namespace HexCiv.UI
                 $"{offerText}　輸送中{enRoute}\n{obligationText}　" +
                 $"移住{(migration == null ? "なし" : migration.people + "人")}\n" +
                 $"{disputeText}\n" +
+                $"{landText}\n" +
                 $"外交評判 {progress.diplomaticReputation}/100　{diplomacyText}";
 
             bool enabled = !session.State.IsGameOver;
@@ -134,6 +160,19 @@ namespace HexCiv.UI
             arbitrateWaterButton.interactable = enabled && openDisputeCount > 1 &&
                 progress.diplomaticReputation >= 25 &&
                 UrukCampaignSystem.GoodAmount(progress, "barley") >= 1;
+            jointLandButton.interactable = enabled && openLand != null &&
+                progress.labor.food >= 40;
+            compensateLandButton.interactable = enabled && openLand != null &&
+                UrukCampaignSystem.GoodAmount(progress, "barley") >= 2;
+            mediateLandButton.interactable = enabled && openLand != null &&
+                progress.diplomaticReputation >= 30 &&
+                UrukCampaignSystem.GoodAmount(progress, "barley") >= 1;
+            rejectLandButton.interactable = enabled && openLand != null;
+            breachLandButton.interactable = enabled && activeLand != null;
+            renegotiateLandButton.interactable = enabled &&
+                recoverableLand != null &&
+                UrukCampaignSystem.GoodAmount(progress, "barley") >= 1 &&
+                UrukCampaignSystem.GoodAmount(progress, "alluvial_clay") >= 1;
             acceptMigrationButton.interactable = enabled && migration != null;
             rejectMigrationButton.interactable = enabled && migration != null;
             for (int i = 0; i < overlayButtons.Length; i++)
@@ -189,7 +228,7 @@ namespace HexCiv.UI
             statusText.resizeTextMinSize = 10;
             UIStyle.SetRect(statusText.gameObject, new Vector2(0f, 1f),
                 new Vector2(1f, 1f), new Vector2(0.5f, 1f),
-                new Vector2(0f, -43f), new Vector2(-24f, 152f));
+                new Vector2(0f, -43f), new Vector2(-24f, 170f));
 
             string[] overlayNames = { "通常", "水利", "農地", "物流" };
             string[] overlayIds =
@@ -267,6 +306,25 @@ namespace HexCiv.UI
             renegotiateWaterButton = CreateButton(body.transform, "RenegotiateWater",
                 "再交渉", 642f, 44f, 66f,
                 () => Apply(UrukRegionalSystem.RenegotiateWaterAction));
+
+            jointLandButton = CreateButton(body.transform, "JointLand",
+                "土地共同耕作", 12f, 2f, 108f,
+                () => Apply(UrukRegionalSystem.JointCultivationLandAction));
+            compensateLandButton = CreateButton(body.transform, "CompensateLand",
+                "土地補償", 126f, 2f, 88f,
+                () => Apply(UrukRegionalSystem.CompensateLandAction));
+            mediateLandButton = CreateButton(body.transform, "MediateLand",
+                "土地仲裁", 220f, 2f, 88f,
+                () => Apply(UrukRegionalSystem.MediateLandAction));
+            rejectLandButton = CreateButton(body.transform, "RejectLand",
+                "土地拒否", 314f, 2f, 80f,
+                () => Apply(UrukRegionalSystem.RejectLandAction));
+            breachLandButton = CreateButton(body.transform, "BreachLand",
+                "土地破約", 400f, 2f, 80f,
+                () => Apply(UrukRegionalSystem.BreachLandAgreementAction));
+            renegotiateLandButton = CreateButton(body.transform, "RenegotiateLand",
+                "土地再交渉", 486f, 2f, 92f,
+                () => Apply(UrukRegionalSystem.RenegotiateLandAction));
         }
 
         Button CreateButton(Transform parent, string name, string label, float x,
@@ -354,6 +412,16 @@ namespace HexCiv.UI
             _ => crop,
         };
 
+        static string FarmNameJa(string id) => id switch
+        {
+            "uruk_north_farm" => "ウルク北農地",
+            "uruk_west_farm" => "ウルク西農地",
+            "eridu_hinterland_farm" => "エリドゥ後背農地",
+            "ur_hinterland_farm" => "ウル後背農地",
+            "lagash_hinterland_farm" => "ラガシュ後背農地",
+            _ => id,
+        };
+
         static string GoodNameJa(string good) => good switch
         {
             "barley" => "大麦",
@@ -436,6 +504,14 @@ namespace HexCiv.UI
             "water_arbitration_award" => "第三者仲裁",
             "water_arbitration_completed" => "仲裁分水履行",
             "water_arbitration_defaulted" => "仲裁分水不履行",
+            "land_joint_cultivation_started" => "共同耕作開始",
+            "land_compensated" => "土地補償",
+            "land_mediation_award" => "土地仲裁",
+            "land_rejected" => "土地要求拒否",
+            "land_agreement_completed" => "耕作権合意履行",
+            "land_agreement_defaulted" => "耕作権合意不履行",
+            "land_agreement_breached" => "耕作権合意破約",
+            "land_renegotiated" => "土地再交渉",
             "rejected" => "要求拒否",
             _ => outcome,
         };
@@ -468,6 +544,19 @@ namespace HexCiv.UI
             "open" => "要求",
             "shared" => "分水履行中",
             "jointly_managed" => "共同管理中",
+            "compensated" => "補償済み",
+            "rejected" => "拒否",
+            "breached" => "破約",
+            "completed" => "合意完了",
+            "defaulted" => "不履行",
+            _ => status,
+        };
+
+        static string LandStatusJa(string status) => status switch
+        {
+            "open" => "要求",
+            "jointly_cultivated" => "共同耕作中",
+            "mediated" => "仲裁利用中",
             "compensated" => "補償済み",
             "rejected" => "拒否",
             "breached" => "破約",

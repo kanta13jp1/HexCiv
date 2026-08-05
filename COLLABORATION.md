@@ -26,6 +26,39 @@ CodexとClaude Codeは、以後この `HexCiv` プロジェクトだけを更新
 
 ## 最新状況
 
+### ✅ 2026-08-05 Codex: ウルク第4G・土地／耕作権紛争と販売素材
+
+**ゲーム開発**
+
+- 農地区画へ、基本帰属とは別に当期管理者と利用共同体台帳を追加した。紀元前4000年頃の近代的固定国境・排他的所有権を捏造せず、既存農地は帰属勢力による単独管理・利用から開始する。
+- ウルク西農地で部分灌漑以上の取水、播種、収穫3以上が同じ期に観測された場合、エリドゥ共同体の季節利用主張を土地・耕作権案件として生成する。双方の根拠、取水、収穫、確度 `inferred` を保存・表示する。
+- 共同耕作は3期間・毎期大麦1、現物補償は大麦2、ニップール仲裁は共同食大麦1と4期間・毎期大麦1の季節利用裁定。実備蓄を当事者間で移し、期限後は利用者台帳から相手を外す。履行／不履行、信頼、外交評判、AI目的、外交履歴を同じ決定論的経路で処理する。
+- 拒否・不履行・破約は相手AIの民兵配分を8ポイント増やし、当事者間の陸上輸送危険を8ポイント増加させる。大麦1と粘土1の現物移転で再交渉し、報復を緩和して解決案を再選択できる。自動管理は合意・拒否・破約・再交渉を決めない。
+- 地域UIへ農地管理者・利用共同体数、土地案件の観測値・双方根拠・確度・仲裁者と「土地共同耕作／土地補償／土地仲裁／土地拒否／土地破約／土地再交渉」を追加した。
+- 進捗JSONをversion 9へ更新。version 8→9とversion 1からの連鎖移行、農地権利、土地案件、仲裁・破約・再交渉のセーブ往復を検証した。Core純度と通常4X RNGを維持する。
+
+**販売促進**
+
+- `UrukRegionalScreenshot.CaptureLandRightsCandidate` を追加し、実キャンペーン状態から760×446の土地外交画面を再生成可能にした。生成画像は `Logs/marketing/uruk_stage4g_land_rights.png`、86,642 bytes、SHA256 `2e4dc0cd5d0da878efc3d00967c055e4a9320f6ac0a416f3925ecb188038451a`。文字、観測値、推定根拠、6操作を目視確認した。
+- `-nographics` のNull描画デバイスが灰色PNGを成功扱いする問題を検出し、撮影ツールを明示失敗させた。販促撮影は `-batchmode -force-d3d11` を使用する。Stage 4F画像も再生成し、77,743 bytes、SHA256 `2930238ad5a878a3e5ab727a957bab5c04f248968a6d857784e7b5f5c146888c` へ更新した。
+- Stage 4GをH10の「開始前に完成した更新候補」へ登録した。H10第1週、公開投稿、訪問、購入、売上には数えておらず、開始後に同じ機能を二重で新機能告知しない。
+- `MARKETING_HANDOFF.md` とObsidian正本へ最新2ZIP、画像ハッシュ、検証事実を同期した。Claudeは公開・計測ゲート、Codexはゲーム／配布物、Obsidianは仮説判定の正本という分担を維持する。
+
+**検証（Unity 6000.3.20f1）**
+
+- `UrukRegionalSimulationSmokeTest.Run`: `URUK REGIONAL SIMULATION SMOKE OK`。発生観測、共同耕作3期、現物補償、季節利用仲裁、AI目的、拒否、破約、報復、再交渉、農地利用権返還、version 8→9、セーブ往復、物資・水量・労働保存、3 seed決定性を確認。平均 `0.14 ms/turn`。
+- `UrukCampaignVerticalSliceSmokeTest.Run`: `URUK CAMPAIGN VERTICAL SLICE SMOKE OK`。
+- `SmokeTest.Run`: `SMOKE OK`。Stage 4Fの `[Smoke]` / `SMOKE` 全11行と完全一致。
+- `DemoModeSmokeTest.Run`: `DEMO SMOKE OK`。30ターン制限と製品版セーブ互換を確認。
+- 製品版 `BUILD OK: 98,079,989 bytes`、Demo `DEMO BUILD OK: 98,079,989 bytes`。各12秒実起動し、Unity 6000.3.20f1・例外0件。
+- 製品ZIP: 37,590,963 bytes、SHA256 `0c00056d0e2f73c711e285612359f3a294459cf59da3c0b61f8a81bc7852c44f`。
+- Demo ZIP: 37,593,656 bytes、SHA256 `118254966f627f4c11f66dce128e2662ecaabc2fe3d08e06a37f08a2b686c5e0`。両manifest一致、各148項目、README／LICENSE／Assembly-CSharp.dll／EXEを1件、クラッシュハンドラ0件。
+
+**次の担当**
+
+- Claude: ユーザー承認後に商品画像PR #4408の生成リリースノートだけを修正し、CI再実行・マージ・P2開始日を返す。itch.ioはユーザーがCloudflare本人確認とログインを完了した後、非公開ページへ最新2ZIPと確認済み画像を登録する。
+- Codex: 複数水利案件の個別選択を破約・再交渉へ拡張し、その後に婚姻・情報伝達の追加交渉へ進む。P1/P2/H4/H7/itch.ioの開始ゲートを越えるまではH10を開始せず、外部投稿・価格変更・有料広告を行わない。
+
 ### ✅ 2026-08-05 Codex: ウルク第4F・複数水利要求／第三者仲裁と更新素材
 
 **ゲーム開発**
@@ -38,7 +71,7 @@ CodexとClaude Codeは、以後この `HexCiv` プロジェクトだけを更新
 
 **販売促進**
 
-- `UrukRegionalScreenshot.CaptureArbitrationCandidate` を追加し、実キャンペーン状態から案件3件と仲裁ボタンを含む760×446 PNGを再生成可能にした。生成画像は `Logs/marketing/uruk_stage4f_water_arbitration.png`、69,807 bytes、SHA256 `d4854788de2c4cc041614b3e40ab1933902bc1cdab806f6c5b79403e8910fb7f`。目視で文字、案件番号、ボタン、欠けを確認した。
+- `UrukRegionalScreenshot.CaptureArbitrationCandidate` を追加し、実キャンペーン状態から案件3件と仲裁ボタンを含む760×446 PNGを再生成可能にした。Stage 4Gの土地操作行追加後に同じ方法で再生成した現行画像は `Logs/marketing/uruk_stage4f_water_arbitration.png`、77,743 bytes、SHA256 `2930238ad5a878a3e5ab727a957bab5c04f248968a6d857784e7b5f5c146888c`。目視で文字、案件番号、ボタン、欠けを確認した。
 - Stage 4FをH10の「開始前に完成した更新候補」へ登録した。開始ゲート前の製品準備であり、H10第1週、公開投稿、訪問、売上には数えていない。同じ機能を開始後に二重で新機能告知しない。
 - `MARKETING_HANDOFF.md` へ最新2ZIPと更新素材の再現方法を同期した。Claudeは販売ページ側、Codexはゲーム／配布物、Obsidianは分母・分子・期間・判定の正本という役割を維持する。
 

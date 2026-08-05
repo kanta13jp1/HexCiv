@@ -55,6 +55,10 @@ namespace HexCiv.Core
     {
         public string id;
         public string ownerFactionId;
+        /// <summary>現在の整備・播種・収穫を統括する共同体。</summary>
+        public string managerFactionId;
+        /// <summary>季節利用・共同耕作を認められた共同体。</summary>
+        public string[] userFactionIds;
         public int col;
         public int row;
         public string crop;
@@ -236,6 +240,41 @@ namespace HexCiv.Core
         public string resultJa;
     }
 
+    [Serializable]
+    public sealed class UrukLandDisputeState
+    {
+        public string id;
+        public string claimantFactionId;
+        public string respondentFactionId;
+        public string plotId;
+        public int createdTurn;
+        public int observedYield;
+        public int observedWater;
+        public string claimantBasisJa;
+        public string respondentBasisJa;
+        /// <summary>joint_cultivation / grain_compensation / seasonal_mediation / rejected。</summary>
+        public string resolutionKind;
+        public int agreementStartTurn;
+        public int agreementUntilTurn;
+        public int yieldSharePerTurn;
+        public int yieldShareExpectedTotal;
+        public int yieldSharedTotal;
+        public int barleyTransferred;
+        public int laborCommitted;
+        public string arbitratorFactionId;
+        public int arbitrationTurn;
+        public string arbitrationReasonJa;
+        public bool agreementSettled;
+        public bool breached;
+        public int renegotiationCount;
+        public int trustAfter;
+        public string retaliationJa;
+        public string confidence;
+        /// <summary>open / jointly_cultivated / compensated / mediated / rejected / breached / completed / defaulted。</summary>
+        public string status;
+        public string resultJa;
+    }
+
     /// <summary>
     /// ウルク地域段階の水利グラフ、農地、8勢力台帳、輸送、移住、外交。
     /// 通常4Xの状態・RNGには触れず、配列順と安定IDだけで決定的に解決する。
@@ -264,6 +303,17 @@ namespace HexCiv.Core
         public const string NextWaterDisputeAction = "regional_next_water_dispute";
         public const string ArbitrateWaterDisputesAction =
             "regional_arbitrate_water_disputes";
+        public const string JointCultivationLandAction =
+            "regional_land_joint_cultivation";
+        public const string CompensateLandAction =
+            "regional_land_compensation";
+        public const string MediateLandAction =
+            "regional_land_mediation";
+        public const string RejectLandAction = "regional_land_reject";
+        public const string BreachLandAgreementAction =
+            "regional_land_breach";
+        public const string RenegotiateLandAction =
+            "regional_land_renegotiate";
         public const string AcceptMigrationAction = "regional_accept_migration";
         public const string RejectMigrationAction = "regional_reject_migration";
 
@@ -286,6 +336,16 @@ namespace HexCiv.Core
             progress.migrationGroups ??= Array.Empty<UrukMigrationGroupState>();
             progress.waterDisputes ??= Array.Empty<UrukWaterDisputeState>();
             progress.selectedWaterDisputeId ??= "";
+            progress.landDisputes ??= Array.Empty<UrukLandDisputeState>();
+            progress.selectedLandDisputeId ??= "";
+            foreach (var farm in progress.farmPlots)
+            {
+                if (farm == null) continue;
+                if (string.IsNullOrWhiteSpace(farm.managerFactionId))
+                    farm.managerFactionId = farm.ownerFactionId;
+                if (farm.userFactionIds == null || farm.userFactionIds.Length == 0)
+                    farm.userFactionIds = new[] { farm.ownerFactionId };
+            }
             if (progress.nextRegionalId <= 0) progress.nextRegionalId = 1;
             SyncHumanFaction(progress);
         }
@@ -357,6 +417,22 @@ namespace HexCiv.Core
             }
         }
 
+        public static void MigrateLandRightsV9(UrukCampaignProgress progress)
+        {
+            if (progress == null) throw new ArgumentNullException(nameof(progress));
+            progress.landDisputes ??= Array.Empty<UrukLandDisputeState>();
+            progress.selectedLandDisputeId ??= "";
+            if (progress.farmPlots != null)
+                foreach (var farm in progress.farmPlots)
+                {
+                    if (farm == null) continue;
+                    if (string.IsNullOrWhiteSpace(farm.managerFactionId))
+                        farm.managerFactionId = farm.ownerFactionId;
+                    if (farm.userFactionIds == null || farm.userFactionIds.Length == 0)
+                        farm.userFactionIds = new[] { farm.ownerFactionId };
+                }
+        }
+
         public static void Validate(HistoricalCampaignDefinition definition,
             UrukCampaignProgress progress)
         {
@@ -390,12 +466,18 @@ namespace HexCiv.Core
             foreach (var farm in progress.farmPlots)
             {
                 if (farm == null || !factionIds.Contains(farm.ownerFactionId) ||
+                    !factionIds.Contains(farm.managerFactionId) ||
+                    farm.userFactionIds == null ||
                     (farm.crop != "barley" && farm.crop != "emmer" &&
                      farm.crop != "fallow") ||
                     !Percent(farm.condition) || !Percent(farm.drainage) ||
                     !Percent(farm.salinity) || farm.waterReceived < 0 ||
                     farm.lastYield < 0)
                     throw new InvalidOperationException("農地区画状態が不正");
+                var users = new HashSet<string>();
+                foreach (string user in farm.userFactionIds)
+                    if (!factionIds.Contains(user) || !users.Add(user))
+                        throw new InvalidOperationException("農地利用権台帳が不正");
             }
             foreach (var transport in progress.transports)
             {
@@ -470,6 +552,38 @@ namespace HexCiv.Core
             if (!string.IsNullOrWhiteSpace(progress.selectedWaterDisputeId) &&
                 FindOpenDispute(progress, progress.selectedWaterDisputeId) == null)
                 throw new InvalidOperationException("選択中の水利案件が不正");
+            foreach (var dispute in progress.landDisputes)
+            {
+                if (dispute == null || string.IsNullOrWhiteSpace(dispute.id) ||
+                    !factionIds.Contains(dispute.claimantFactionId) ||
+                    !factionIds.Contains(dispute.respondentFactionId) ||
+                    FindFarm(progress, dispute.plotId) == null ||
+                    dispute.createdTurn < 0 || dispute.observedYield < 0 ||
+                    dispute.observedWater < 0 ||
+                    string.IsNullOrWhiteSpace(dispute.claimantBasisJa) ||
+                    string.IsNullOrWhiteSpace(dispute.respondentBasisJa) ||
+                    dispute.agreementStartTurn < 0 ||
+                    dispute.agreementUntilTurn < 0 ||
+                    dispute.yieldSharePerTurn < 0 ||
+                    dispute.yieldShareExpectedTotal < 0 ||
+                    dispute.yieldSharedTotal < 0 ||
+                    dispute.barleyTransferred < 0 ||
+                    dispute.laborCommitted < 0 ||
+                    dispute.arbitratorFactionId == null ||
+                    (!string.IsNullOrWhiteSpace(dispute.arbitratorFactionId) &&
+                     !factionIds.Contains(dispute.arbitratorFactionId)) ||
+                    dispute.arbitrationTurn < 0 ||
+                    dispute.arbitrationReasonJa == null ||
+                    dispute.renegotiationCount < 0 ||
+                    dispute.trustAfter < 0 || dispute.trustAfter > 100 ||
+                    dispute.retaliationJa == null ||
+                    string.IsNullOrWhiteSpace(dispute.confidence) ||
+                    string.IsNullOrWhiteSpace(dispute.status))
+                    throw new InvalidOperationException("土地紛争状態が不正");
+            }
+            if (!string.IsNullOrWhiteSpace(progress.selectedLandDisputeId) &&
+                FindOpenLandDispute(progress, progress.selectedLandDisputeId) == null)
+                throw new InvalidOperationException("選択中の土地案件が不正");
             if (progress.lastRegionalSourceWater !=
                 progress.lastRegionalFarmWater + progress.lastRegionalLeakage +
                 progress.lastRegionalUnusedWater)
@@ -567,6 +681,22 @@ namespace HexCiv.Core
                     return SelectNextWaterDispute(progress, out resultJa);
                 case ArbitrateWaterDisputesAction:
                     return ArbitrateOpenWaterDisputes(progress, turn, out resultJa);
+                case JointCultivationLandAction:
+                    return ResolveOpenLandDispute(progress, turn,
+                        "joint_cultivation", out resultJa);
+                case CompensateLandAction:
+                    return ResolveOpenLandDispute(progress, turn,
+                        "grain_compensation", out resultJa);
+                case MediateLandAction:
+                    return ResolveOpenLandDispute(progress, turn,
+                        "seasonal_mediation", out resultJa);
+                case RejectLandAction:
+                    return ResolveOpenLandDispute(progress, turn,
+                        "rejected", out resultJa);
+                case BreachLandAgreementAction:
+                    return BreachActiveLandAgreement(progress, turn, out resultJa);
+                case RenegotiateLandAction:
+                    return RenegotiateLandDispute(progress, turn, out resultJa);
                 case AcceptMigrationAction:
                     return RespondToMigration(progress, turn, true, out resultJa);
                 case RejectMigrationAction:
@@ -605,6 +735,7 @@ namespace HexCiv.Core
             AdvanceProjects(progress, completedTurn);
             ResolveWater(progress, completedTurn);
             ResolveFarms(progress);
+            AdvanceLandAgreements(progress, completedTurn);
             ResolveAiLedgers(progress, flood);
             AdvanceObligations(session.Definition, progress, completedTurn);
             AdvanceTransports(progress, completedTurn);
@@ -742,6 +873,50 @@ namespace HexCiv.Core
             return null;
         }
 
+        public static UrukLandDisputeState FirstOpenLandDispute(
+            UrukCampaignProgress progress)
+        {
+            if (progress?.landDisputes == null) return null;
+            foreach (var dispute in progress.landDisputes)
+                if (dispute != null &&
+                    dispute.respondentFactionId == HumanFactionId &&
+                    dispute.status == "open") return dispute;
+            return null;
+        }
+
+        public static UrukLandDisputeState SelectedOpenLandDispute(
+            UrukCampaignProgress progress)
+        {
+            var selected = FindOpenLandDispute(progress,
+                progress?.selectedLandDisputeId);
+            return selected ?? FirstOpenLandDispute(progress);
+        }
+
+        public static UrukLandDisputeState FirstActiveLandAgreement(
+            UrukCampaignProgress progress)
+        {
+            if (progress?.landDisputes == null) return null;
+            foreach (var dispute in progress.landDisputes)
+                if (dispute != null && !dispute.agreementSettled &&
+                    (dispute.status == "jointly_cultivated" ||
+                     dispute.status == "mediated")) return dispute;
+            return null;
+        }
+
+        public static UrukLandDisputeState LatestRecoverableLandDispute(
+            UrukCampaignProgress progress)
+        {
+            if (progress?.landDisputes == null) return null;
+            for (int i = progress.landDisputes.Length - 1; i >= 0; i--)
+            {
+                var dispute = progress.landDisputes[i];
+                if (dispute != null && (dispute.status == "rejected" ||
+                    dispute.status == "breached" ||
+                    dispute.status == "defaulted")) return dispute;
+            }
+            return null;
+        }
+
         public static int WaterRetaliationRiskPenalty(
             UrukCampaignProgress progress, string originFactionId,
             string destinationFactionId)
@@ -755,6 +930,24 @@ namespace HexCiv.Core
                     (dispute.claimantFactionId == destinationFactionId &&
                      dispute.respondentFactionId == originFactionId))
                     return 10;
+            }
+            return 0;
+        }
+
+        public static int LandRetaliationRiskPenalty(
+            UrukCampaignProgress progress, string originFactionId,
+            string destinationFactionId)
+        {
+            if (progress?.landDisputes == null) return 0;
+            foreach (var dispute in progress.landDisputes)
+            {
+                if (dispute == null ||
+                    string.IsNullOrWhiteSpace(dispute.retaliationJa)) continue;
+                if ((dispute.claimantFactionId == originFactionId &&
+                     dispute.respondentFactionId == destinationFactionId) ||
+                    (dispute.respondentFactionId == originFactionId &&
+                     dispute.claimantFactionId == destinationFactionId))
+                    return 8;
             }
             return 0;
         }
@@ -836,6 +1029,8 @@ namespace HexCiv.Core
                 {
                     id = source.id,
                     ownerFactionId = source.factionId,
+                    managerFactionId = source.factionId,
+                    userFactionIds = new[] { source.factionId },
                     col = source.col,
                     row = source.row,
                     crop = source.crop,
@@ -1269,6 +1464,25 @@ namespace HexCiv.Core
                         "食料労働を増やし、緊急性の低い工事を中断した。";
                     faction.knownReasonJa = "備蓄不足が推定される。";
                 }
+                else if (HasActiveLandAgreement(progress, faction.factionId))
+                {
+                    bool mediator = IsActiveLandArbitrator(progress,
+                        faction.factionId);
+                    faction.currentGoalJa = mediator
+                        ? "耕作権の第三者仲裁" : "共同耕作の履行監視";
+                    faction.lastDecisionJa = mediator
+                        ? "境界を固定せず、季節利用と現物配分を裁定した。"
+                        : "合意した農地利用と収穫配分を監視している。";
+                    faction.knownReasonJa =
+                        "灌漑・播種・収穫の観測と、推定される季節利用慣行。";
+                }
+                else if (HasLandRetaliation(progress, faction.factionId))
+                {
+                    faction.currentGoalJa = "耕作権の防衛";
+                    faction.lastDecisionJa =
+                        "境界農地への接近警戒と陸上輸送の監視を継続した。";
+                    faction.knownReasonJa = "土地合意の拒否・不履行・破約。";
+                }
                 else if (HasActiveWaterArbitration(progress, faction.factionId))
                 {
                     bool mediator = IsActiveWaterArbitrator(progress,
@@ -1320,6 +1534,8 @@ namespace HexCiv.Core
             }
             if (turn >= 8)
                 TryOpenObservedWaterDisputes(progress, turn);
+            if (turn >= 14)
+                TryOpenObservedLandDispute(progress, turn);
             if (turn >= 9 && progress.migrationGroups.Length == 0)
             {
                 Append(ref progress.migrationGroups, new UrukMigrationGroupState
@@ -1405,6 +1621,103 @@ namespace HexCiv.Core
             Append(ref progress.waterDisputes, dispute);
             if (string.IsNullOrWhiteSpace(progress.selectedWaterDisputeId))
                 progress.selectedWaterDisputeId = dispute.id;
+        }
+
+        static void TryOpenObservedLandDispute(UrukCampaignProgress progress,
+            int turn)
+        {
+            const string id = "eridu_uruk_west_plot_claim";
+            if (FindLandDispute(progress, id) != null) return;
+            var plot = FindFarm(progress, "uruk_west_farm");
+            if (plot == null || plot.managerFactionId != HumanFactionId ||
+                plot.crop == "fallow" || plot.waterReceived <= 0 ||
+                plot.lastYield < 3)
+                return;
+            var claimant = FindFaction(progress, "eridu_community");
+            var dispute = new UrukLandDisputeState
+            {
+                id = id,
+                claimantFactionId = "eridu_community",
+                respondentFactionId = HumanFactionId,
+                plotId = plot.id,
+                createdTurn = turn,
+                observedYield = plot.lastYield,
+                observedWater = plot.waterReceived,
+                claimantBasisJa =
+                    "湿地縁辺からの季節利用慣行があった可能性（推定）。",
+                respondentBasisJa =
+                    "ウルク共同体が当期に灌漑・播種・収穫を実施した観測記録。",
+                arbitratorFactionId = "",
+                arbitrationReasonJa = "",
+                trustAfter = claimant?.diplomaticTrust ?? 50,
+                retaliationJa = "",
+                confidence = "inferred",
+                status = "open",
+                resultJa =
+                    $"ウルク西農地で取水{plot.waterReceived}・収穫{plot.lastYield}を観測。" +
+                    "エリドゥ共同体が季節利用を主張したが、紀元前4000年頃の境界は確定できない。",
+            };
+            Append(ref progress.landDisputes, dispute);
+            progress.selectedLandDisputeId = dispute.id;
+        }
+
+        static void AdvanceLandAgreements(UrukCampaignProgress progress,
+            int turn)
+        {
+            foreach (var dispute in progress.landDisputes)
+            {
+                if (dispute == null || dispute.agreementSettled ||
+                    (dispute.status != "jointly_cultivated" &&
+                     dispute.status != "mediated") ||
+                    turn < dispute.agreementStartTurn)
+                    continue;
+                if (turn <= dispute.agreementUntilTurn)
+                {
+                    int due = dispute.yieldSharePerTurn;
+                    dispute.yieldShareExpectedTotal += due;
+                    int available = AvailableFactionGood(progress,
+                        dispute.respondentFactionId, "barley");
+                    int paid = Math.Min(due, available);
+                    if (paid > 0)
+                    {
+                        ConsumeFactionGood(progress, dispute.respondentFactionId,
+                            "barley", paid);
+                        AddFactionGood(progress, dispute.claimantFactionId,
+                            "barley", paid);
+                        dispute.yieldSharedTotal += paid;
+                    }
+                }
+                if (turn < dispute.agreementUntilTurn) continue;
+
+                var plot = FindFarm(progress, dispute.plotId);
+                RemoveFarmUser(plot, dispute.claimantFactionId);
+                dispute.agreementSettled = true;
+                bool fulfilled = dispute.yieldSharedTotal >=
+                    dispute.yieldShareExpectedTotal;
+                dispute.status = fulfilled ? "completed" : "defaulted";
+                var claimant = FindFaction(progress, dispute.claimantFactionId);
+                int trustDelta = fulfilled ? 4 : -10;
+                int reputationDelta = fulfilled ? 2 : -7;
+                if (claimant != null)
+                {
+                    claimant.diplomaticTrust = Math.Clamp(
+                        claimant.diplomaticTrust + trustDelta, 0, 100);
+                    dispute.trustAfter = claimant.diplomaticTrust;
+                }
+                string kind = dispute.resolutionKind == "seasonal_mediation"
+                    ? "仲裁による季節利用" : "共同耕作";
+                dispute.resultJa = fulfilled
+                    ? $"{kind}を履行した（約束{dispute.yieldShareExpectedTotal}／" +
+                      $"移転{dispute.yieldSharedTotal}）。利用権は当期で終了した。"
+                    : $"{kind}を履行できなかった（約束{dispute.yieldShareExpectedTotal}／" +
+                      $"移転{dispute.yieldSharedTotal}）。";
+                RecordDiplomaticEvent(progress, turn, "land_dispute", dispute.id,
+                    dispute.claimantFactionId,
+                    fulfilled ? "land_agreement_completed" :
+                        "land_agreement_defaulted",
+                    reputationDelta, dispute.resultJa, dispute.confidence);
+                if (!fulfilled) ApplyLandRetaliation(progress, dispute);
+            }
         }
 
         static void ApplyWaterSharingAgreements(UrukCampaignProgress progress,
@@ -2093,6 +2406,7 @@ namespace HexCiv.Core
             if (HasActiveAccessRight(progress, origin, destination))
                 risk = Math.Max(2, risk - 6);
             risk = Math.Clamp(risk + WaterRetaliationRiskPenalty(progress,
+                origin, destination) + LandRetaliationRiskPenalty(progress,
                 origin, destination), 2, 35);
             int lost = StableHash(definition.seed + 17, id, turn) % 100 < risk
                 ? Math.Min(1, amount) : 0;
@@ -2440,6 +2754,252 @@ namespace HexCiv.Core
             return true;
         }
 
+        static bool ResolveOpenLandDispute(UrukCampaignProgress progress,
+            int turn, string resolutionKind, out string resultJa)
+        {
+            var dispute = SelectedOpenLandDispute(progress);
+            if (dispute == null)
+            {
+                resultJa = "判断待ちの土地・耕作権問題がない。";
+                return false;
+            }
+            var plot = FindFarm(progress, dispute.plotId);
+            var claimant = FindFaction(progress, dispute.claimantFactionId);
+            string claimantName = claimant?.nameJa ?? dispute.claimantFactionId;
+            int trustDelta;
+            int reputationDelta;
+            string outcome;
+            switch (resolutionKind)
+            {
+                case "joint_cultivation":
+                    if (progress.labor.food < 40)
+                    {
+                        resultJa = "共同耕作には食料労働40%以上の配分が必要。";
+                        return false;
+                    }
+                    AddFarmUser(plot, dispute.claimantFactionId);
+                    dispute.laborCommitted = 10;
+                    dispute.yieldSharePerTurn = 1;
+                    dispute.agreementStartTurn = turn;
+                    dispute.agreementUntilTurn = turn + 2;
+                    dispute.status = "jointly_cultivated";
+                    dispute.agreementSettled = false;
+                    dispute.resultJa =
+                        $"{claimantName}へ3期間の共同耕作権を認め、毎期大麦1を収穫配分する。";
+                    trustDelta = 9;
+                    reputationDelta = 3;
+                    outcome = "land_joint_cultivation_started";
+                    break;
+                case "grain_compensation":
+                    if (AvailableFactionGood(progress, HumanFactionId,
+                        "barley") < 2)
+                    {
+                        resultJa = "耕作権補償に必要な大麦2がない。";
+                        return false;
+                    }
+                    ConsumeFactionGood(progress, HumanFactionId, "barley", 2);
+                    AddFactionGood(progress, dispute.claimantFactionId,
+                        "barley", 2);
+                    dispute.barleyTransferred = 2;
+                    dispute.status = "compensated";
+                    dispute.agreementSettled = true;
+                    dispute.resultJa =
+                        $"大麦2を{claimantName}へ移転し、当期の整備・播種実績に基づく管理を維持した。";
+                    trustDelta = 7;
+                    reputationDelta = 2;
+                    outcome = "land_compensated";
+                    break;
+                case "seasonal_mediation":
+                    if (progress.diplomaticReputation < 30)
+                    {
+                        resultJa = "第三者仲裁を依頼できる外交評判がない。";
+                        return false;
+                    }
+                    if (AvailableFactionGood(progress, HumanFactionId,
+                        "barley") < 1)
+                    {
+                        resultJa = "仲裁協議の共同食に大麦1が必要。";
+                        return false;
+                    }
+                    const string arbitratorId = "nippur_community";
+                    var arbitrator = FindFaction(progress, arbitratorId);
+                    if (arbitrator == null || arbitrator.diplomaticTrust < 35)
+                    {
+                        resultJa = "仲介可能な第三者共同体との信頼が不足している。";
+                        return false;
+                    }
+                    ConsumeFactionGood(progress, HumanFactionId, "barley", 1);
+                    AddFactionGood(progress, arbitratorId, "barley", 1);
+                    AddFarmUser(plot, dispute.claimantFactionId);
+                    dispute.laborCommitted = 5;
+                    dispute.yieldSharePerTurn = 1;
+                    dispute.agreementStartTurn = turn;
+                    dispute.agreementUntilTurn = turn + 3;
+                    dispute.arbitratorFactionId = arbitratorId;
+                    dispute.arbitrationTurn = turn;
+                    dispute.arbitrationReasonJa =
+                        "紀元前4000年頃の固定境界を確定できないため、灌漑・播種・収穫の観測と推定季節利用を両立する期限付き裁定。";
+                    dispute.status = "mediated";
+                    dispute.agreementSettled = false;
+                    dispute.resultJa =
+                        "ニップール共同体の推定上の仲介で4期間の季節利用を認め、毎期大麦1を配分する。";
+                    arbitrator.currentGoalJa = "耕作権の第三者仲裁";
+                    arbitrator.lastDecisionJa =
+                        "恒久国境ではなく、期限付き季節利用を裁定した。";
+                    arbitrator.knownReasonJa = dispute.arbitrationReasonJa;
+                    trustDelta = 8;
+                    reputationDelta = 4;
+                    outcome = "land_mediation_award";
+                    break;
+                case "rejected":
+                    dispute.status = "rejected";
+                    dispute.agreementSettled = true;
+                    dispute.resultJa =
+                        "季節利用の主張を拒否した。相手共同体は境界農地と陸上輸送の警戒を強めた。";
+                    trustDelta = -14;
+                    reputationDelta = -5;
+                    outcome = "land_rejected";
+                    break;
+                default:
+                    resultJa = "不明な土地紛争解決案。";
+                    return false;
+            }
+            dispute.resolutionKind = resolutionKind;
+            if (claimant != null)
+            {
+                claimant.diplomaticTrust = Math.Clamp(
+                    claimant.diplomaticTrust + trustDelta, 0, 100);
+                dispute.trustAfter = claimant.diplomaticTrust;
+            }
+            RecordDiplomaticEvent(progress, turn, "land_dispute", dispute.id,
+                dispute.claimantFactionId, outcome, reputationDelta,
+                dispute.resultJa, dispute.confidence);
+            if (resolutionKind == "rejected")
+                ApplyLandRetaliation(progress, dispute);
+            progress.selectedLandDisputeId = "";
+            progress.regionalRevision++;
+            resultJa = dispute.resultJa;
+            return true;
+        }
+
+        static bool BreachActiveLandAgreement(UrukCampaignProgress progress,
+            int turn, out string resultJa)
+        {
+            var dispute = FirstActiveLandAgreement(progress);
+            if (dispute == null)
+            {
+                resultJa = "破約できる土地・耕作権合意がない。";
+                return false;
+            }
+            RemoveFarmUser(FindFarm(progress, dispute.plotId),
+                dispute.claimantFactionId);
+            dispute.status = "breached";
+            dispute.agreementSettled = true;
+            dispute.breached = true;
+            dispute.resultJa =
+                "ウルクが共同耕作合意を破棄し、相手共同体が境界農地と輸送路の警戒を強めた。";
+            var claimant = FindFaction(progress, dispute.claimantFactionId);
+            if (claimant != null)
+            {
+                claimant.diplomaticTrust = Math.Clamp(
+                    claimant.diplomaticTrust - 18, 0, 100);
+                dispute.trustAfter = claimant.diplomaticTrust;
+            }
+            RecordDiplomaticEvent(progress, turn, "land_dispute", dispute.id,
+                dispute.claimantFactionId, "land_agreement_breached", -10,
+                dispute.resultJa, dispute.confidence);
+            ApplyLandRetaliation(progress, dispute);
+            progress.regionalRevision++;
+            resultJa = dispute.resultJa;
+            return true;
+        }
+
+        static bool RenegotiateLandDispute(UrukCampaignProgress progress,
+            int turn, out string resultJa)
+        {
+            var dispute = LatestRecoverableLandDispute(progress);
+            if (dispute == null)
+            {
+                resultJa = "再交渉できる土地・耕作権問題がない。";
+                return false;
+            }
+            if (AvailableFactionGood(progress, HumanFactionId, "barley") < 1 ||
+                AvailableFactionGood(progress, HumanFactionId,
+                    "alluvial_clay") < 1)
+            {
+                resultJa = "再交渉には共同食の大麦1と境界標用の粘土1が必要。";
+                return false;
+            }
+            ConsumeFactionGood(progress, HumanFactionId, "barley", 1);
+            ConsumeFactionGood(progress, HumanFactionId, "alluvial_clay", 1);
+            AddFactionGood(progress, dispute.claimantFactionId, "barley", 1);
+            AddFactionGood(progress, dispute.claimantFactionId,
+                "alluvial_clay", 1);
+            EaseLandRetaliation(progress, dispute);
+            dispute.status = "open";
+            dispute.resolutionKind = "";
+            dispute.agreementStartTurn = 0;
+            dispute.agreementUntilTurn = 0;
+            dispute.yieldSharePerTurn = 0;
+            dispute.yieldShareExpectedTotal = 0;
+            dispute.yieldSharedTotal = 0;
+            dispute.barleyTransferred = 0;
+            dispute.laborCommitted = 0;
+            dispute.arbitratorFactionId = "";
+            dispute.arbitrationTurn = 0;
+            dispute.arbitrationReasonJa = "";
+            dispute.agreementSettled = false;
+            dispute.breached = false;
+            dispute.renegotiationCount++;
+            dispute.retaliationJa = "";
+            var claimant = FindFaction(progress, dispute.claimantFactionId);
+            if (claimant != null)
+            {
+                claimant.diplomaticTrust = Math.Clamp(
+                    claimant.diplomaticTrust + 6, 0, 100);
+                dispute.trustAfter = claimant.diplomaticTrust;
+            }
+            dispute.resultJa =
+                "大麦1と粘土1を移転して協議を再開した。共同耕作・補償・仲裁を改めて選べる。";
+            progress.selectedLandDisputeId = dispute.id;
+            RecordDiplomaticEvent(progress, turn, "land_dispute", dispute.id,
+                dispute.claimantFactionId, "land_renegotiated", 1,
+                dispute.resultJa, dispute.confidence);
+            progress.regionalRevision++;
+            resultJa = dispute.resultJa;
+            return true;
+        }
+
+        static void ApplyLandRetaliation(UrukCampaignProgress progress,
+            UrukLandDisputeState dispute)
+        {
+            if (dispute == null || !string.IsNullOrWhiteSpace(dispute.retaliationJa))
+                return;
+            dispute.retaliationJa =
+                "境界農地の警戒を増強。両勢力間の陸上輸送損失リスク+8%。";
+            var claimant = FindFaction(progress, dispute.claimantFactionId);
+            if (claimant == null) return;
+            ShiftLaborTowardMilitia(claimant.labor, 8);
+            claimant.currentGoalJa = "耕作権の防衛";
+            claimant.lastDecisionJa = "境界農地と陸上輸送路の警戒を強化した。";
+            claimant.knownReasonJa = "土地合意の拒否・不履行・破約。";
+        }
+
+        static void EaseLandRetaliation(UrukCampaignProgress progress,
+            UrukLandDisputeState dispute)
+        {
+            var claimant = FindFaction(progress, dispute?.claimantFactionId);
+            if (claimant == null || string.IsNullOrWhiteSpace(dispute.retaliationJa))
+                return;
+            int restored = Math.Min(4, Math.Max(0, claimant.labor.militia));
+            claimant.labor.militia -= restored;
+            claimant.labor.trade += restored;
+            claimant.currentGoalJa = GoalFor(claimant.aiArchetype);
+            claimant.lastDecisionJa =
+                "共同食と境界標素材を受け取り、耕作権協議を再開した。";
+            claimant.knownReasonJa = "現物移転と再交渉の記録。";
+        }
+
         static void ApplyWaterRetaliation(UrukCampaignProgress progress,
             UrukWaterDisputeState dispute)
         {
@@ -2496,6 +3056,41 @@ namespace HexCiv.Core
                 if (dispute != null && dispute.claimantFactionId == factionId &&
                     !string.IsNullOrWhiteSpace(dispute.retaliationJa))
                     return true;
+            return false;
+        }
+
+        static bool HasLandRetaliation(UrukCampaignProgress progress,
+            string factionId)
+        {
+            if (progress?.landDisputes == null) return false;
+            foreach (var dispute in progress.landDisputes)
+                if (dispute != null && dispute.claimantFactionId == factionId &&
+                    !string.IsNullOrWhiteSpace(dispute.retaliationJa))
+                    return true;
+            return false;
+        }
+
+        static bool HasActiveLandAgreement(UrukCampaignProgress progress,
+            string factionId)
+        {
+            if (progress?.landDisputes == null) return false;
+            foreach (var dispute in progress.landDisputes)
+                if (dispute != null && !dispute.agreementSettled &&
+                    (dispute.status == "jointly_cultivated" ||
+                     dispute.status == "mediated") &&
+                    (dispute.claimantFactionId == factionId ||
+                     dispute.arbitratorFactionId == factionId)) return true;
+            return false;
+        }
+
+        static bool IsActiveLandArbitrator(UrukCampaignProgress progress,
+            string factionId)
+        {
+            if (progress?.landDisputes == null) return false;
+            foreach (var dispute in progress.landDisputes)
+                if (dispute != null && !dispute.agreementSettled &&
+                    dispute.status == "mediated" &&
+                    dispute.arbitratorFactionId == factionId) return true;
             return false;
         }
 
@@ -2840,6 +3435,45 @@ namespace HexCiv.Core
             var dispute = FindDispute(progress, id);
             return dispute != null && dispute.respondentFactionId == HumanFactionId &&
                 dispute.status == "open" ? dispute : null;
+        }
+
+        static UrukLandDisputeState FindLandDispute(
+            UrukCampaignProgress progress, string id)
+        {
+            if (progress?.landDisputes == null || string.IsNullOrWhiteSpace(id))
+                return null;
+            foreach (var dispute in progress.landDisputes)
+                if (dispute != null && dispute.id == id) return dispute;
+            return null;
+        }
+
+        static UrukLandDisputeState FindOpenLandDispute(
+            UrukCampaignProgress progress, string id)
+        {
+            var dispute = FindLandDispute(progress, id);
+            return dispute != null &&
+                dispute.respondentFactionId == HumanFactionId &&
+                dispute.status == "open" ? dispute : null;
+        }
+
+        static void AddFarmUser(UrukFarmPlotState farm, string factionId)
+        {
+            if (farm == null || string.IsNullOrWhiteSpace(factionId)) return;
+            var users = new List<string>(farm.userFactionIds ??
+                Array.Empty<string>());
+            if (!users.Contains(factionId)) users.Add(factionId);
+            farm.userFactionIds = users.ToArray();
+        }
+
+        static void RemoveFarmUser(UrukFarmPlotState farm, string factionId)
+        {
+            if (farm == null || string.IsNullOrWhiteSpace(factionId)) return;
+            var users = new List<string>();
+            foreach (string user in farm.userFactionIds ?? Array.Empty<string>())
+                if (user != factionId) users.Add(user);
+            if (!users.Contains(farm.ownerFactionId)) users.Insert(0,
+                farm.ownerFactionId);
+            farm.userFactionIds = users.ToArray();
         }
 
         static void SelectFirstOpenWaterDispute(UrukCampaignProgress progress)

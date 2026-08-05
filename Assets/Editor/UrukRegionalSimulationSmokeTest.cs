@@ -22,6 +22,7 @@ public static class UrukRegionalSimulationSmokeTest
             ValidateContractSuite(definition);
             ValidateWaterDisputeChoices(definition);
             ValidateMultipleWaterArbitration(definition);
+            ValidateLandRightsDispute(definition);
             ValidatePlayerSequence(definition);
             ValidateThreeSeedDeterminism();
             UnityEngine.Debug.Log("URUK REGIONAL SIMULATION SMOKE OK");
@@ -40,7 +41,7 @@ public static class UrukRegionalSimulationSmokeTest
     {
         var session = HistoricalCampaignFactory.Build(definition);
         var progress = session.Progress;
-        Require(progress.version == 8, "進捗versionが8ではない");
+        Require(progress.version == 9, "進捗versionが9ではない");
         Require(progress.obligations != null, "契約債務台帳が初期化されていない");
         Require(progress.diplomaticRecords != null &&
             progress.diplomaticReputation == 50,
@@ -48,6 +49,11 @@ public static class UrukRegionalSimulationSmokeTest
         Require(progress.regionalFactions.Length == 8, "8勢力台帳がない");
         Require(progress.farmPlots.Length == definition.farmPlots.Length,
             "農地定義が状態へ反映されていない");
+        foreach (var farm in progress.farmPlots)
+            Require(farm.managerFactionId == farm.ownerFactionId &&
+                farm.userFactionIds.Length == 1 &&
+                farm.userFactionIds[0] == farm.ownerFactionId,
+                farm.id + "の初期管理権・利用権が不正");
         Require(progress.canalSegments.Length == definition.canalSegments.Length,
             "水路定義が状態へ反映されていない");
         for (int i = 0; i < progress.regionalFactions.Length; i++)
@@ -284,7 +290,7 @@ public static class UrukRegionalSimulationSmokeTest
             },
         };
         UrukCampaignSystem.MigrateProgress(definition, migrated);
-        Require(migrated.version == 8 &&
+        Require(migrated.version == 9 &&
             migrated.waterDisputes[0].claimantFarmId ==
                 "lagash_hinterland_farm" &&
             migrated.waterDisputes[0].resolutionKind == "joint_maintenance" &&
@@ -307,7 +313,7 @@ public static class UrukRegionalSimulationSmokeTest
             },
         };
         UrukCampaignSystem.MigrateProgress(definition, v6Migration);
-        Require(v6Migration.version == 8 &&
+        Require(v6Migration.version == 9 &&
             v6Migration.waterDisputes[0].retaliationJa == "" &&
             v6Migration.waterDisputes[0].renegotiationCount == 0,
             "version 6から報復・再交渉状態を補完できない");
@@ -331,7 +337,7 @@ public static class UrukRegionalSimulationSmokeTest
             },
         };
         UrukCampaignSystem.MigrateProgress(definition, v7Migration);
-        Require(v7Migration.version == 8 &&
+        Require(v7Migration.version == 9 &&
             v7Migration.waterDisputes[0].basinId ==
                 "lower_alluvial_wetland_network" &&
             v7Migration.waterDisputes[0].upstreamFactionId ==
@@ -342,12 +348,32 @@ public static class UrukRegionalSimulationSmokeTest
             v7Migration.selectedWaterDisputeId == "v7_dispute",
             "version 7から水系関係・仲裁・選択案件を補完できない");
 
+        var v8Migration = HistoricalCampaignFactory.Build(definition).Progress;
+        v8Migration.version = 8;
+        v8Migration.landDisputes = null;
+        v8Migration.selectedLandDisputeId = null;
+        foreach (var farm in v8Migration.farmPlots)
+        {
+            farm.managerFactionId = null;
+            farm.userFactionIds = null;
+        }
+        UrukCampaignSystem.MigrateProgress(definition, v8Migration);
+        Require(v8Migration.version == 9 &&
+            v8Migration.landDisputes != null &&
+            v8Migration.selectedLandDisputeId == "",
+            "version 8から土地紛争台帳を補完できない");
+        foreach (var farm in v8Migration.farmPlots)
+            Require(farm.managerFactionId == farm.ownerFactionId &&
+                farm.userFactionIds.Length == 1 &&
+                farm.userFactionIds[0] == farm.ownerFactionId,
+                farm.id + "の旧セーブ農地権利を補完できない");
+
         var chainedMigration = HistoricalCampaignFactory.Build(definition).Progress;
         chainedMigration.version = 3;
         chainedMigration.obligations = null;
         chainedMigration.diplomaticRecords = null;
         UrukCampaignSystem.MigrateProgress(definition, chainedMigration);
-        Require(chainedMigration.version == 8 &&
+        Require(chainedMigration.version == 9 &&
             chainedMigration.obligations != null &&
             chainedMigration.diplomaticRecords != null,
             "version 3から現行versionへ連続移行できない");
@@ -600,6 +626,184 @@ public static class UrukRegionalSimulationSmokeTest
             "複数水利案件・仲裁状態のセーブ往復が一致しない");
     }
 
+    static void ValidateLandRightsDispute(
+        HistoricalCampaignDefinition definition)
+    {
+        var compensationSession = PreparedLandDispute(definition);
+        var compensation =
+            UrukRegionalSystem.SelectedOpenLandDispute(
+                compensationSession.Progress);
+        Require(compensation != null &&
+            compensation.plotId == "uruk_west_farm" &&
+            compensation.claimantFactionId == "eridu_community" &&
+            compensation.respondentFactionId == "uruk_community" &&
+            compensation.observedYield >= 3 &&
+            compensation.observedWater > 0 &&
+            compensation.confidence == "inferred" &&
+            !string.IsNullOrWhiteSpace(compensation.claimantBasisJa) &&
+            !string.IsNullOrWhiteSpace(compensation.respondentBasisJa),
+            "灌漑・収穫の観測から推定土地紛争が生成されない");
+        SetGood(compensationSession.Progress, "uruk_community", "barley", 5);
+        int eriduBarley = FactionGood(compensationSession.Progress,
+            "eridu_community", "barley");
+        Require(UrukCampaignSystem.TryApplyAction(compensationSession,
+            UrukRegionalSystem.CompensateLandAction, out _),
+            "土地利用の現物補償に失敗");
+        Require(compensation.status == "compensated" &&
+            compensation.barleyTransferred == 2 &&
+            compensationSession.Progress.diplomaticReputation == 52 &&
+            UrukCampaignSystem.GoodAmount(compensationSession.Progress,
+                "barley") == 3 &&
+            FactionGood(compensationSession.Progress, "eridu_community",
+                "barley") == eriduBarley + 2 &&
+            HasDiplomaticOutcome(compensationSession.Progress,
+                "land_compensated"),
+            "土地補償が現物移転・評判・履歴へ反映されない");
+
+        var jointSession = PreparedLandDispute(definition);
+        var joint = UrukRegionalSystem.SelectedOpenLandDispute(
+            jointSession.Progress);
+        SetGood(jointSession.Progress, "uruk_community", "barley", 50);
+        Require(UrukCampaignSystem.TryApplyAction(jointSession,
+            UrukRegionalSystem.JointCultivationLandAction, out _),
+            "期限付き共同耕作の開始に失敗");
+        Require(joint.status == "jointly_cultivated" &&
+            joint.laborCommitted == 10 && joint.yieldSharePerTurn == 1 &&
+            HasFarmUser(jointSession.Progress, joint.plotId,
+                "eridu_community"),
+            "共同耕作権・労働・現物配分が保存されない");
+        Advance(jointSession, 15);
+        Advance(jointSession, 16);
+        Advance(jointSession, 17);
+        Require(joint.status == "completed" && joint.agreementSettled &&
+            joint.yieldShareExpectedTotal == 3 &&
+            joint.yieldSharedTotal == 3 &&
+            !HasFarmUser(jointSession.Progress, joint.plotId,
+                "eridu_community") &&
+            jointSession.Progress.diplomaticReputation == 55 &&
+            HasDiplomaticOutcome(jointSession.Progress,
+                "land_agreement_completed"),
+            "共同耕作の現物配分・期限満了・利用権返還が一致しない");
+
+        var mediationSession = PreparedLandDispute(definition);
+        var mediation = UrukRegionalSystem.SelectedOpenLandDispute(
+            mediationSession.Progress);
+        SetGood(mediationSession.Progress, "uruk_community", "barley", 5);
+        int nippurBarley = FactionGood(mediationSession.Progress,
+            "nippur_community", "barley");
+        Require(UrukCampaignSystem.TryApplyAction(mediationSession,
+            UrukRegionalSystem.MediateLandAction, out _),
+            "土地・耕作権の第三者仲裁に失敗");
+        Require(mediation.status == "mediated" &&
+            mediation.arbitratorFactionId == "nippur_community" &&
+            mediation.arbitrationTurn == 15 &&
+            !string.IsNullOrWhiteSpace(mediation.arbitrationReasonJa) &&
+            mediationSession.Progress.diplomaticReputation == 54 &&
+            FactionGood(mediationSession.Progress, "nippur_community",
+                "barley") == nippurBarley + 1 &&
+            HasDiplomaticOutcome(mediationSession.Progress,
+                "land_mediation_award"),
+            "土地仲裁が共同食・根拠・評判・履歴へ反映されない");
+        Advance(mediationSession, 15);
+        Require(UrukRegionalSystem.FindFaction(mediationSession.Progress,
+            "nippur_community").currentGoalJa == "耕作権の第三者仲裁",
+            "仲介勢力AIが土地仲裁の履行を目的にしない");
+        string save = HistoricalCampaignSave.Serialize(mediationSession);
+        var loaded = HistoricalCampaignSave.Deserialize(save,
+            id => id == definition.id ? definition : null);
+        Require(JsonUtility.ToJson(mediationSession.Progress) ==
+            JsonUtility.ToJson(loaded.Progress),
+            "土地権利・仲裁状態のセーブ往復が一致しない");
+
+        var breachSession = PreparedLandDispute(definition);
+        var breach = UrukRegionalSystem.SelectedOpenLandDispute(
+            breachSession.Progress);
+        SetGood(breachSession.Progress, "uruk_community", "barley", 20);
+        Require(UrukCampaignSystem.TryApplyAction(breachSession,
+            UrukRegionalSystem.JointCultivationLandAction, out _),
+            "土地破約試験の共同耕作開始に失敗");
+        var breachFaction = UrukRegionalSystem.FindFaction(
+            breachSession.Progress, "eridu_community");
+        int militiaBeforeBreach = breachFaction.labor.militia;
+        Require(UrukCampaignSystem.TryApplyAction(breachSession,
+            UrukRegionalSystem.BreachLandAgreementAction, out _),
+            "土地合意の破約に失敗");
+        Require(breach.status == "breached" && breach.breached &&
+            breach.agreementSettled &&
+            !HasFarmUser(breachSession.Progress, breach.plotId,
+                "eridu_community") &&
+            breachFaction.labor.militia == militiaBeforeBreach + 8 &&
+            breachFaction.labor.Total == 100 &&
+            breachSession.Progress.diplomaticReputation == 43 &&
+            UrukRegionalSystem.LandRetaliationRiskPenalty(
+                breachSession.Progress, "uruk_community",
+                "eridu_community") == 8 &&
+            HasDiplomaticOutcome(breachSession.Progress,
+                "land_agreement_breached"),
+            "土地破約が利用権取消・報復AI・危険度・評判へ反映されない");
+
+        var rejectSession = PreparedLandDispute(definition);
+        var rejected = UrukRegionalSystem.SelectedOpenLandDispute(
+            rejectSession.Progress);
+        var rejectFaction = UrukRegionalSystem.FindFaction(
+            rejectSession.Progress, "eridu_community");
+        int militiaBeforeReject = rejectFaction.labor.militia;
+        Require(UrukCampaignSystem.TryApplyAction(rejectSession,
+            UrukRegionalSystem.RejectLandAction, out _),
+            "土地利用要求の拒否に失敗");
+        Require(rejected.status == "rejected" &&
+            rejectFaction.labor.militia == militiaBeforeReject + 8 &&
+            rejectSession.Progress.diplomaticReputation == 45 &&
+            UrukRegionalSystem.LandRetaliationRiskPenalty(
+                rejectSession.Progress, "uruk_community",
+                "eridu_community") == 8,
+            "土地拒否の評判・報復が反映されない");
+        SetGood(rejectSession.Progress, "uruk_community", "barley", 2);
+        SetGood(rejectSession.Progress, "uruk_community", "alluvial_clay", 2);
+        int claimantBarley = FactionGood(rejectSession.Progress,
+            "eridu_community", "barley");
+        int claimantClay = FactionGood(rejectSession.Progress,
+            "eridu_community", "alluvial_clay");
+        Require(UrukCampaignSystem.TryApplyAction(rejectSession,
+            UrukRegionalSystem.RenegotiateLandAction, out _),
+            "土地問題の再交渉に失敗");
+        Require(rejected.status == "open" &&
+            rejected.renegotiationCount == 1 &&
+            rejected.retaliationJa == "" &&
+            rejectSession.Progress.selectedLandDisputeId == rejected.id &&
+            rejectSession.Progress.diplomaticReputation == 46 &&
+            FactionGood(rejectSession.Progress, "eridu_community",
+                "barley") == claimantBarley + 1 &&
+            FactionGood(rejectSession.Progress, "eridu_community",
+                "alluvial_clay") == claimantClay + 1 &&
+            UrukRegionalSystem.LandRetaliationRiskPenalty(
+                rejectSession.Progress, "uruk_community",
+                "eridu_community") == 0 &&
+            HasDiplomaticOutcome(rejectSession.Progress,
+                "land_renegotiated"),
+            "土地再交渉が現物移転・報復緩和・再選択へ反映されない");
+    }
+
+    static HistoricalCampaignSession PreparedLandDispute(
+        HistoricalCampaignDefinition definition)
+    {
+        var session = HistoricalCampaignFactory.Build(definition);
+        var progress = session.Progress;
+        var plot = Farm(progress, "uruk_west_farm");
+        plot.crop = "barley";
+        progress.selectedFarmId = plot.id;
+        var intake = Segment(progress, "uruk_intake_segment");
+        var branch = Segment(progress, "uruk_west_branch");
+        intake.completed = true;
+        intake.condition = 80;
+        branch.completed = true;
+        branch.condition = 80;
+        Advance(session, 14);
+        Require(UrukRegionalSystem.FirstOpenLandDispute(progress) != null,
+            "灌漑・収穫条件を満たしても土地紛争が発生しない");
+        return session;
+    }
+
     static HistoricalCampaignSession PreparedWaterDispute(
         HistoricalCampaignDefinition definition)
     {
@@ -707,6 +911,15 @@ public static class UrukRegionalSimulationSmokeTest
     {
         var segment = Segment(progress, segmentId);
         foreach (string user in segment.userFactionIds)
+            if (user == factionId) return true;
+        return false;
+    }
+
+    static bool HasFarmUser(UrukCampaignProgress progress, string plotId,
+        string factionId)
+    {
+        var farm = Farm(progress, plotId);
+        foreach (string user in farm.userFactionIds)
             if (user == factionId) return true;
         return false;
     }
