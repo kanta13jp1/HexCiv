@@ -1,6 +1,6 @@
 # HexCiv 販売ハンドオフ
 
-更新日: 2026-08-05
+更新日: 2026-08-14
 
 この文書は、ゲーム本体を担当するCodexから、販売サイトと掲載作業を担当するClaude Codeへの
 受け渡しです。仮説の判定記録は
@@ -14,12 +14,12 @@
 - 自サイト価格: ¥500
 - 体験版セーブは製品版で続行可能
 
-2026-08-05 Stage 4L検証済み配布物:
+2026-08-14 Stage 4M検証済み候補（旧配布物を上書きせず `dist/stage4m_candidate_20260814/` に保存）:
 
 | 版 | サイズ | SHA256 |
 |---|---:|---|
-| 製品版 | 37,601,404 bytes | `2057080640022f87ae1f952a28879ca4828318215d88b1ee640d5d730534c380` |
-| 30ターンDemo | 37,604,108 bytes | `07293eee7b932011a4f28cca6d0d787f5e569e39017a7fb2afba011110949f98` |
+| 製品版 | 37,603,463 bytes | `66bf4bf96459b3d8cf2c35785e91c5cc0d75f2fb89a8993f3b379727cafc6490` |
+| 30ターンDemo | 37,606,160 bytes | `25fc7c0aa6687d35ab1be548f637abe2553855346c36f56beb2e3398439e8004` |
 
 両版ともUnity 6000.3.20f1で12秒起動し、重大例外0件。manifestのサイズ・SHA256と
 実ZIPの一致も確認済み。販売サイトへ差し替える際は2ファイルを混同しない。
@@ -43,6 +43,7 @@
 | `Logs/marketing/uruk_stage4j_information_transmission.png` | ウルク編の情報伝達 | 口頭・封泥・数量記録の年代・信頼度を選び、媒体史料と推定シナリオを分けて確認する |
 | `Logs/marketing/uruk_stage4k_transport_forecast.png` | ウルク編の情報照合輸送 | 数量記録が後続輸送の数量条件と推定危険幅へ結び付くことを確認する |
 | `Logs/marketing/uruk_stage4l_information_personnel.png` | ウルク編の情報担当 | 氏名・人数不詳の伝達／記録担当と、発送中に残る交易・工芸労働枠を確認する |
+| `Logs/marketing/uruk_stage4m_counterpart_reception.png` | ウルク編の情報受信 | 相手共同体・媒体ごとの処理力、実効理解率、交渉結果を推定ゲーム値として確認する |
 
 Stage 4F画像は `UrukRegionalScreenshot.CaptureArbitrationCandidate`、Stage 4G画像は
 `UrukRegionalScreenshot.CaptureLandRightsCandidate`、Stage 4H画像は
@@ -52,7 +53,8 @@ Stage 4F画像は `UrukRegionalScreenshot.CaptureArbitrationCandidate`、Stage 4
 `UrukRegionalScreenshot.CaptureTransportForecastCandidate` で実キャンペーン状態から760px幅で
 再生成できる。撮影は `-batchmode -force-d3d11` を使い、`-nographics` は使わない。
 Stage 4L画像は `UrukRegionalScreenshot.CaptureInformationPersonnelCandidate` で同条件から再生成できる。
-Null描画デバイスの場合は灰色画像を成功扱いせず失敗する。2026-08-05生成版は次のとおり。
+Stage 4M画像は `UrukRegionalScreenshot.CaptureInformationReceptionCandidate` で760×620として再生成できる。
+Null描画デバイスの場合は灰色画像を成功扱いせず失敗する。Stage 4F～4Lは2026-08-05、Stage 4Mは2026-08-14生成版。
 
 | 画像 | サイズ | SHA256 |
 |---|---:|---|
@@ -63,6 +65,7 @@ Null描画デバイスの場合は灰色画像を成功扱いせず失敗する�
 | Stage 4J | 98,582 bytes | `50a46cfb605cd3c3286dacb4b5474ec6805a8db92aa2a7a4af5c548f24ab8e05` |
 | Stage 4K | 110,049 bytes | `22ef2632e7c7e5c4fb7c2f0afcc7b2995570c08e01fd1ff8e488c31b5af97722` |
 | Stage 4L | 102,653 bytes | `3133fbae3d8dc265d948803c6eb812c5c9c462a0b8a1202e9d43be079b41c20e` |
+| Stage 4M | 116,362 bytes | `a8196402c5ca83163310bf31258723bc6404a7a8352c8507349ea1ad8699ed1e` |
 
 商品ページへ載せる際は圧縮前のPNGを使い、実ゲーム画面であること、上下流・季節利用・境界が
 `inferred` な復元であることを明記する。
@@ -94,6 +97,7 @@ HexCivは「育っていく世界を見届ける」ことを中心にした、1�
 - 口頭伝言・封泥付き荷・数量記録板を、年代・行政・粘土・到着・誤解とともに扱い、媒体史料と推定シナリオを分ける情報伝達
 - 到着済み情報を契約輸送へ照合し、連絡なしでは危険不明、記録ありでは媒体別の推定危険幅と数量条件を示す情報の霧
 - 情報伝達へ交易／工芸労働の空き枠を割り当て、氏名・人数不詳の担当者像を推定と明示する人的な機会費用
+- 共同体・媒体別の受信処理力と実効理解率を推定ゲーム値として示し、理解成否を信頼・再確認・数量条件交渉へ接続
 - 世界史図鑑、指導者、遺跡、偉人、作品、研究、文化をゲーム内で確認
 - 観戦モードと自動管理。4X初心者向けの導入ガイド
 - BGM・SE、セーブ/ロード、一般的な内蔵GPU向けの軽量表示
@@ -138,11 +142,18 @@ X投稿12本の事前登録下書きと2×2実験設計は
 `MARKETING_EXPERIMENT_H10_UPDATES.md` に保存した。P1/P2、itch.io本人確認、H4/H7終了を
 開始条件とし、それまでは開始日・売上・訪問を未計測として扱う。更新週はテスト済みビルド、
 変更履歴、X告知を一組で公開し、基準週は開発を続けても公開更新とHexCiv投稿を行わない。
-Stage 4F/4G/4H/4I/4J/4K/4Lは開始前に完成した更新候補であり、まだH10第1週として公開・計測していない。
+Stage 4F/4G/4H/4I/4J/4K/4L/4Mは開始前に完成した更新候補であり、まだH10第1週として公開・計測していない。
+
+### 販売ページ読み取り確認（2026-08-14）
+
+- `https://my-web-app-b67f4.web.app/shop/hexciv` はHTTP 200を返した。
+- 配信中のFlutter資産には `HexCiv` とStripe導線が含まれる。
+- 価格は本番DBから動的取得する設計。ブラウザ連携が接続層で終了したため、画面上の¥500表示と購入ボタンは今回未検証であり、従来の確認結果を新しい実測として数えない。
+- 商品画像PR #4408はOPEN。主要CIは合格、`release-notes-data` 1件だけ失敗。マージ・本番反映は未実施。
 
 ## Claude Codeの次アクション
 
-1. 自サイトの商品ページへ実ゲーム画像3枚を追加するPR [#4408](https://github.com/kanta13jp1/my_web_app/pull/4408) は、12件の画面テストと主要CIを通過済み。必須 `release-notes-data` は最新main取り込み後の生成JSONが古いことだけで失敗しているため、承認後に `scripts/generate_release_notes.py` を実行し、生成差分だけを追加してマージする。
+1. 自サイトの商品ページへ実ゲーム画像3枚を追加するPR [#4408](https://github.com/kanta13jp1/my_web_app/pull/4408) はOPENで、12件の画面テストと主要CIを通過済み。必須 `release-notes-data` は最新main取り込み後の生成JSONが古いことだけで失敗しているため、承認後に `scripts/generate_release_notes.py` を実行し、生成差分だけを追加してマージする。
 2. itch.ioで非公開ページを作成し、630×500カバー、確認済み画像3～5枚、製品ZIP、無料Demo ZIPを登録する。
 3. 日本語のみであることを、購入ボタンより前に表示する。
 4. P1の本番SQL確認とプローブ行削除を行う。

@@ -170,6 +170,10 @@ namespace HexCiv.UI
                     $"送受信{ConfidenceJa(latestInformation.scenarioConfidence)}・" +
                     $"危険-{UrukRegionalSystem.CommunicationTransportRiskReduction(progress, "uruk_community", latestInformation.receiverFactionId, session.State.TurnNumber)}%・" +
                     $"照合輸送{latestInformation.linkedTransportCount}件");
+            string receptionText = latestInformation == null
+                ? UrukRegionalSystem.SelectedInformationReceptionSummaryJa(session)
+                : UrukRegionalSystem.InformationReceptionSummaryJa(
+                    latestInformation);
             string personnelText = latestInformation == null
                 ? $"伝達担当の空き: 交易{UrukRegionalSystem.AvailableInformationMessengerLabor(progress)}%・" +
                   $"工芸{UrukRegionalSystem.AvailableInformationRecordLabor(progress)}%"
@@ -196,6 +200,7 @@ namespace HexCiv.UI
                 $"外交評判 {progress.diplomaticReputation}/100　{diplomacyText}\n" +
                 kinshipText + "\n" +
                 informationText + "\n" +
+                receptionText + "\n" +
                 personnelText + "\n" +
                 transportText;
 
@@ -277,7 +282,7 @@ namespace HexCiv.UI
             body = UIStyle.CreatePanel(canvasGo.transform, "RegionalBody",
                 new Color(0.025f, 0.04f, 0.07f, 0.95f));
             UIStyle.SetRect(body, new Vector2(0f, 0f), new Vector2(0f, 0f),
-                new Vector2(0f, 0f), new Vector2(18f, 18f), new Vector2(720f, 500f));
+                new Vector2(0f, 0f), new Vector2(18f, 18f), new Vector2(720f, 580f));
 
             var title = UIStyle.CreateText(body.transform, "Title",
                 "南メソポタミア地域管理　—　水利・農業・交易・外交・情報", 17,
@@ -300,7 +305,7 @@ namespace HexCiv.UI
             statusText.resizeTextMaxSize = 12;
             UIStyle.SetRect(statusText.gameObject, new Vector2(0f, 1f),
                 new Vector2(1f, 1f), new Vector2(0.5f, 1f),
-                new Vector2(0f, -43f), new Vector2(-24f, 240f));
+                new Vector2(0f, -43f), new Vector2(-24f, 260f));
 
             string[] overlayNames = { "通常", "水利", "農地", "物流" };
             string[] overlayIds =

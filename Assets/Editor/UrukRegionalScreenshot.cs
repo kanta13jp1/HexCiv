@@ -8,13 +8,13 @@ using UnityEngine;
 using UnityEngine.UI;
 
 /// <summary>
-/// Stage 4F〜4L の実キャンペーン状態から、地域外交UIを撮影する。
+/// Stage 4F〜4M の実キャンペーン状態から、地域外交UIを撮影する。
 /// 出力は販売素材候補だが、H10開始前は公開・計測へ使用しない。
 /// </summary>
 public static class UrukRegionalScreenshot
 {
     const int Width = 760;
-    const int Height = 540;
+    const int Height = 620;
 
     public static void CaptureArbitrationCandidate()
     {
@@ -54,6 +54,12 @@ public static class UrukRegionalScreenshot
     {
         Capture("uruk_stage4l_information_personnel.png",
             PrepareInformationPersonnel);
+    }
+
+    public static void CaptureInformationReceptionCandidate()
+    {
+        Capture("uruk_stage4m_counterpart_reception.png",
+            PrepareInformationReception);
     }
 
     static void Capture(string fileName,
@@ -197,7 +203,7 @@ public static class UrukRegionalScreenshot
     static void PrepareInformationTransmission(
         HistoricalCampaignSession session)
     {
-        session.State.TurnNumber = 34;
+        session.State.TurnNumber = 35;
         session.Progress.templePlanned = true;
         session.Progress.templeStage = 5;
         session.Progress.templeProgress = 100;
@@ -209,16 +215,33 @@ public static class UrukRegionalScreenshot
         if (!UrukCampaignSystem.TryApplyAction(session,
             UrukRegionalSystem.SendInformationAction, out _))
             throw new Exception("撮影用の数量記録板を発送できない");
-        session.State.TurnNumber = 36;
+        session.State.TurnNumber = 37;
         UrukCampaignSystem.AdvanceAfterTurn(session);
         var dispatch =
             UrukRegionalSystem.LatestHumanInformationDispatch(session.Progress);
         if (dispatch == null || dispatch.status != "active" ||
             dispatch.medium != UrukRegionalSystem.NumericalRecordMedium ||
             UrukRegionalSystem.CommunicationTransportRiskReduction(
-                session.Progress, "uruk_community", "eridu_community", 36) != 5)
+                session.Progress, "uruk_community", "eridu_community", 37) != 5)
             throw new Exception("撮影用の情報伝達効果を再現できない");
     }
+    static void PrepareInformationReception(
+        HistoricalCampaignSession session)
+    {
+        PrepareInformationTransmission(session);
+        var dispatch =
+            UrukRegionalSystem.LatestHumanInformationDispatch(session.Progress);
+        if (dispatch == null || dispatch.status != "active" ||
+            dispatch.receiverCapacityPercent != 55 ||
+            dispatch.effectiveUnderstandingPercent != 85 ||
+            dispatch.receptionOutcome != "understood" ||
+            dispatch.diplomaticTrustDelta != 3 ||
+            dispatch.negotiationOutcomeJa != "数量条件の照合に合意" ||
+            !dispatch.receiverCapacityEvidenceJa.Contains("ゲーム上"))
+            throw new Exception(
+                "撮影用の相手処理力・実効理解・交渉結果を再現できない");
+    }
+
 
     static void PrepareTransportForecast(HistoricalCampaignSession session)
     {

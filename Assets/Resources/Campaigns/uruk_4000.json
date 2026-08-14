@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "datasetVersion": 2,
+  "datasetVersion": 3,
   "reviewStatus": "verified",
   "id": "uruk_4000",
   "title": {
@@ -132,6 +132,20 @@
       "initialPopulation": 3,
       "colorHex": "C99735",
       "aiArchetype": "urban_growth_trade",
+      "informationCapacity": {
+        "oralPercent": 75,
+        "sealingPercent": 85,
+        "numericalPercent": 90,
+        "confidence": "inferred",
+        "note": {
+          "key": "faction.uruk_community.information_capacity",
+          "ja": "都市化と後期の封印・数量記録を参照したゲーム上の処理力。識字率や実在人数の推定値ではない。"
+        },
+        "sourceRefs": [
+          "met_late_uruk_cylinder_seal",
+          "cambridge_seals_signs_2025"
+        ]
+      },
       "historicalNote": {
         "key": "faction.uruk_community.note",
         "ja": "紀元前4千年紀に急速な都市化を遂げたウルクを、初期段階では個人名の分からない共同体として表現する。"
@@ -165,6 +179,20 @@
       "initialPopulation": 2,
       "colorHex": "4E9B86",
       "aiArchetype": "wetland_temple",
+      "informationCapacity": {
+        "oralPercent": 80,
+        "sealingPercent": 70,
+        "numericalPercent": 55,
+        "confidence": "inferred",
+        "note": {
+          "key": "faction.eridu_community.information_capacity",
+          "ja": "湿地縁辺の対面連絡を重く置いたゲーム上の処理力。共同体別の実測値ではない。"
+        },
+        "sourceRefs": [
+          "unesco_ahwar",
+          "cambridge_seals_signs_2025"
+        ]
+      },
       "historicalNote": {
         "key": "faction.eridu_community.note",
         "ja": "湿地縁辺のエリドゥ遺丘を中心とする共同体。国家としての制度や境界は推定を含む。"
@@ -197,6 +225,20 @@
       "initialPopulation": 2,
       "colorHex": "5C78B8",
       "aiArchetype": "marsh_trade",
+      "informationCapacity": {
+        "oralPercent": 78,
+        "sealingPercent": 78,
+        "numericalPercent": 62,
+        "confidence": "inferred",
+        "note": {
+          "key": "faction.ur_community.information_capacity",
+          "ja": "湿地交通と交換接触を反映したゲーム上の処理力。政治制度や識字率を断定しない。"
+        },
+        "sourceRefs": [
+          "unesco_ahwar",
+          "met_late_uruk_cylinder_seal"
+        ]
+      },
       "historicalNote": {
         "key": "faction.ur_community.note",
         "ja": "後世の大都市ウルへ連なる遺跡共同体。紀元前4000年時点の政治的範囲は確定できない。"
@@ -229,6 +271,20 @@
       "initialPopulation": 1,
       "colorHex": "B85B4F",
       "aiArchetype": "canal_border",
+      "informationCapacity": {
+        "oralPercent": 72,
+        "sealingPercent": 62,
+        "numericalPercent": 42,
+        "confidence": "inferred",
+        "note": {
+          "key": "faction.lagash_region.information_capacity",
+          "ja": "複数集落を抽象化した勢力のゲーム上の処理力。紀元前4000年の行政能力を示す史実値ではない。"
+        },
+        "sourceRefs": [
+          "unesco_nomination",
+          "cambridge_seals_signs_2025"
+        ]
+      },
       "historicalNote": {
         "key": "faction.lagash_region.note",
         "ja": "後世にラガシュ都市国家圏となる地域の集落をまとめた推定勢力であり、紀元前4000年の国家名ではない。"
@@ -261,6 +317,20 @@
       "initialPopulation": 1,
       "colorHex": "8E6AB3",
       "aiArchetype": "ritual_center",
+      "informationCapacity": {
+        "oralPercent": 82,
+        "sealingPercent": 72,
+        "numericalPercent": 52,
+        "confidence": "inferred",
+        "note": {
+          "key": "faction.nippur_community.information_capacity",
+          "ja": "共同儀礼を介した対面確認を重くしたゲーム上の処理力。後世の宗教的地位は遡及しない。"
+        },
+        "sourceRefs": [
+          "met_uruk_bowl",
+          "cambridge_seals_signs_2025"
+        ]
+      },
       "historicalNote": {
         "key": "faction.nippur_community.note",
         "ja": "ニップール遺跡周辺の早期居住を抽象化した勢力。後世の宗教的地位をこの時点へそのまま遡及しない。"
@@ -293,6 +363,20 @@
       "initialPopulation": 1,
       "colorHex": "7F8452",
       "aiArchetype": "northern_exchange",
+      "informationCapacity": {
+        "oralPercent": 76,
+        "sealingPercent": 66,
+        "numericalPercent": 46,
+        "confidence": "inferred",
+        "note": {
+          "key": "faction.kish_region.information_capacity",
+          "ja": "北方交換路との接触を表すゲーム上の処理力。後世のキシュ行政を遡及しない。"
+        },
+        "sourceRefs": [
+          "british_museum_uruk",
+          "cambridge_seals_signs_2025"
+        ]
+      },
       "historicalNote": {
         "key": "faction.kish_region.note",
         "ja": "後世のキシュ都市圏に相当する北方地域を表す。紀元前4000年の統一国家としては扱わない。"
@@ -325,6 +409,20 @@
       "initialPopulation": 2,
       "colorHex": "B36A8B",
       "aiArchetype": "eastern_exchange",
+      "informationCapacity": {
+        "oralPercent": 74,
+        "sealingPercent": 86,
+        "numericalPercent": 58,
+        "confidence": "inferred",
+        "note": {
+          "key": "faction.susiana_exchange.information_capacity",
+          "ja": "地域間交換と封印慣行を重くしたゲーム上の処理力。個別組織や人員を示す値ではない。"
+        },
+        "sourceRefs": [
+          "cambridge_uruk_glocalization_2025",
+          "cambridge_seals_signs_2025"
+        ]
+      },
       "historicalNote": {
         "key": "faction.susiana_exchange.note",
         "ja": "南西イラン側との交換関係を表す地域勢力。後世のペルシア国家とは別物として扱う。"
@@ -357,6 +455,20 @@
       "initialPopulation": 1,
       "colorHex": "3B8792",
       "aiArchetype": "reed_fish_transport",
+      "informationCapacity": {
+        "oralPercent": 88,
+        "sealingPercent": 48,
+        "numericalPercent": 28,
+        "confidence": "inferred",
+        "note": {
+          "key": "faction.marsh_communities.information_capacity",
+          "ja": "水上移動と対面伝達を重くしたゲーム上の処理力。湿地住民の能力差を史実として断定しない。"
+        },
+        "sourceRefs": [
+          "unesco_ahwar",
+          "cambridge_seals_signs_2025"
+        ]
+      },
       "historicalNote": {
         "key": "faction.marsh_communities.note",
         "ja": "葦・漁撈・水上交通に依存した複数の湿地集落を一勢力へ抽象化した推定枠。"

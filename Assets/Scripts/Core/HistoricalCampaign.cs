@@ -63,6 +63,22 @@ namespace HexCiv.Core
     }
 
     [Serializable]
+    public sealed class HistoricalInformationCapacityDefinition
+    {
+        /// <summary>
+        /// 媒体を受け取った共同体が内容を照合できるゲーム上の処理力。
+        /// 識字率・実在人数の史実推定値ではない。
+        /// </summary>
+        public int oralPercent;
+        public int sealingPercent;
+        public int numericalPercent;
+        /// <summary>現段階ではinferredのみ。</summary>
+        public string confidence;
+        public HistoricalLocalizedText note;
+        public string[] sourceRefs;
+    }
+
+    [Serializable]
     public sealed class HistoricalFactionDefinition
     {
         public string id;
@@ -78,6 +94,7 @@ namespace HexCiv.Core
         public int initialPopulation = 1;
         public string colorHex;
         public string aiArchetype;
+        public HistoricalInformationCapacityDefinition informationCapacity;
         public HistoricalLocalizedText historicalNote;
         public string[] sourceRefs;
     }
@@ -381,6 +398,22 @@ namespace HexCiv.Core
                 RequireLocalized(errors, faction.historicalNote, faction.id + ".historicalNote");
                 ValidateConfidence(errors, faction.confidence, faction.id);
                 ValidateReviewStatus(errors, faction.reviewStatus, faction.id, true);
+                var information = faction.informationCapacity;
+                if (information == null)
+                    errors.Add("情報処理力定義がない: " + faction.id);
+                else
+                {
+                    if (!IsPercent(information.oralPercent) ||
+                        !IsPercent(information.sealingPercent) ||
+                        !IsPercent(information.numericalPercent))
+                        errors.Add("情報処理力が0..100でない: " + faction.id);
+                    if (information.confidence != "inferred")
+                        errors.Add("情報処理力の確度はinferred: " + faction.id);
+                    RequireLocalized(errors, information.note,
+                        faction.id + ".informationCapacity.note");
+                    ValidateSourceRefs(information.sourceRefs, sourceIds,
+                        faction.id + ".informationCapacity", errors);
+                }
                 if (faction.human) humans++;
                 if (faction.initialPopulation < 1) errors.Add("初期人口が1未満: " + faction.id);
                 if (!IsInBounds(definition, faction.startCol, faction.startRow))
