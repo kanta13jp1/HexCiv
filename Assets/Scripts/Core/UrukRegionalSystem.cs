@@ -335,6 +335,21 @@ namespace HexCiv.Core
         public int trustAfter;
         public bool exactQuantities;
         /// <summary>
+        /// 受信共同体が媒体を照合できるゲーム上の処理力と、媒体を合わせた
+        /// 実効理解率。識字率・実在人数の史実推定値ではない。
+        /// </summary>
+        public int receiverCapacityPercent;
+        public int effectiveUnderstandingPercent;
+        public string receiverCapacityConfidence;
+        public string receiverCapacityEvidenceJa;
+        public string[] receiverCapacitySourceRefs;
+        /// <summary>pending / understood / failed / legacy_resolved / legacy_failed。</summary>
+        public string receptionOutcome;
+        /// <summary>到着時に実際に適用した信頼変化。</summary>
+        public int diplomaticTrustDelta;
+        public string negotiationOutcomeJa;
+
+        /// <summary>
         /// 発送中に占有する交易・工芸労働枠。人数の史実推定値ではない。
         /// version 12以前の記録は0（配分未記録）として移行する。
         /// </summary>
@@ -455,6 +470,11 @@ namespace HexCiv.Core
                 dispatch.messengerIdentityJa ??= "";
                 dispatch.recordIdentityJa ??= "";
                 dispatch.personnelConfidence ??= "";
+                dispatch.receiverCapacityConfidence ??= "";
+                dispatch.receiverCapacityEvidenceJa ??= "";
+                dispatch.receiverCapacitySourceRefs ??= Array.Empty<string>();
+                dispatch.receptionOutcome ??= "";
+                dispatch.negotiationOutcomeJa ??= "";
             }
             progress.selectedInformationFactionId ??= "";
             if (!IsInformationMedium(progress.selectedInformationMedium))
@@ -615,6 +635,39 @@ namespace HexCiv.Core
             }
         }
 
+        public static void MigrateInformationReceptionV14(
+            HistoricalCampaignDefinition definition, UrukCampaignProgress progress)
+        {
+            if (definition == null) throw new ArgumentNullException(nameof(definition));
+            if (progress == null) throw new ArgumentNullException(nameof(progress));
+            progress.informationDispatches ??=
+                Array.Empty<UrukInformationDispatchState>();
+            foreach (var dispatch in progress.informationDispatches)
+            {
+                if (dispatch == null) continue;
+                // 旧記録の成否へ新しい相手別処理力を遡及しない。
+                dispatch.receiverCapacityPercent = 0;
+                dispatch.effectiveUnderstandingPercent = Math.Clamp(
+                    dispatch.reliabilityPercent, 0, 100);
+                dispatch.receiverCapacityConfidence = "inferred";
+                dispatch.receiverCapacityEvidenceJa =
+                    "旧記録・受信共同体の処理力は未記録。媒体信頼度だけを保持。";
+                dispatch.receiverCapacitySourceRefs = Array.Empty<string>();
+                dispatch.receptionOutcome = dispatch.status switch
+                {
+                    "pending" => "pending",
+                    "failed" => "legacy_failed",
+                    _ => "legacy_resolved",
+                };
+                dispatch.diplomaticTrustDelta = 0;
+                dispatch.negotiationOutcomeJa = dispatch.status switch
+                {
+                    "pending" => "受信待ち（旧記録）",
+                    "failed" => "照合不成立（旧記録）",
+                    _ => "照合済み（旧記録）",
+                };
+            }
+        }
         public static void Validate(HistoricalCampaignDefinition definition,
             UrukCampaignProgress progress)
         {
@@ -874,6 +927,46 @@ namespace HexCiv.Core
                       (expectedRecordLabor > 0) !=
                           !string.IsNullOrWhiteSpace(dispatch.recordIdentityJa))))
                     throw new InvalidOperationException("情報伝達の担当・労働枠が不正");
+                bool legacyReception = dispatch.receiverCapacitySourceRefs != null &&
+                    dispatch.receiverCapacityPercent == 0 &&
+                    dispatch.receiverCapacitySourceRefs.Length == 0;
+                bool outcomeKnown = dispatch.receptionOutcome == "pending" ||
+                    dispatch.receptionOutcome == "understood" ||
+                    dispatch.receptionOutcome == "failed" ||
+                    dispatch.receptionOutcome == "legacy_resolved" ||
+                    dispatch.receptionOutcome == "legacy_failed";
+                bool receptionMatchesStatus = dispatch.status switch
+                {
+                    "pending" => dispatch.receptionOutcome == "pending",
+                    "failed" => dispatch.receptionOutcome == "failed" ||
+                        dispatch.receptionOutcome == "legacy_failed",
+                    "active" => dispatch.receptionOutcome == "understood" ||
+                        dispatch.receptionOutcome == "legacy_resolved",
+                    "archived" => dispatch.receptionOutcome == "understood" ||
+                        dispatch.receptionOutcome == "legacy_resolved",
+                    _ => false,
+                };
+                if (!Percent(dispatch.receiverCapacityPercent) ||
+                    !Percent(dispatch.effectiveUnderstandingPercent) ||
+                    dispatch.receiverCapacitySourceRefs == null ||
+                    dispatch.receiverCapacityConfidence != "inferred" ||
+                    string.IsNullOrWhiteSpace(
+                        dispatch.receiverCapacityEvidenceJa) ||
+                    string.IsNullOrWhiteSpace(dispatch.negotiationOutcomeJa) ||
+                    dispatch.diplomaticTrustDelta < -1 ||
+                    dispatch.diplomaticTrustDelta > 4 || !outcomeKnown ||
+                    !receptionMatchesStatus ||
+                    (legacyReception
+                        ? dispatch.effectiveUnderstandingPercent !=
+                            dispatch.reliabilityPercent
+                        : dispatch.receiverCapacityPercent == 0 ||
+                          dispatch.receiverCapacitySourceRefs.Length == 0 ||
+                          dispatch.effectiveUnderstandingPercent !=
+                            EffectiveInformationUnderstandingPercent(
+                                dispatch.reliabilityPercent,
+                                dispatch.receiverCapacityPercent)))
+                    throw new InvalidOperationException(
+                        "情報伝達の受信能力・交渉結果が不正");
                 int linkedTransportCount = 0;
                 foreach (var transport in progress.transports)
                     if (transport != null &&
@@ -884,6 +977,9 @@ namespace HexCiv.Core
                 foreach (string sourceRef in dispatch.sourceRefs)
                     if (!HasSource(definition, sourceRef))
                         throw new InvalidOperationException("情報伝達の出典参照が不正");
+                foreach (string sourceRef in dispatch.receiverCapacitySourceRefs)
+                    if (!HasSource(definition, sourceRef))
+                        throw new InvalidOperationException("受信能力の出典参照が不正");
             }
             if (!string.IsNullOrWhiteSpace(
                     progress.selectedInformationFactionId) &&
@@ -1665,6 +1761,64 @@ namespace HexCiv.Core
                 "（人数不詳・推定）";
         }
 
+        public static int InformationReceiverCapacity(
+            HistoricalCampaignDefinition definition, string factionId,
+            string medium)
+        {
+            var capacity = InformationCapacityDefinition(definition, factionId);
+            if (capacity == null) return 0;
+            return medium switch
+            {
+                OralMessageMedium => capacity.oralPercent,
+                ClaySealingMedium => capacity.sealingPercent,
+                NumericalRecordMedium => capacity.numericalPercent,
+                _ => 0,
+            };
+        }
+
+        public static int EffectiveInformationUnderstandingPercent(
+            int mediumReliabilityPercent, int receiverCapacityPercent)
+        {
+            return Math.Clamp((Math.Clamp(mediumReliabilityPercent, 0, 100) * 2 +
+                Math.Clamp(receiverCapacityPercent, 0, 100)) / 3, 0, 100);
+        }
+
+        public static string SelectedInformationReceptionSummaryJa(
+            HistoricalCampaignSession session)
+        {
+            if (session?.Progress == null) return "相手処理力なし";
+            var partner = SelectedInformationPartner(session.Progress);
+            if (partner == null) return "相手処理力なし";
+            int capacity = InformationReceiverCapacity(session.Definition,
+                partner.factionId, session.Progress.selectedInformationMedium);
+            int effective = EffectiveInformationUnderstandingPercent(
+                InformationMediumReliability(
+                    session.Progress.selectedInformationMedium), capacity);
+            return $"相手処理力{capacity}%・実効理解{effective}%（推定ゲーム値）";
+        }
+
+        public static string InformationReceptionSummaryJa(
+            UrukInformationDispatchState dispatch)
+        {
+            if (dispatch == null) return "受信記録なし";
+            string capacity = dispatch.receiverCapacityPercent <= 0
+                ? "相手処理力:旧記録"
+                : $"相手処理力{dispatch.receiverCapacityPercent}%";
+            return $"{capacity}／実効理解{dispatch.effectiveUnderstandingPercent}%／" +
+                $"交渉:{dispatch.negotiationOutcomeJa}";
+        }
+
+        static HistoricalInformationCapacityDefinition InformationCapacityDefinition(
+            HistoricalCampaignDefinition definition, string factionId)
+        {
+            if (definition?.factions == null ||
+                string.IsNullOrWhiteSpace(factionId)) return null;
+            foreach (var faction in definition.factions)
+                if (faction != null && faction.id == factionId)
+                    return faction.informationCapacity;
+            return null;
+        }
+
         public static bool CanSendInformation(HistoricalCampaignSession session)
         {
             if (session?.Progress == null) return false;
@@ -1873,6 +2027,15 @@ namespace HexCiv.Core
 
             int travelTurns = InformationMediumTravelTurns(medium);
             int arrivalTurn = Math.Max(0, turn) + travelTurns;
+            var capacityDefinition = InformationCapacityDefinition(
+                session.Definition, partner.factionId);
+            int reliabilityPercent =
+                InformationMediumReliability(medium);
+            int receiverCapacityPercent = InformationReceiverCapacity(
+                session.Definition, partner.factionId, medium);
+            int effectiveUnderstandingPercent =
+                EffectiveInformationUnderstandingPercent(reliabilityPercent,
+                    receiverCapacityPercent);
             var dispatch = new UrukInformationDispatchState
             {
                 id = NextId(progress, "information"),
@@ -1885,11 +2048,24 @@ namespace HexCiv.Core
                 activeUntilTurn = arrivalTurn + 3,
                 earliestYear = earliestYear,
                 claySpent = clayCost,
-                reliabilityPercent = InformationMediumReliability(medium),
+                reliabilityPercent = reliabilityPercent,
                 riskReductionPercent = medium == OralMessageMedium ? 1 :
                     medium == ClaySealingMedium ? 3 : 5,
                 trustAfter = partner.diplomaticTrust,
                 exactQuantities = medium == NumericalRecordMedium,
+                receiverCapacityPercent = receiverCapacityPercent,
+                effectiveUnderstandingPercent = effectiveUnderstandingPercent,
+                receiverCapacityConfidence =
+                    capacityDefinition?.confidence ?? "inferred",
+                receiverCapacityEvidenceJa = capacityDefinition?.note?.ja ??
+                    "受信共同体の処理力は推定ゲーム値。",
+                receiverCapacitySourceRefs =
+                    capacityDefinition?.sourceRefs == null
+                        ? Array.Empty<string>()
+                        : (string[])capacityDefinition.sourceRefs.Clone(),
+                receptionOutcome = "pending",
+                diplomaticTrustDelta = 0,
+                negotiationOutcomeJa = "受信待ち",
                 messengerLaborPercent = InformationMessengerLaborPercent,
                 recordLaborPercent = recordLabor,
                 messengerIdentityJa = "氏名不詳の伝達担当",
@@ -1931,28 +2107,30 @@ namespace HexCiv.Core
                         dispatch.receiverFactionId);
                     bool understood = StableHash(definition.seed + 31,
                         dispatch.id, dispatch.createdTurn) % 100 <
-                        dispatch.reliabilityPercent;
+                        dispatch.effectiveUnderstandingPercent;
                     if (understood)
                     {
                         dispatch.status = "active";
                         dispatch.activeUntilTurn = turn + 3;
                         int trustDelta = dispatch.medium == OralMessageMedium ? 1 :
                             dispatch.medium == ClaySealingMedium ? 2 : 3;
+                        dispatch.receptionOutcome = "understood";
+                        dispatch.diplomaticTrustDelta = trustDelta;
+                        dispatch.negotiationOutcomeJa =
+                            InformationNegotiationOutcomeJa(dispatch.medium, true);
                         if (partner != null)
                         {
                             partner.diplomaticTrust = Math.Clamp(
                                 partner.diplomaticTrust + trustDelta, 0, 100);
                             dispatch.trustAfter = partner.diplomaticTrust;
                             partner.currentGoalJa = "伝達済みの物資移送に備える";
-                            partner.lastDecisionJa =
-                                InformationMediumNameJa(dispatch.medium) +
-                                "を照合した。";
+                            partner.lastDecisionJa = dispatch.negotiationOutcomeJa;
                             partner.knownReasonJa = dispatch.subjectJa;
                         }
                         dispatch.resultJa =
                             $"{InformationMediumNameJa(dispatch.medium)}が到着し、" +
                             $"{dispatch.activeUntilTurn - turn + 1}期間、当事者間の" +
-                            $"輸送危険を{dispatch.riskReductionPercent}%軽減する。";
+                            $"輸送危険を{dispatch.riskReductionPercent}%軽減する。交渉:{dispatch.negotiationOutcomeJa}。";
                         RecordDiplomaticEvent(progress, turn,
                             "information_transfer", dispatch.id,
                             dispatch.receiverFactionId, "information_received",
@@ -1963,16 +2141,21 @@ namespace HexCiv.Core
                     {
                         dispatch.status = "failed";
                         dispatch.riskReductionPercent = 0;
+                        dispatch.receptionOutcome = "failed";
+                        dispatch.diplomaticTrustDelta = -1;
+                        dispatch.negotiationOutcomeJa =
+                            InformationNegotiationOutcomeJa(dispatch.medium, false);
                         if (partner != null)
                         {
                             partner.diplomaticTrust = Math.Clamp(
                                 partner.diplomaticTrust - 1, 0, 100);
                             dispatch.trustAfter = partner.diplomaticTrust;
                             partner.currentGoalJa = "伝言内容を再確認する";
-                            partner.lastDecisionJa = "口頭伝言の内容を一致させられなかった。";
+                            partner.lastDecisionJa = dispatch.negotiationOutcomeJa;
                         }
-                        dispatch.resultJa =
-                            "口頭伝言の内容が一致せず、物資移送の危険軽減は得られなかった。";
+                        dispatch.resultJa = $"{InformationMediumNameJa(dispatch.medium)}を" +
+                            "照合できず、物資移送の危険軽減は得られなかった。" +
+                            $"交渉:{dispatch.negotiationOutcomeJa}。";
                         RecordDiplomaticEvent(progress, turn,
                             "information_transfer", dispatch.id,
                             dispatch.receiverFactionId, "information_failed", -1,
@@ -2100,6 +2283,18 @@ namespace HexCiv.Core
             _ => "物資移送予定",
         };
 
+        static string InformationNegotiationOutcomeJa(
+            string medium, bool understood)
+        {
+            if (!understood) return "内容の再確認を要求";
+            return medium switch
+            {
+                OralMessageMedium => "条件確認の継続に合意",
+                ClaySealingMedium => "荷印の照合に合意",
+                NumericalRecordMedium => "数量条件の照合に合意",
+                _ => "情報の照合に合意",
+            };
+        }
         static string InformationMediumEvidenceJa(string medium) => medium switch
         {
             OralMessageMedium =>

@@ -26,6 +26,53 @@ CodexとClaude Codeは、以後この `HexCiv` プロジェクトだけを更新
 
 ## 最新状況
 
+### ✅ 2026-08-15 Codex: Stage 4Mを計測可能な販売候補へ固定
+
+**判定**
+
+- `stage4m-20260814` / commit `b878666` を販売候補として固定した。成果物候補とKPI契約はGO、本番計測開始はBLOCKED、公開販売はNO-GO。
+- 製品／Demo ZIPのmanifest・サイズ・SHA256、必須EXE／Assembly-CSharp.dll／README／LICENSE、デバッグ物除外を再監査した。製品SHA256は `66bf4bf96459b3d8cf2c35785e91c5cc0d75f2fb89a8993f3b379727cafc6490`、Demoは `25fc7c0aa6687d35ab1be548f637abe2553855346c36f56beb2e3398439e8004` で台帳と一致した。
+- 史実スキーマ、史実基盤、地域、縦切り、通常4X、Demo互換、製品／Demoビルド、製品／Demo起動の10証拠を再監査し、すべてPASS。Demoは31ターン時点で製品版と同一、保存後に32ターンへ継続する証拠を確認した。
+- `sales_candidate.json` と `scripts/audit_sales_candidate.ps1` を追加し、監査結果を `reports/sales-candidate/latest.{json,md}` へ出す。自然購入は0件とせず `unmeasured`、自己購入1件は主KPIから除外する。
+- P1は本番プローブ行の特権SQL確認と削除、P2は商品画像PR #4408の本番反映、H5はitch.io本人確認と非公開ページレビューが未完了。外部公開、マージ、価格変更、決済、投稿は行っていない。
+
+**次の担当**
+
+- オペレーター: P1の本番行確認・プローブ削除と、itch.ioのCloudflare本人確認／ログインを行う。
+- 販売サイト担当: PR #4408の生成リリースノートだけを更新してCIを再実行し、承認後にP2を本番反映する。
+- Codex: 計測開始までは新しいウルク機能を販売成果として追加せず、不具合、ビルド再現性、計測欠損、商品表示、購入導線、購入者保護だけを扱う。
+
+### ✅ 2026-08-14 Codex: ウルク第4M・共同体別の情報受信能力と交渉結果
+
+**ゲーム開発**
+
+- 8勢力それぞれに、口頭・封泥・数量記録の媒体別「相手処理力」をJSONで追加した。値は識字率・史実人口・史実の成功率ではなく、地理・社会構造・媒体利用可能性を表現する `inferred` なゲーム値である。
+- 実効理解率を `(媒体信頼度×2 + 相手処理力) / 3` で決定し、到着時の決定論的な理解成否へ接続した。理解成功では媒体別の交渉結果と信頼上昇、失敗では「内容の再確認を要求」と信頼-1を保存・表示する。通常4XのRNGは消費しない。
+- キャンペーンデータセットをversion 3、進捗JSONをversion 14へ更新した。version 13以前の解決済み伝達は旧記録として保持し、現在の相手処理力から過去の理解成否を作り直さない。
+- 地域管理UIへ相手処理力、実効理解率、交渉結果を追加した。実画像で折り返しによる操作ボタンとの重なりを検出し、パネル高580px・状態欄260px・撮影高620pxへ拡張して解消した。
+
+**販売検証**
+
+- `UrukRegionalScreenshot.CaptureInformationReceptionCandidate` で実キャンペーン状態を760×620に描画した。`Logs/marketing/uruk_stage4m_counterpart_reception.png` は116,362 bytes、SHA256 `a8196402c5ca83163310bf31258723bc6404a7a8352c8507349ea1ad8699ed1e`。相手処理力55%、実効理解85%、数量条件照合への合意、確度表記、文字欠け・重なりなしを目視確認した。
+- Stage 4MをH10の「開始前に完成した更新候補」へ登録した。外部公開、H10第1週、訪問、購入、売上には数えず、同じ改善を開始後に二重で新機能告知しない。
+- 公開商品URLはHTTP 200。配信中のアプリ資産にはHexCivとStripe導線が含まれる。ブラウザ連携が接続層で終了したため、今回の画面上の価格表示・購入ボタンは未検証。PR #4408はOPENで、主要CIは合格、`release-notes-data` 1件のみ失敗のまま。マージ、価格変更、決済、itch.io、投稿は行っていない。
+
+**検証（Unity 6000.3.20f1）**
+
+- `HistoricalContentSchemaSmokeTest.Run`: `HISTORICAL CONTENT SCHEMA SMOKE OK`。
+- `HistoricalCampaignFoundationSmokeTest.Run`: `HISTORICAL CAMPAIGN FOUNDATION SMOKE OK`。
+- `UrukRegionalSimulationSmokeTest.Run`: `URUK REGIONAL SIMULATION SMOKE OK`。媒体別処理力、成功・失敗、交渉、v13→v14、セーブ往復、3 seed決定性を確認。最終実行平均 `0.15 ms/turn`。
+- `UrukCampaignVerticalSliceSmokeTest.Run`: `URUK CAMPAIGN VERTICAL SLICE SMOKE OK`。
+- `SmokeTest.Run`: `SMOKE OK`。150ターン時点 units=88、cities=18、techs=165、wars=3、ローマ文化勝利。
+- `DemoModeSmokeTest.Run`: `DEMO SMOKE OK`。
+- 製品版 `BUILD OK: 98,114,429 bytes`、Demo `DEMO BUILD OK: 98,114,429 bytes`。各12秒実起動し、Unity 6000.3.20f1・重大例外0件。
+- 旧配布物を上書きせず `dist/stage4m_candidate_20260814/` に候補を作成。製品ZIP 37,603,463 bytes、SHA256 `66bf4bf96459b3d8cf2c35785e91c5cc0d75f2fb89a8993f3b379727cafc6490`。Demo ZIP 37,606,160 bytes、SHA256 `25fc7c0aa6687d35ab1be548f637abe2553855346c36f56beb2e3398439e8004`。manifest一致、EXE／Assembly-CSharp.dll同梱、クラッシュハンドラ／PDB 0件。
+
+**次の担当**
+
+- Claude: ユーザー承認後にPR #4408の生成リリースノートだけを更新し、CI再実行・マージ・P2開始日を返す。公開前に本番の商品価格・購入導線を画面で再確認し、販売サイトへ採用するZIPを候補ハッシュと照合する。
+- Codex: 情報受信能力をAIの媒体選択と再確認交渉へ広げる。P1/P2/H4/H7/itch.ioの開始ゲートを越えるまではH10を開始せず、外部投稿・価格変更・有料広告を行わない。
+
 
 ### ✅ 2026-08-05 Codex: ウルク第4L・氏名／人数不詳の情報担当と労働枠
 

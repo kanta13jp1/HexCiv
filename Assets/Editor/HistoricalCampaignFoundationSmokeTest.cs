@@ -38,7 +38,7 @@ public static class HistoricalCampaignFoundationSmokeTest
         if (errors.Count != 0)
             throw new Exception("定義検証エラー: " + string.Join(" | ", errors));
         if (definition.id != "uruk_4000" || definition.schemaVersion != 1 ||
-            definition.datasetVersion != 2 || definition.reviewStatus != "verified")
+            definition.datasetVersion != 3 || definition.reviewStatus != "verified")
             throw new Exception("キャンペーン安定ID・版数・確認状態が不正");
         if (definition.startYear != -4000 || definition.endYear != -3000 ||
             definition.maxTurns != 50)
@@ -50,6 +50,22 @@ public static class HistoricalCampaignFoundationSmokeTest
         if (definition.factions[0].id != "uruk_community" ||
             !definition.factions[0].human)
             throw new Exception("ウルクが先頭の人間勢力ではない");
+        if (definition.factions.Any(f =>
+            f.informationCapacity == null ||
+            f.informationCapacity.oralPercent <= 0 ||
+            f.informationCapacity.oralPercent > 100 ||
+            f.informationCapacity.sealingPercent <= 0 ||
+            f.informationCapacity.sealingPercent > 100 ||
+            f.informationCapacity.numericalPercent <= 0 ||
+            f.informationCapacity.numericalPercent > 100 ||
+            f.informationCapacity.confidence != "inferred" ||
+            f.informationCapacity.note == null ||
+            string.IsNullOrWhiteSpace(f.informationCapacity.note.ja) ||
+            f.informationCapacity.sourceRefs == null ||
+            f.informationCapacity.sourceRefs.Length == 0))
+            throw new Exception("勢力別の情報受容力・確度・出典が不足");
+        if (definition.factions.Select(f => f.informationCapacity.numericalPercent).Distinct().Count() < 4)
+            throw new Exception("勢力別の情報受容力が十分に差別化されていない");
         if (definition.goods.Length < 8 ||
             !definition.goods.Any(g => g.id == "barley") ||
             !definition.goods.Any(g => g.id == "reeds") ||
