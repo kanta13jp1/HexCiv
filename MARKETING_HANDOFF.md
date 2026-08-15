@@ -1,12 +1,17 @@
 # HexCiv 販売ハンドオフ
 
-更新日: 2026-08-14
+更新日: 2026-08-15
 
 この文書は、ゲーム本体を担当するCodexから、販売サイトと掲載作業を担当するClaude Codeへの
 受け渡しです。仮説の判定記録は
 `C:\Users\kanta\Documents\Obsidian Vault\HexCiv販売_仮説台帳.md` を正本とします。
 
-## 現在販売できるもの
+## 現在の販売候補
+
+2026-08-15判定: Stage 4Mは **計測可能な販売候補**。成果物候補とKPI契約はGOだが、
+P1本番行確認・P2画像公開・H5非公開ページレビューが未完了のため、本番計測開始はBLOCKED、
+公開販売はNO-GO。`sales_candidate.json` と `scripts/audit_sales_candidate.ps1` を正本候補監査に使う。
+自然購入数は0ではなく未計測、自己購入1件は自然販売KPIから除外する。
 
 - 製品版: `dist/HexCiv-v1.0-win64.zip`
 - 30ターン無料体験版: `dist/HexCiv-Demo-v1.0-win64.zip`

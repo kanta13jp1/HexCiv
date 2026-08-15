@@ -1,0 +1,467 @@
+﻿{
+    "schemaVersion":  1,
+    "generatedAtUtc":  "2026-08-15T07:10:08Z",
+    "candidateId":  "stage4m-20260814",
+    "candidateCommit":  "b878666",
+    "candidateCommitExists":  true,
+    "classification":  "MEASURABLE_SALES_CANDIDATE",
+    "artifactCandidateDecision":  "GO",
+    "measurementContractDecision":  "GO",
+    "measurementActivation":  "BLOCKED",
+    "publicSalesDecision":  "NO_GO",
+    "packages":  [
+                     {
+                         "edition":  "full",
+                         "passed":  true,
+                         "checks":  [
+                                        {
+                                            "name":  "zip exists",
+                                            "passed":  true,
+                                            "detail":  "HexCiv-v1.0-win64.zip"
+                                        },
+                                        {
+                                            "name":  "manifest exists",
+                                            "passed":  true,
+                                            "detail":  "HexCiv-v1.0-win64.manifest.json"
+                                        },
+                                        {
+                                            "name":  "manifest filename",
+                                            "passed":  true,
+                                            "detail":  "manifest=HexCiv-v1.0-win64.zip"
+                                        },
+                                        {
+                                            "name":  "manifest size",
+                                            "passed":  true,
+                                            "detail":  "manifest=37603463; actual=37603463"
+                                        },
+                                        {
+                                            "name":  "manifest sha256",
+                                            "passed":  true,
+                                            "detail":  "66bf4bf96459b3d8cf2c35785e91c5cc0d75f2fb89a8993f3b379727cafc6490"
+                                        },
+                                        {
+                                            "name":  "required exe",
+                                            "passed":  true,
+                                            "detail":  "count=1"
+                                        },
+                                        {
+                                            "name":  "managed assembly",
+                                            "passed":  true,
+                                            "detail":  "count=1"
+                                        },
+                                        {
+                                            "name":  "README",
+                                            "passed":  true,
+                                            "detail":  "count=1"
+                                        },
+                                        {
+                                            "name":  "LICENSE",
+                                            "passed":  true,
+                                            "detail":  "count=1"
+                                        },
+                                        {
+                                            "name":  "forbidden debug/crash files",
+                                            "passed":  true,
+                                            "detail":  "count=0"
+                                        }
+                                    ]
+                     },
+                     {
+                         "edition":  "demo-30-turns",
+                         "passed":  true,
+                         "checks":  [
+                                        {
+                                            "name":  "zip exists",
+                                            "passed":  true,
+                                            "detail":  "HexCiv-Demo-v1.0-win64.zip"
+                                        },
+                                        {
+                                            "name":  "manifest exists",
+                                            "passed":  true,
+                                            "detail":  "HexCiv-Demo-v1.0-win64.manifest.json"
+                                        },
+                                        {
+                                            "name":  "manifest filename",
+                                            "passed":  true,
+                                            "detail":  "manifest=HexCiv-Demo-v1.0-win64.zip"
+                                        },
+                                        {
+                                            "name":  "manifest size",
+                                            "passed":  true,
+                                            "detail":  "manifest=37606160; actual=37606160"
+                                        },
+                                        {
+                                            "name":  "manifest sha256",
+                                            "passed":  true,
+                                            "detail":  "25fc7c0aa6687d35ab1be548f637abe2553855346c36f56beb2e3398439e8004"
+                                        },
+                                        {
+                                            "name":  "required exe",
+                                            "passed":  true,
+                                            "detail":  "count=1"
+                                        },
+                                        {
+                                            "name":  "managed assembly",
+                                            "passed":  true,
+                                            "detail":  "count=1"
+                                        },
+                                        {
+                                            "name":  "README",
+                                            "passed":  true,
+                                            "detail":  "count=1"
+                                        },
+                                        {
+                                            "name":  "LICENSE",
+                                            "passed":  true,
+                                            "detail":  "count=1"
+                                        },
+                                        {
+                                            "name":  "forbidden debug/crash files",
+                                            "passed":  true,
+                                            "detail":  "count=0"
+                                        }
+                                    ]
+                     }
+                 ],
+    "validationLogs":  [
+                           {
+                               "name":  "historical-content-schema",
+                               "passed":  true,
+                               "checks":  [
+                                              {
+                                                  "name":  "log exists",
+                                                  "passed":  true,
+                                                  "detail":  "Logs/stage4m_schema_20260814.log"
+                                              },
+                                              {
+                                                  "name":  "success marker",
+                                                  "passed":  true,
+                                                  "detail":  "HISTORICAL CONTENT SCHEMA SMOKE OK"
+                                              },
+                                              {
+                                                  "name":  "additional marker",
+                                                  "passed":  true,
+                                                  "detail":  ""
+                                              },
+                                              {
+                                                  "name":  "fatal marker absent",
+                                                  "passed":  true,
+                                                  "detail":  "SMOKE FAIL|BUILD FAIL|Compilation failed|NullReferenceException|Unhandled exception|Crash!!!|Aborting batchmode due to failure"
+                                              }
+                                          ]
+                           },
+                           {
+                               "name":  "historical-campaign-foundation",
+                               "passed":  true,
+                               "checks":  [
+                                              {
+                                                  "name":  "log exists",
+                                                  "passed":  true,
+                                                  "detail":  "Logs/stage4m_foundation_20260814.log"
+                                              },
+                                              {
+                                                  "name":  "success marker",
+                                                  "passed":  true,
+                                                  "detail":  "HISTORICAL CAMPAIGN FOUNDATION SMOKE OK"
+                                              },
+                                              {
+                                                  "name":  "additional marker",
+                                                  "passed":  true,
+                                                  "detail":  ""
+                                              },
+                                              {
+                                                  "name":  "fatal marker absent",
+                                                  "passed":  true,
+                                                  "detail":  "SMOKE FAIL|BUILD FAIL|Compilation failed|NullReferenceException|Unhandled exception|Crash!!!|Aborting batchmode due to failure"
+                                              }
+                                          ]
+                           },
+                           {
+                               "name":  "uruk-regional-simulation",
+                               "passed":  true,
+                               "checks":  [
+                                              {
+                                                  "name":  "log exists",
+                                                  "passed":  true,
+                                                  "detail":  "Logs/stage4m_regional_20260814.log"
+                                              },
+                                              {
+                                                  "name":  "success marker",
+                                                  "passed":  true,
+                                                  "detail":  "URUK REGIONAL SIMULATION SMOKE OK"
+                                              },
+                                              {
+                                                  "name":  "additional marker",
+                                                  "passed":  true,
+                                                  "detail":  ""
+                                              },
+                                              {
+                                                  "name":  "fatal marker absent",
+                                                  "passed":  true,
+                                                  "detail":  "SMOKE FAIL|BUILD FAIL|Compilation failed|NullReferenceException|Unhandled exception|Crash!!!|Aborting batchmode due to failure"
+                                              }
+                                          ]
+                           },
+                           {
+                               "name":  "uruk-vertical-slice",
+                               "passed":  true,
+                               "checks":  [
+                                              {
+                                                  "name":  "log exists",
+                                                  "passed":  true,
+                                                  "detail":  "Logs/stage4m_vertical_20260814.log"
+                                              },
+                                              {
+                                                  "name":  "success marker",
+                                                  "passed":  true,
+                                                  "detail":  "URUK CAMPAIGN VERTICAL SLICE SMOKE OK"
+                                              },
+                                              {
+                                                  "name":  "additional marker",
+                                                  "passed":  true,
+                                                  "detail":  ""
+                                              },
+                                              {
+                                                  "name":  "fatal marker absent",
+                                                  "passed":  true,
+                                                  "detail":  "SMOKE FAIL|BUILD FAIL|Compilation failed|NullReferenceException|Unhandled exception|Crash!!!|Aborting batchmode due to failure"
+                                              }
+                                          ]
+                           },
+                           {
+                               "name":  "normal-game-regression",
+                               "passed":  true,
+                               "checks":  [
+                                              {
+                                                  "name":  "log exists",
+                                                  "passed":  true,
+                                                  "detail":  "Logs/stage4m_smoke_20260814.log"
+                                              },
+                                              {
+                                                  "name":  "success marker",
+                                                  "passed":  true,
+                                                  "detail":  "SMOKE OK"
+                                              },
+                                              {
+                                                  "name":  "additional marker",
+                                                  "passed":  true,
+                                                  "detail":  ""
+                                              },
+                                              {
+                                                  "name":  "fatal marker absent",
+                                                  "passed":  true,
+                                                  "detail":  "SMOKE FAIL|BUILD FAIL|Compilation failed|NullReferenceException|Unhandled exception|Crash!!!|Aborting batchmode due to failure"
+                                              }
+                                          ]
+                           },
+                           {
+                               "name":  "demo-save-continuation",
+                               "passed":  true,
+                               "checks":  [
+                                              {
+                                                  "name":  "log exists",
+                                                  "passed":  true,
+                                                  "detail":  "Logs/stage4m_demo_20260814.log"
+                                              },
+                                              {
+                                                  "name":  "success marker",
+                                                  "passed":  true,
+                                                  "detail":  "DEMO SMOKE OK"
+                                              },
+                                              {
+                                                  "name":  "additional marker",
+                                                  "passed":  true,
+                                                  "detail":  "identical checkpoint: turn=31"
+                                              },
+                                              {
+                                                  "name":  "additional marker",
+                                                  "passed":  true,
+                                                  "detail":  "save compatibility: continued to turn=32"
+                                              },
+                                              {
+                                                  "name":  "fatal marker absent",
+                                                  "passed":  true,
+                                                  "detail":  "SMOKE FAIL|BUILD FAIL|Compilation failed|NullReferenceException|Unhandled exception|Crash!!!|Aborting batchmode due to failure"
+                                              }
+                                          ]
+                           },
+                           {
+                               "name":  "product-build",
+                               "passed":  true,
+                               "checks":  [
+                                              {
+                                                  "name":  "log exists",
+                                                  "passed":  true,
+                                                  "detail":  "Logs/stage4m_build_20260814.log"
+                                              },
+                                              {
+                                                  "name":  "success marker",
+                                                  "passed":  true,
+                                                  "detail":  "BUILD OK:"
+                                              },
+                                              {
+                                                  "name":  "additional marker",
+                                                  "passed":  true,
+                                                  "detail":  ""
+                                              },
+                                              {
+                                                  "name":  "fatal marker absent",
+                                                  "passed":  true,
+                                                  "detail":  "SMOKE FAIL|BUILD FAIL|Compilation failed|NullReferenceException|Unhandled exception|Crash!!!|Aborting batchmode due to failure"
+                                              }
+                                          ]
+                           },
+                           {
+                               "name":  "demo-build",
+                               "passed":  true,
+                               "checks":  [
+                                              {
+                                                  "name":  "log exists",
+                                                  "passed":  true,
+                                                  "detail":  "Logs/stage4m_demo_build_20260814.log"
+                                              },
+                                              {
+                                                  "name":  "success marker",
+                                                  "passed":  true,
+                                                  "detail":  "DEMO BUILD OK:"
+                                              },
+                                              {
+                                                  "name":  "additional marker",
+                                                  "passed":  true,
+                                                  "detail":  ""
+                                              },
+                                              {
+                                                  "name":  "fatal marker absent",
+                                                  "passed":  true,
+                                                  "detail":  "SMOKE FAIL|BUILD FAIL|Compilation failed|NullReferenceException|Unhandled exception|Crash!!!|Aborting batchmode due to failure"
+                                              }
+                                          ]
+                           },
+                           {
+                               "name":  "product-launch",
+                               "passed":  true,
+                               "checks":  [
+                                              {
+                                                  "name":  "log exists",
+                                                  "passed":  true,
+                                                  "detail":  "Logs/stage4m_product_player_launch_20260814.log"
+                                              },
+                                              {
+                                                  "name":  "success marker",
+                                                  "passed":  true,
+                                                  "detail":  "[Edition] 製品版"
+                                              },
+                                              {
+                                                  "name":  "additional marker",
+                                                  "passed":  true,
+                                                  "detail":  "Initialize engine version: 6000.3.20f1"
+                                              },
+                                              {
+                                                  "name":  "fatal marker absent",
+                                                  "passed":  true,
+                                                  "detail":  "SMOKE FAIL|BUILD FAIL|Compilation failed|NullReferenceException|Unhandled exception|Crash!!!|Aborting batchmode due to failure"
+                                              }
+                                          ]
+                           },
+                           {
+                               "name":  "demo-launch",
+                               "passed":  true,
+                               "checks":  [
+                                              {
+                                                  "name":  "log exists",
+                                                  "passed":  true,
+                                                  "detail":  "Logs/stage4m_demo_player_launch_20260814.log"
+                                              },
+                                              {
+                                                  "name":  "success marker",
+                                                  "passed":  true,
+                                                  "detail":  "[Edition] 体験版（30ターン上限）"
+                                              },
+                                              {
+                                                  "name":  "additional marker",
+                                                  "passed":  true,
+                                                  "detail":  "Initialize engine version: 6000.3.20f1"
+                                              },
+                                              {
+                                                  "name":  "fatal marker absent",
+                                                  "passed":  true,
+                                                  "detail":  "SMOKE FAIL|BUILD FAIL|Compilation failed|NullReferenceException|Unhandled exception|Crash!!!|Aborting batchmode due to failure"
+                                              }
+                                          ]
+                           }
+                       ],
+    "salesAssets":  [
+                        {
+                            "path":  "Logs/gameplay_turn30.png",
+                            "passed":  true,
+                            "bytes":  228855,
+                            "sha256":  "adf85ce7485b022f011c6ce0792f8e3ef3025d7c365151cb13f54b45a0975c5a"
+                        },
+                        {
+                            "path":  "Logs/gameplay_turn80.png",
+                            "passed":  true,
+                            "bytes":  258376,
+                            "sha256":  "c87c09b0131004c22f320a890523db6ad0ca4f8a824e809b619ce9e02ab68054"
+                        },
+                        {
+                            "path":  "Logs/gameplay_turn150.png",
+                            "passed":  true,
+                            "bytes":  290103,
+                            "sha256":  "81d2a743c1fe7d27f53ab69f1d12d88cfc88f97453488833bf0305c5ca08ee10"
+                        },
+                        {
+                            "path":  "Logs/marketing/uruk_stage4m_counterpart_reception.png",
+                            "passed":  true,
+                            "bytes":  116362,
+                            "sha256":  "a8196402c5ca83163310bf31258723bc6404a7a8352c8507349ea1ad8699ed1e"
+                        }
+                    ],
+    "measurementContract":  {
+                                "implementationPullRequest":  "https://github.com/kanta13jp1/my_web_app/pull/4392",
+                                "stages":  [
+                                               "product_view",
+                                               "purchase_click",
+                                               "checkout_redirect",
+                                               "purchase_complete"
+                                           ],
+                                "dimensions":  [
+                                                   "visitor_id",
+                                                   "utm_source",
+                                                   "utm_campaign",
+                                                   "utm_content"
+                                               ],
+                                "primaryKpi":  "net_revenue_jpy_excluding_self_purchase",
+                                "secondaryKpis":  [
+                                                      "unique_product_viewers",
+                                                      "view_to_purchase_click_rate",
+                                                      "purchase_click_to_checkout_rate",
+                                                      "checkout_to_purchase_rate",
+                                                      "refund_count"
+                                                  ],
+                                "organicPurchaseCount":  null,
+                                "organicPurchaseState":  "unmeasured",
+                                "excludedPurchases":  [
+                                                          "one self-purchase used for payment verification"
+                                                      ]
+                            },
+    "activationGates":  [
+                            {
+                                "id":  "P1",
+                                "name":  "production funnel row verified and probe removed",
+                                "status":  "blocked",
+                                "evidence":  "shop-funnel is deployed and returned recorded=true, but the production row has not been read with privileged SQL"
+                            },
+                            {
+                                "id":  "P2",
+                                "name":  "three real gameplay screenshots published",
+                                "status":  "blocked",
+                                "evidence":  "https://github.com/kanta13jp1/my_web_app/pull/4408 is open and not deployed"
+                            },
+                            {
+                                "id":  "H5",
+                                "name":  "private itch.io listing reviewed",
+                                "status":  "blocked",
+                                "evidence":  "Cloudflare verification and account login require the operator"
+                            }
+                        ]
+}

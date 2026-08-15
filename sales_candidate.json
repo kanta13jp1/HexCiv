@@ -1,0 +1,147 @@
+{
+  "schemaVersion": 1,
+  "candidateId": "stage4m-20260814",
+  "candidateCommit": "b878666",
+  "candidateDirectory": "dist/stage4m_candidate_20260814",
+  "product": {
+    "id": "hexciv-win64",
+    "name": "HexCiv",
+    "version": "1.0",
+    "platform": "Windows 10/11 64bit",
+    "language": "Japanese",
+    "priceJpy": 500,
+    "productUrl": "https://my-web-app-b67f4.web.app/shop/hexciv"
+  },
+  "packages": [
+    {
+      "edition": "full",
+      "zip": "HexCiv-v1.0-win64.zip",
+      "manifest": "HexCiv-v1.0-win64.manifest.json",
+      "requiredExe": "HexCiv.exe",
+      "requiredDataDirectory": "HexCiv_Data"
+    },
+    {
+      "edition": "demo-30-turns",
+      "zip": "HexCiv-Demo-v1.0-win64.zip",
+      "manifest": "HexCiv-Demo-v1.0-win64.manifest.json",
+      "requiredExe": "HexCiv-Demo.exe",
+      "requiredDataDirectory": "HexCiv-Demo_Data"
+    }
+  ],
+  "validationLogs": [
+    {
+      "name": "historical-content-schema",
+      "path": "Logs/stage4m_schema_20260814.log",
+      "successMarker": "HISTORICAL CONTENT SCHEMA SMOKE OK"
+    },
+    {
+      "name": "historical-campaign-foundation",
+      "path": "Logs/stage4m_foundation_20260814.log",
+      "successMarker": "HISTORICAL CAMPAIGN FOUNDATION SMOKE OK"
+    },
+    {
+      "name": "uruk-regional-simulation",
+      "path": "Logs/stage4m_regional_20260814.log",
+      "successMarker": "URUK REGIONAL SIMULATION SMOKE OK"
+    },
+    {
+      "name": "uruk-vertical-slice",
+      "path": "Logs/stage4m_vertical_20260814.log",
+      "successMarker": "URUK CAMPAIGN VERTICAL SLICE SMOKE OK"
+    },
+    {
+      "name": "normal-game-regression",
+      "path": "Logs/stage4m_smoke_20260814.log",
+      "successMarker": "SMOKE OK"
+    },
+    {
+      "name": "demo-save-continuation",
+      "path": "Logs/stage4m_demo_20260814.log",
+      "successMarker": "DEMO SMOKE OK",
+      "additionalMarkers": [
+        "identical checkpoint: turn=31",
+        "save compatibility: continued to turn=32"
+      ]
+    },
+    {
+      "name": "product-build",
+      "path": "Logs/stage4m_build_20260814.log",
+      "successMarker": "BUILD OK:"
+    },
+    {
+      "name": "demo-build",
+      "path": "Logs/stage4m_demo_build_20260814.log",
+      "successMarker": "DEMO BUILD OK:"
+    },
+    {
+      "name": "product-launch",
+      "path": "Logs/stage4m_product_player_launch_20260814.log",
+      "successMarker": "[Edition] 製品版",
+      "additionalMarkers": [
+        "Initialize engine version: 6000.3.20f1"
+      ]
+    },
+    {
+      "name": "demo-launch",
+      "path": "Logs/stage4m_demo_player_launch_20260814.log",
+      "successMarker": "[Edition] 体験版（30ターン上限）",
+      "additionalMarkers": [
+        "Initialize engine version: 6000.3.20f1"
+      ]
+    }
+  ],
+  "salesAssets": [
+    "Logs/gameplay_turn30.png",
+    "Logs/gameplay_turn80.png",
+    "Logs/gameplay_turn150.png",
+    "Logs/marketing/uruk_stage4m_counterpart_reception.png"
+  ],
+  "measurementContract": {
+    "implementationPullRequest": "https://github.com/kanta13jp1/my_web_app/pull/4392",
+    "stages": [
+      "product_view",
+      "purchase_click",
+      "checkout_redirect",
+      "purchase_complete"
+    ],
+    "dimensions": [
+      "visitor_id",
+      "utm_source",
+      "utm_campaign",
+      "utm_content"
+    ],
+    "primaryKpi": "net_revenue_jpy_excluding_self_purchase",
+    "secondaryKpis": [
+      "unique_product_viewers",
+      "view_to_purchase_click_rate",
+      "purchase_click_to_checkout_rate",
+      "checkout_to_purchase_rate",
+      "refund_count"
+    ],
+    "organicPurchaseCount": null,
+    "organicPurchaseState": "unmeasured",
+    "excludedPurchases": [
+      "one self-purchase used for payment verification"
+    ]
+  },
+  "activationGates": [
+    {
+      "id": "P1",
+      "name": "production funnel row verified and probe removed",
+      "status": "blocked",
+      "evidence": "shop-funnel is deployed and returned recorded=true, but the production row has not been read with privileged SQL"
+    },
+    {
+      "id": "P2",
+      "name": "three real gameplay screenshots published",
+      "status": "blocked",
+      "evidence": "https://github.com/kanta13jp1/my_web_app/pull/4408 is open and not deployed"
+    },
+    {
+      "id": "H5",
+      "name": "private itch.io listing reviewed",
+      "status": "blocked",
+      "evidence": "Cloudflare verification and account login require the operator"
+    }
+  ]
+}

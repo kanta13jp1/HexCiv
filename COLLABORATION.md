@@ -26,6 +26,22 @@ CodexとClaude Codeは、以後この `HexCiv` プロジェクトだけを更新
 
 ## 最新状況
 
+### ✅ 2026-08-15 Codex: Stage 4Mを計測可能な販売候補へ固定
+
+**判定**
+
+- `stage4m-20260814` / commit `b878666` を販売候補として固定した。成果物候補とKPI契約はGO、本番計測開始はBLOCKED、公開販売はNO-GO。
+- 製品／Demo ZIPのmanifest・サイズ・SHA256、必須EXE／Assembly-CSharp.dll／README／LICENSE、デバッグ物除外を再監査した。製品SHA256は `66bf4bf96459b3d8cf2c35785e91c5cc0d75f2fb89a8993f3b379727cafc6490`、Demoは `25fc7c0aa6687d35ab1be548f637abe2553855346c36f56beb2e3398439e8004` で台帳と一致した。
+- 史実スキーマ、史実基盤、地域、縦切り、通常4X、Demo互換、製品／Demoビルド、製品／Demo起動の10証拠を再監査し、すべてPASS。Demoは31ターン時点で製品版と同一、保存後に32ターンへ継続する証拠を確認した。
+- `sales_candidate.json` と `scripts/audit_sales_candidate.ps1` を追加し、監査結果を `reports/sales-candidate/latest.{json,md}` へ出す。自然購入は0件とせず `unmeasured`、自己購入1件は主KPIから除外する。
+- P1は本番プローブ行の特権SQL確認と削除、P2は商品画像PR #4408の本番反映、H5はitch.io本人確認と非公開ページレビューが未完了。外部公開、マージ、価格変更、決済、投稿は行っていない。
+
+**次の担当**
+
+- オペレーター: P1の本番行確認・プローブ削除と、itch.ioのCloudflare本人確認／ログインを行う。
+- 販売サイト担当: PR #4408の生成リリースノートだけを更新してCIを再実行し、承認後にP2を本番反映する。
+- Codex: 計測開始までは新しいウルク機能を販売成果として追加せず、不具合、ビルド再現性、計測欠損、商品表示、購入導線、購入者保護だけを扱う。
+
 ### ✅ 2026-08-14 Codex: ウルク第4M・共同体別の情報受信能力と交渉結果
 
 **ゲーム開発**
