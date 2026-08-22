@@ -26,6 +26,32 @@ CodexとClaude Codeは、以後この `HexCiv` プロジェクトだけを更新
 
 ## 最新状況
 
+### ✅ 2026-08-22 Codex: 生成物保存・商品化ループをHexCivスキルへ統合
+
+**運用基盤**
+
+- `hexciv-develop-and-market` に、画像・動画・音声・デザイン・文章・プロンプト・アイデア・ゲーム・テンプレート・アプリ・配布候補を、生成／重要改訂のターン中に `C:\Users\kanta\GeneratedArtifacts` へ保存する必須工程を追加した。
+- 原本、プロンプト／brief、生成ツール、出典、ハッシュ、権利、プライバシー、派生物、検証、承認、公開先、指標、次版の関係を同じマニフェストで追跡する。原本は上書きせず、権利または個人情報が未確認なら販売可能と判定しない。
+- ローカル保存と外部公開を分離した。アップロード、出品、公開範囲・価格変更、有料生成、販売は、対象・チャネル・ファイル・価格を示した新しいユーザー承認がある場合だけ行う。
+
+**保存済み証拠**
+
+- スキル統合版: `hexciv-artifact-commercialization-integration-v1` — `C:\Users\kanta\GeneratedArtifacts\2026\08\hexciv-artifact-commercialization-integration-v1\manifest.json`
+- Stage 4M製品／Demo候補: `hexciv-stage4m-sales-candidate-20260814` — `C:\Users\kanta\GeneratedArtifacts\2026\08\hexciv-stage4m-sales-candidate-20260814\manifest.json`
+- Stage 4M実ゲーム画像: `hexciv-stage4m-counterpart-reception-20260814` — `C:\Users\kanta\GeneratedArtifacts\2026\08\hexciv-stage4m-counterpart-reception-20260814\manifest.json`
+- 3件ともvault `verify` は `ok: true`。販売候補には製品／Demo ZIP、両manifest、販売候補監査JSON／Markdown、画像マニフェストを添付した。
+
+**検証と影響**
+
+- `quick_validate.py`: `Skill is valid!`。`artifact_vault.py` の単体テスト3件はすべて合格。
+- ゲームコード、JSON、セーブ形式、販売サイト、価格、公開状態、Obsidian仮説判定は変更していない。Unityテスト／ビルドは不要な運用文書・保存基盤変更のため実行していない。
+- 3件はすべて `captured`、権利・プライバシーは `pending`。販売可能・公開済み・計測開始とは扱わない。
+
+**次の担当**
+
+- 以後、再利用可能な生成物を作る各担当は、ターン終了前にartifact ID／manifest／権利・privacy・release状態を本ファイルへ記録する。
+- 実際の公開・販売前に、対象ファイルとハッシュ、公開先、価格、権利・privacy証拠、ロールバック方法を提示し、個別承認を得る。
+
 ### ✅ 2026-08-15 Codex: Stage 4Mを計測可能な販売候補へ固定
 
 **判定**
