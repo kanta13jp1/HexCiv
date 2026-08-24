@@ -128,20 +128,20 @@
     {
       "id": "P1",
       "name": "production funnel row verified and probe removed",
-      "status": "blocked",
-      "evidence": "shop-funnel is deployed and returned recorded=true, but the production row has not been read with privileged SQL"
+      "status": "complete",
+      "evidence": "2026-08-25 privileged aggregate SQL found direct/product_view=3 and probe_claude/product_view=1; the exact probe row was deleted in a short transaction and the post-delete aggregate contains direct/product_view=3 only"
     },
     {
       "id": "P2",
       "name": "three real gameplay screenshots published",
-      "status": "blocked",
-      "evidence": "https://github.com/kanta13jp1/my_web_app/pull/4408 is open and not deployed"
+      "status": "complete",
+      "evidence": "https://github.com/kanta13jp1/my_web_app/pull/4702 was merged and deployed by run https://github.com/kanta13jp1/my_web_app/actions/runs/32579800151 on 2026-08-22; the production page displays the turn 30, 80, and 150 gameplay screenshots"
     },
     {
       "id": "H5",
       "name": "private itch.io listing reviewed",
-      "status": "blocked",
-      "evidence": "Cloudflare verification and account login require the operator"
+      "status": "pending",
+      "evidence": "P1 and P2 are complete; the itch.io account and listing form are being checked before a private draft is submitted for operator review"
     }
   ]
 }
